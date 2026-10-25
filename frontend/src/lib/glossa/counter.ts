@@ -1,6 +1,7 @@
 import {
   type ChangeSpec,
   EditorState,
+  StateField,
   type Text,
   Transaction,
   type TransactionSpec,
@@ -96,12 +97,29 @@ export function counterTypo(doc: Text, end: number): ChangeSpec | null {
 }
 
 /**
- * The cursor just left the end of a one-letter Greek word without changing the
- * text: that finishes the word as much as typing a space after it.
+ * Where the student's last keystroke left the cursor, while it stays there.
+ * Leaving a word only finishes it if it was just typed: moving through pasted
+ * or older code must not rewrite it.
+ */
+const justTyped = StateField.define<number | null>({
+  create: () => null,
+  update(value, tr) {
+    if (tr.docChanged && tr.isUserEvent("input.type")) return tr.newSelection.main.head;
+    if (tr.docChanged && value !== null) return tr.changes.mapPos(value);
+    return tr.selection ? null : value;
+  },
+});
+
+/**
+ * The cursor just left the end of a one-letter Greek word, just typed, without
+ * changing the text: that finishes the word as much as typing a space after it.
  */
 function leftTypo(tr: Transaction): ChangeSpec | null {
   if (tr.docChanged || !tr.selection || !tr.annotation(Transaction.userEvent)) return null;
+  // Read-only (the agent is writing): a filter's added changes would get through.
+  if (tr.startState.readOnly) return null;
   const before = tr.startState.selection.main;
+  if (tr.startState.field(justTyped, false) !== before.head) return null;
   const after = tr.newSelection.main;
   if (!before.empty) return null;
   const change = counterTypo(tr.startState.doc, before.head) as { from: number; to: number } | null;
@@ -145,4 +163,4 @@ function latinizeCounter(tr: Transaction): Transaction | readonly TransactionSpe
   return changes ? [tr, { changes, sequential: true }] : tr;
 }
 
-export const glossaCounter = EditorState.transactionFilter.of(latinizeCounter);
+export const glossaCounter = [justTyped, EditorState.transactionFilter.of(latinizeCounter)];

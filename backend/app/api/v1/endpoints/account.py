@@ -4,7 +4,7 @@ from typing import Annotated
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
-from sqlalchemy.exc import InterfaceError, OperationalError
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings, is_unset
 from app.core.db import DbSession, has_migration
@@ -61,7 +61,7 @@ async def delete_account(user: CurrentUserDep, _: AdminReady, db: DbSession) -> 
     # user Supabase only hides) would leave the row, and so everything it owns.
     try:
         still_there = await db.scalar(select(auth_users.c.id).where(auth_users.c.id == user.id))
-    except (OperationalError, InterfaceError):
+    except SQLAlchemyError:
         # Supabase said it's deleted; only the double check failed. Don't tell the
         # student it failed (they'd keep a session for an account that's gone).
         logger.warning("Deleted user %s, but couldn't check auth.users afterwards", user.id)
@@ -70,5 +70,5 @@ async def delete_account(user: CurrentUserDep, _: AdminReady, db: DbSession) -> 
         # Retrying won't help (e.g. soft-deleted, or SUPABASE_URL is another
         # project): someone has to look, so say which user.
         logger.error("Admin API deleted user %s, but auth.users still has it", user.id)
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not delete the account")
+        raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Account deletion incomplete")
     return Response(status_code=status.HTTP_204_NO_CONTENT)

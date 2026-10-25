@@ -26,6 +26,8 @@ from app.core.config import get_settings
 
 logger = logging.getLogger("uvicorn.error")
 
+USAGE_WRITE_SECONDS = 5
+
 
 def sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
@@ -59,17 +61,18 @@ async def stream_reply(
                     for edit in context.edits:
                         yield sse("edit", asdict(edit))
                     context.edits.clear()
+        # Before the usage write below: the reply is over for the student.
+        yield sse("done", {})
     except Exception:
         # The 200 and the first events are already sent, so report it in-stream.
         logger.exception("Agent run failed (conversation %s)", conversation_id)
         yield sse("error", {"message": "Ο βοηθός αντιμετώπισε πρόβλημα. Δοκίμασε ξανά."})
-        return
     finally:
         # Also runs when the client disconnects: stop paying for an unread answer.
         result.cancel()
         if on_usage is not None:
-            # Count what was spent, even on a disconnect. Shielded: the cancelled
-            # request would otherwise cancel this write too.
-            with anyio.CancelScope(shield=True):
+            # Count what was spent, even on a disconnect: shielded, or the cancelled
+            # request would cancel this write too. Bounded, so a stuck database
+            # can't hold the stream open.
+            with anyio.move_on_after(USAGE_WRITE_SECONDS, shield=True):
                 await on_usage(result.context_wrapper.usage)
-    yield sse("done", {})

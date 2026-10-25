@@ -18,6 +18,6 @@ class AgentUsage(Base):
         UUID(as_uuid=True), ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True
     )
     day: Mapped[date] = mapped_column(Date, primary_key=True)
-    input_tokens: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
-    output_tokens: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
-    requests: Mapped[int] = mapped_column(Integer, server_default=text("0"))
+    # Charged toward the limit: input + output, at least MESSAGE_TOKENS a message.
+    tokens: Mapped[int] = mapped_column(BigInteger, server_default=text("0"))
+    messages: Mapped[int] = mapped_column(Integer, server_default=text("0"))

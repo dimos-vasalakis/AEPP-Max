@@ -1,4 +1,4 @@
-import { EditorSelection, EditorState, Text } from "@codemirror/state";
+import { EditorSelection, EditorState, type Extension, Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { glossaAutocase } from "./autocase";
 import { forCounter, glossaCounter, latinCounter, renameInUnit } from "./counter";
@@ -61,11 +61,11 @@ describe("renameInUnit", () => {
   });
 });
 
-function typing(doc: string) {
+function typing(doc: string, extra: Extension[] = []) {
   let state = EditorState.create({
     doc,
     selection: EditorSelection.cursor(doc.length),
-    extensions: [glossa, glossaIndent, glossaCounter, glossaAutocase],
+    extensions: [glossa, glossaIndent, glossaCounter, glossaAutocase, ...extra],
   });
   return {
     /** Move the cursor without typing, as a click or an arrow key does. */
@@ -159,6 +159,18 @@ describe("typing a ΓΙΑ", () => {
   it("leaves a Greek letter alone where there is no Latin counter", () => {
     const t = typing(top);
     const text = t.type("γραψε ι");
+    expect(t.moveTo(0)).toBe(text);
+  });
+
+  it("doesn't rewrite code it didn't just see typed, such as a pasted line", () => {
+    const pasted = `${loop}\n    ΓΡΑΨΕ ι`;
+    const t = typing(pasted);
+    expect(t.moveTo(0)).toBe(pasted); // cursor starts after «ι», but nothing was typed
+  });
+
+  it("doesn't change a read-only editor (while the agent writes)", () => {
+    const t = typing(top, [EditorState.readOnly.of(true)]);
+    const text = t.type("για ι απο 1 μεχρι 10\n    γραψε ι");
     expect(t.moveTo(0)).toBe(text);
   });
 });

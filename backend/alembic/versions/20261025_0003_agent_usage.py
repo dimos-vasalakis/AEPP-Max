@@ -20,9 +20,8 @@ UPGRADE_SQL = """
 create table public.agent_usage (
   user_id uuid not null references auth.users (id) on delete cascade,
   day date not null,
-  input_tokens bigint not null default 0,
-  output_tokens bigint not null default 0,
-  requests integer not null default 0,
+  tokens bigint not null default 0,
+  messages integer not null default 0,
   primary key (user_id, day)
 );
 

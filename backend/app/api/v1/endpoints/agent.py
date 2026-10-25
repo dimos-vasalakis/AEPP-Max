@@ -8,10 +8,10 @@ from sqlalchemy import func, select
 from app.agent.context import AgentContext
 from app.agent.session import conversation_session
 from app.agent.stream import stream_reply
-from app.agent.usage import record_usage, tokens_today
+from app.agent.usage import MESSAGE_TOKENS, record_usage, reserve_message
 from app.api.v1.endpoints.programs import owned_program
 from app.core.config import get_settings, is_unset
-from app.core.db import DbSession
+from app.core.db import DbSession, has_migration
 from app.core.security import CurrentUserDep
 from app.models import Conversation
 from app.schemas.agent import ChatRequest
@@ -33,8 +33,13 @@ async def chat(
     body: ChatRequest, user: CurrentUserDep, _: AgentReady, db: DbSession
 ) -> StreamingResponse:
     """Send a message to the agent; the reply streams back as SSE (app/agent/stream.py)."""
+    # The daily limit's table (agent/usage.py); migrations don't run on deploy.
+    if not await has_migration(db, "0003"):
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Agent needs migration 0003")
     limit = get_settings().agent_daily_tokens
-    if limit and await tokens_today(db, user.id) >= limit:
+    reserved = MESSAGE_TOKENS if limit > 0 else 0
+    # Committed with the conversation below; an error before that refunds it.
+    if reserved and not await reserve_message(db, user.id, limit):
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Daily agent limit reached")
     if body.program_id is not None:
         await owned_program(db, user, body.program_id)
@@ -62,7 +67,7 @@ async def chat(
             body.message,
             context,
             conversation_session(conversation.id),
-            on_usage=partial(record_usage, user.id),
+            on_usage=partial(record_usage, user.id, reserved),
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

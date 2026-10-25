@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import NonNegativeInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,9 +24,10 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-sol"
     agent_max_turns: int = 12
-    # Agent tokens (input + output) per student per day, Athens time. 0 = no limit.
-    # A message costs about 1-4k tokens, more as a conversation grows.
-    agent_daily_tokens: int = 20_000
+    # Agent tokens (input + output) per student per day, Athens time. 0 = no limit
+    # (negative is refused at startup). A message costs about 1-4k tokens, more as
+    # a conversation grows, and at least 1k (agent/usage.py).
+    agent_daily_tokens: NonNegativeInt = 20_000
 
     # ΓΛΩΣΣΑ interpreter limits, per run. Hitting one ends the run with status "limit".
     run_max_steps: int = 200_000

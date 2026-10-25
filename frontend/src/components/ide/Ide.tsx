@@ -6,9 +6,11 @@ import { NavPopover } from "@/components/NavPopover";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type { RunResult } from "@/lib/glossa/types";
+import { useOutputHeight } from "@/lib/useOutputHeight";
 import { useThemeInfo } from "@/lib/useTheme";
 import { CodeEditor } from "./CodeEditor";
 import { OutputPanel, type RunState } from "./OutputPanel";
+import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
 
 export function Ide() {
   const [code, setCode] = useState("");
@@ -18,6 +20,9 @@ export function Ide() {
   // Locked while an Agent-mode reply runs, so its write_code can't overwrite new typing.
   const [agentWriting, setAgentWriting] = useState(false);
   const darkTheme = useThemeInfo().dark;
+  // The editor-plus-output column; the output's top edge drags to resize it.
+  const column = useRef<HTMLDivElement>(null);
+  const outputHeight = useOutputHeight();
 
   // Stable identity: CodeEditor must not get a new onChange on every render.
   const updateCode = useCallback((value: string) => {
@@ -113,7 +118,16 @@ export function Ide() {
 
       {/* minmax(0,1fr), not 1fr: long code lines scroll inside the editor instead of widening the page. */}
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[60dvh_40dvh] lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_minmax(140px,35%)]">
+        {/* A dragged output height replaces the default rows; min() keeps the editor visible if the window shrinks later. */}
+        <div
+          ref={column}
+          style={
+            outputHeight === null
+              ? undefined
+              : { gridTemplateRows: `minmax(0,1fr) min(${outputHeight}px, calc(100% - ${MIN_EDITOR}px))` }
+          }
+          className="grid h-dvh min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[60dvh_40dvh] lg:h-auto lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_minmax(140px,35%)]"
+        >
           <main className="flex min-h-0 flex-col">
             {agentWriting && (
               <div className="shrink-0 border-b border-border bg-panel-2 px-3 py-1.5 font-mono text-xs text-warn">
@@ -129,7 +143,10 @@ export function Ide() {
               />
             </div>
           </main>
-          <OutputPanel run={run} onInput={readInput} onClear={() => setRun({ kind: "idle" })} />
+          <div className="relative grid min-h-0 grid-rows-[minmax(0,1fr)]">
+            <OutputResizer column={column} />
+            <OutputPanel run={run} onInput={readInput} onClear={() => setRun({ kind: "idle" })} />
+          </div>
         </div>
         {/* The agent's write_code goes straight into the editor (Ctrl+Z undoes it). */}
         <AgentPanel code={code} onEdit={updateCode} onWriting={setAgentWriting} />

@@ -83,17 +83,50 @@ def test_agent_refuses_past_the_daily_limit(
     from app.core.config import get_settings
     from app.core.db import get_db
 
-    async def no_db():  # the limit check is the first thing to use it
+    async def no_db():  # the checks before the limit are patched out
         yield None
 
-    async def used(*_):
-        return get_settings().agent_daily_tokens
+    async def migrated(*_):
+        return True
+
+    async def over_limit(*_):
+        return False
 
     monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
-    monkeypatch.setattr(agent, "tokens_today", used)
+    monkeypatch.setattr(agent, "has_migration", migrated)
+    monkeypatch.setattr(agent, "reserve_message", over_limit)
     monkeypatch.setitem(client.app.dependency_overrides, get_db, no_db)
     res = client.post(
         "/api/v1/agent/chat", json={"message": "Γεια", "code": ""}, headers=auth_header()
     )
     assert res.status_code == 429
     assert res.json()["detail"] == "Daily agent limit reached"
+
+
+def test_agent_needs_its_migration(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.v1.endpoints import agent
+    from app.core.config import get_settings
+    from app.core.db import get_db
+
+    async def no_db():
+        yield None
+
+    async def not_migrated(*_):
+        return False
+
+    monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
+    monkeypatch.setattr(agent, "has_migration", not_migrated)
+    monkeypatch.setitem(client.app.dependency_overrides, get_db, no_db)
+    res = client.post(
+        "/api/v1/agent/chat", json={"message": "Γεια", "code": ""}, headers=auth_header()
+    )
+    assert res.status_code == 503
+
+
+def test_negative_daily_limit_is_refused() -> None:
+    from pydantic import ValidationError
+
+    from app.core.config import Settings
+
+    with pytest.raises(ValidationError):
+        Settings(agent_daily_tokens=-1)

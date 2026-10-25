@@ -148,8 +148,8 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
         // The conversation was deleted (e.g. with the account, from another tab).
         // Keep the transcript to read, say the agent no longer remembers it, start a
         // new conversation next time, and give the message back (unless the box
-        // already has something new in it).
-        usedAgent.current = usedBefore;
+        // already has something new in it). That new one hasn't used Agent mode.
+        usedAgent.current = false;
         appendText(
           "Αυτή η συζήτηση δεν υπάρχει πια, οπότε ο agent δεν θυμάται τα παραπάνω. Στείλε ξανά το μήνυμά σου για να ξεκινήσει νέα.",
         );

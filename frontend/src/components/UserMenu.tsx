@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useState } from "react";
 import { NavPopover } from "@/components/NavPopover";
+import { FontSizeSettings, GearIcon } from "@/components/ZoomMenu";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
 import { useUser } from "@/lib/supabase/useUser";
@@ -13,7 +14,12 @@ export function UserMenu() {
   // open while a deletion runs, and closing it resets to idle, so the second
   // step is never left armed.
   const [deletion, setDeletion] = useState<Deletion>(IDLE);
-  const reset = useCallback(() => setDeletion(IDLE), []);
+  // Ρυθμίσεις folds open under its gear; the menu reopens with it folded.
+  const [settings, setSettings] = useState(false);
+  const reset = useCallback(() => {
+    setDeletion(IDLE);
+    setSettings(false);
+  }, []);
   // Signed out (another tab) and in again without a reload: start over too.
   const [deletionUser, setDeletionUser] = useState(user?.id);
   if (user?.id !== deletionUser) {
@@ -48,8 +54,26 @@ export function UserMenu() {
       <p className="mt-1 truncate text-xs text-muted">{user.email}</p>
       <button
         type="button"
+        onClick={() => setSettings(!settings)}
+        aria-expanded={settings}
+        className="mt-3 flex w-full items-center gap-2 rounded-md bg-panel-2 px-3 py-1.5 text-left hover:text-text"
+      >
+        <GearIcon size={16} />
+        Ρυθμίσεις
+        <span className={`ml-auto text-muted transition-transform ${settings ? "rotate-90" : ""}`} aria-hidden>
+          ›
+        </span>
+      </button>
+      {settings && (
+        <div className="mt-2 rounded-md border border-border p-3">
+          <div className="mb-2 text-xs font-medium text-muted">Μέγεθος γραμμάτων</div>
+          <FontSizeSettings />
+        </div>
+      )}
+      <button
+        type="button"
         onClick={() => createClient().auth.signOut()}
-        className="mt-3 w-full rounded-md bg-panel-2 px-3 py-1.5 text-left hover:text-text"
+        className="mt-2 w-full rounded-md bg-panel-2 px-3 py-1.5 text-left hover:text-text"
       >
         Αποσύνδεση
       </button>
@@ -82,7 +106,9 @@ function DeleteAccount({
         error:
           err instanceof ApiError && err.status === 503
             ? "Η διαγραφή δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκίμασε αργότερα."
-            : "Η διαγραφή απέτυχε. Δοκίμασε ξανά.",
+            : err instanceof ApiError && err.status === 500
+              ? "Η διαγραφή δεν ολοκληρώθηκε και δεν θα βοηθήσει να ξαναδοκιμάσεις. Γράψε μας (δες την Πολιτική απορρήτου) για να την ολοκληρώσουμε."
+              : "Η διαγραφή απέτυχε. Δοκίμασε ξανά.",
       });
       return;
     }

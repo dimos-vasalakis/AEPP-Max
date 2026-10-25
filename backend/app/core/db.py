@@ -64,11 +64,21 @@ def revision_includes(version: str | None, needed: str) -> bool:
         return False
 
 
+# Migrations found applied. They don't get unapplied under a running app, so a
+# hot path (every agent message) asks the database only until the answer is yes.
+_applied: set[str] = set()
+
+
 async def has_migration(db: AsyncSession, needed: str) -> bool:
     """Migrations don't run on deploy, so a feature that relies on one checks first."""
+    if needed in _applied:
+        return True
     version = None
     # A database Alembic never ran on has no alembic_version table.
     if await db.scalar(text("select to_regclass('alembic_version') is not null")):
         version = await db.scalar(text("select version_num from alembic_version"))
     # Reading the migration files is blocking I/O (only the first time; it's cached).
-    return await asyncio.to_thread(revision_includes, version, needed)
+    if await asyncio.to_thread(revision_includes, version, needed):
+        _applied.add(needed)
+        return True
+    return False
