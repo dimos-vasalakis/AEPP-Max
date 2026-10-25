@@ -1,19 +1,31 @@
 "use client";
 
-import { type ReactNode, useId } from "react";
+import { type ReactNode, useId, useState } from "react";
 import { NavPopover } from "@/components/NavPopover";
 
 /** The info button: a short guide to the whole app, one foldable section per part. */
 export function HelpMenu() {
   return (
     <NavPopover label="Οδηγός χρήσης" icon={<InfoIcon />} wide>
+      <Guide />
+    </NavPopover>
+  );
+}
+
+/** One section open at a time: opening another closes the last. Each opening of the panel starts at the first. */
+function Guide() {
+  const [open, setOpen] = useState<string | null>("Γράψιμο κώδικα");
+  const toggle = (title: string) => setOpen(open === title ? null : title);
+  const section = (title: string) => ({ title, open: open === title, onToggle: () => toggle(title) });
+  return (
+    <>
       <h2 className="font-semibold">Πώς δουλεύει το AEPP Max</h2>
       <p className="mt-1 text-xs text-muted">
         Γράφεις ΓΛΩΣΣΑ, την τρέχεις και, αν κολλήσεις, ρωτάς τον agent. Πάτα μια ενότητα για να
         ανοίξει.
       </p>
       <div className="mt-3 space-y-1.5">
-        <Section title="Γράψιμο κώδικα" open>
+        <Section {...section("Γράψιμο κώδικα")}>
           <li>
             Γράψε στον editor. Οι εντολές γίνονται κεφαλαίες χωρίς τόνους μόλις τις τελειώσεις
             (<Kbd>γραψε</Kbd> → <Kbd>ΓΡΑΨΕ</Kbd>), και η εσοχή μπαίνει μόνη της μέσα σε ΑΝ, ΓΙΑ,
@@ -37,7 +49,7 @@ export function HelpMenu() {
             <Kbd>Ctrl/Cmd+Z</Kbd> τον φέρνει πίσω.
           </li>
         </Section>
-        <Section title="Εκτέλεση">
+        <Section {...section("Εκτέλεση")}>
           <li>
             Πάτα ▶ ή <Kbd>F9</Kbd> ή <Kbd>Ctrl/Cmd+Enter</Kbd>.
           </li>
@@ -57,7 +69,7 @@ export function HelpMenu() {
             κλικ την επαναφέρει.
           </li>
         </Section>
-        <Section title="Agent (χρειάζεται λογαριασμό)">
+        <Section {...section("Agent (χρειάζεται λογαριασμό)")}>
           <li>
             Γράψε στο πλαίσιο δεξιά και πάτα <Kbd>Enter</Kbd>. Βλέπει τον κώδικά σου και μπορεί να
             τον τρέξει.
@@ -75,14 +87,14 @@ export function HelpMenu() {
             μεσάνυχτα.
           </li>
         </Section>
-        <Section title="Εμφάνιση">
+        <Section {...section("Εμφάνιση")}>
           <li>Ο φακός αλλάζει το μέγεθος των γραμμάτων στον editor και στην οθόνη εκτέλεσης.</li>
           <li>
             Οι <b>Επεκτάσεις</b> (πάνω δεξιά) έχουν θέματα: Σκούρο, Λευκό, Κλασικό, ή δικό σου με
             τα χρώματα που θέλεις.
           </li>
         </Section>
-        <Section title="Λογαριασμός">
+        <Section {...section("Λογαριασμός")}>
           <li>
             Με <b>Εγγραφή</b> (email, Google ή Apple) ανοίγει ο agent. Ο editor και η εκτέλεση
             δουλεύουν και χωρίς λογαριασμό.
@@ -93,21 +105,42 @@ export function HelpMenu() {
           </li>
         </Section>
       </div>
-    </NavPopover>
+    </>
   );
 }
 
-function Section({ title, open, children }: { title: string; open?: boolean; children: ReactNode }) {
+function Section({
+  title,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  open: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+}) {
+  const body = useId();
   return (
-    <details open={open} className="group rounded-md bg-panel-2">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-1.5 font-medium hover:text-text [&::-webkit-details-marker]:hidden">
+    <div className="rounded-md bg-panel-2">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls={body}
+        className="flex w-full items-center gap-2 px-3 py-1.5 text-left font-medium hover:text-text"
+      >
         {title}
-        <span className="ml-auto text-muted transition-transform group-open:rotate-90" aria-hidden>
+        <span className={`ml-auto text-muted transition-transform ${open ? "rotate-90" : ""}`} aria-hidden>
           ›
         </span>
-      </summary>
-      <ul className="list-disc space-y-1.5 px-3 pb-3 pl-7 text-xs leading-relaxed">{children}</ul>
-    </details>
+      </button>
+      {open && (
+        <ul id={body} className="list-disc space-y-1.5 px-3 pb-3 pl-7 text-xs leading-relaxed">
+          {children}
+        </ul>
+      )}
+    </div>
   );
 }
 
