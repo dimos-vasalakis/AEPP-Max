@@ -66,7 +66,7 @@ const MODES: Record<
   },
   agent: {
     label: "Agent",
-    short: "γράφει στον κώδικα",
+    short: "αυτόματα",
     hint: "γράφει κατευθείαν στον κώδικά σου",
     placeholder: "Πες τι να αλλάξει στον κώδικα…",
     mascot: "/mascot-agent.png",
@@ -539,25 +539,25 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
           <div className="mt-1.5 flex items-center gap-2 px-1 text-xs whitespace-nowrap">
             {mode === "agent" ? (
               <>
-                <span className="min-w-0 truncate text-muted">⇧⇥ αυτόματα / με έγκριση</span>
+                <span className="min-w-0 flex-1 truncate text-muted">⇧⇥ αλλαγή</span>
                 <button
                   type="button"
                   onClick={() => setApprove(!approve)}
                   title={`${current.label}: ${current.hint} · Shift+Tab για αλλαγή`}
-                  className={`ml-auto flex items-center gap-1.5 hover:opacity-80 ${current.color}`}
+                  className={`flex shrink-0 items-center gap-1.5 hover:opacity-80 ${current.color}`}
                 >
                   <ModeLabel mode={current} />
                 </button>
               </>
             ) : (
               <>
-                <span className="min-w-0 truncate text-muted">/switch για Agent</span>
+                <span className="min-w-0 flex-1 truncate text-muted">/switch για Agent</span>
                 {/* A tap target for phones, which have no keyboard to type /switch quickly. */}
                 <button
                   type="button"
                   onClick={switchMode}
                   title={`${current.label}: ${current.hint} · /switch για Agent`}
-                  className={`ml-auto flex items-center gap-1.5 hover:opacity-80 ${current.color}`}
+                  className={`flex shrink-0 items-center gap-1.5 hover:opacity-80 ${current.color}`}
                 >
                   <ModeLabel mode={current} />
                 </button>
