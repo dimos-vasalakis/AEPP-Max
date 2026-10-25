@@ -10,6 +10,8 @@ type Props = {
   icon: ReactNode;
   /** Which edge of the button the panel lines up with, on wider screens. */
   align?: "left" | "right";
+  /** A wider panel on wider screens, for longer text. */
+  wide?: boolean;
   /** Also closes an open panel, so its buttons can't act while the trigger couldn't. */
   disabled?: boolean;
   /** Keeps the panel open (no outside click, Escape or trigger click), e.g. while it waits for a request. */
@@ -26,6 +28,7 @@ export function NavPopover({
   title,
   icon,
   align = "left",
+  wide,
   disabled,
   locked,
   onClose,
@@ -85,7 +88,7 @@ export function NavPopover({
           id={panelId}
           role="dialog"
           aria-label={label}
-          className={`fixed inset-x-3 top-14 z-50 max-h-[calc(100dvh-4.5rem)] overflow-auto rounded-lg border border-border bg-panel p-4 text-sm shadow-2xl sm:absolute sm:inset-x-auto ${align === "left" ? "sm:left-0" : "sm:right-0"} sm:top-full sm:mt-2 sm:w-80`}
+          className={`fixed inset-x-3 top-14 z-50 max-h-[calc(100dvh-4.5rem)] overflow-auto rounded-lg border border-border bg-panel p-4 text-sm shadow-2xl sm:absolute sm:inset-x-auto ${align === "left" ? "sm:left-0" : "sm:right-0"} sm:top-full sm:mt-2 ${wide ? "sm:w-[26rem]" : "sm:w-80"}`}
         >
           {typeof children === "function" ? children(close) : children}
         </div>
