@@ -4,7 +4,7 @@ Events (frontend/src/lib/api/agent.ts parses them):
   conversation {id}         first event, so the client can continue the thread
   text {delta}              streamed answer text
   tool {name}               the agent called a tool (shown as activity)
-  edit {code, summary}      a propose_edit proposal, shown as a diff
+  edit {code, summary}      write_code's new program, written into the editor
   error {message}           the run failed; the stream ends
   done {}                   the run finished
 """
@@ -51,9 +51,9 @@ async def stream_reply(
                 if event.name == "tool_called":
                     yield sse("tool", {"name": getattr(event.item.raw_item, "name", "")})
                 elif event.name == "tool_output":
-                    for edit in context.proposed_edits:
+                    for edit in context.edits:
                         yield sse("edit", asdict(edit))
-                    context.proposed_edits.clear()
+                    context.edits.clear()
     except Exception:
         # The 200 and the first events are already sent, so report it in-stream.
         logger.exception("Agent run failed (conversation %s)", conversation_id)

@@ -10,7 +10,7 @@ from app.core.config import get_settings
 
 @lru_cache
 def get_agent() -> Agent[AgentContext]:
-    # One agent for both modes: instructions and propose_edit's is_enabled
+    # One agent for both modes: instructions and write_code's is_enabled
     # read the mode from the run context.
     return Agent[AgentContext](
         name="AEPP-Max",

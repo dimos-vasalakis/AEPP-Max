@@ -5,7 +5,7 @@ from dataclasses import asdict
 from agents import Agent, RunContextWrapper, function_tool
 
 from app import glossa
-from app.agent.context import AgentContext, ProposedEdit
+from app.agent.context import AgentContext, CodeEdit
 from app.core.config import get_settings
 
 # The model reads tool output as text; this many trace steps is plenty to
@@ -58,15 +58,17 @@ def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) ->
 
 
 @function_tool(is_enabled=_agent_mode)
-def propose_edit(ctx: RunContextWrapper[AgentContext], code: str, summary: str) -> str:
-    """Propose a new version of the student's program. They see a diff and accept or reject it.
+def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: str) -> str:
+    """Replace the student's program in the editor with a new version. It applies at once.
 
     Args:
         code: The complete new program, not a fragment.
         summary: One sentence in Greek on what changes.
     """
-    ctx.context.proposed_edits.append(ProposedEdit(code=code, summary=summary))
-    return "Ο μαθητής βλέπει την πρόταση. Δεν ξέρεις ακόμα αν θα την αποδεχτεί."
+    ctx.context.edits.append(CodeEdit(code=code, summary=summary))
+    # Later tool calls without `code` now run what the editor holds.
+    ctx.context.code = code
+    return "Ο κώδικας γράφτηκε στον editor του μαθητή."
 
 
-TOOLS = [run_program, trace_program, propose_edit]
+TOOLS = [run_program, trace_program, write_code]

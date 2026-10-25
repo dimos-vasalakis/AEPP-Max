@@ -19,6 +19,12 @@ export async function GET(request: Request) {
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
   const next = safeNext(searchParams.get("next")) ?? "/";
+  // Keep Supabase's reason (e.g. a wrong Google client secret) for the login page and the URL.
+  const failed = new URL("/login", origin);
+  for (const key of ["error", "error_code", "error_description"]) {
+    const value = searchParams.get(key);
+    if (value) failed.searchParams.set(key, value);
+  }
 
   if (supabaseConfigured && (code || tokenHash)) {
     const supabase = await createClient();
@@ -31,6 +37,9 @@ export async function GET(request: Request) {
           ? await supabase.auth.exchangeCodeForSession(code)
           : { error: new Error("unsupported link") };
     if (!error) return NextResponse.redirect(`${origin}${next}`);
+    console.error("auth callback:", error.message);
+    failed.searchParams.set("error_description", error.message);
   }
-  return NextResponse.redirect(`${origin}/login?error=auth`);
+  if (!failed.searchParams.has("error")) failed.searchParams.set("error", "auth");
+  return NextResponse.redirect(failed);
 }

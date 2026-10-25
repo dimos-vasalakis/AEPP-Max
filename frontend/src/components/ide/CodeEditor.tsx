@@ -1,8 +1,6 @@
 "use client";
 
-import { unifiedMergeView } from "@codemirror/merge";
 import CodeMirror from "@uiw/react-codemirror";
-import { useMemo } from "react";
 import { glossaAutocase } from "@/lib/glossa/autocase";
 import { glossaAutocomplete } from "@/lib/glossa/completion";
 import { glossaCounter } from "@/lib/glossa/counter";
@@ -26,31 +24,24 @@ const BASIC_SETUP = {
 
 // @uiw/react-codemirror reconfigures the whole editor whenever `extensions`,
 // `theme`, `basicSetup` or `onChange` change identity, which also cancels an
-// inserted block's Tab stops. Keep them stable: module constants, a memo keyed
-// on `original`, and a callback from useCallback in the parent.
+// inserted block's Tab stops. Keep them stable: module constants and a callback
+// from useCallback in the parent.
 type Props = {
   value: string;
   onChange: (value: string) => void;
-  /** Set while an agent edit is pending: shows the diff against it, with per-change accept/reject. */
-  original?: string;
+  /** While the agent is writing to the editor. */
+  readOnly?: boolean;
   /** Whether the active color theme is dark (lib/theme.ts). */
   dark: boolean;
 };
 
-export function CodeEditor({ value, onChange, original, dark }: Props) {
-  const extensions = useMemo(
-    () =>
-      original === undefined
-        ? BASE
-        : [...BASE, unifiedMergeView({ original, mergeControls: true })],
-    [original],
-  );
-
+export function CodeEditor({ value, onChange, readOnly, dark }: Props) {
   return (
     <CodeMirror
       value={value}
       onChange={onChange}
-      extensions={extensions}
+      extensions={BASE}
+      readOnly={readOnly}
       theme={dark ? darkEditorTheme : lightEditorTheme}
       height="100%"
       className="h-full"

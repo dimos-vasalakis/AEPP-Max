@@ -109,9 +109,11 @@ Why the interpreter lives on the backend: one implementation serves the IDE, the
 
 **Agent (`backend/app/agent/`).** `POST /api/v1/agent/chat` needs auth. Dependencies run in parameter order (user → `AgentReady` → db), so callers get 401 before a 503.
 
-There is one `Agent` (`tutor.py`, model from `OPENAI_MODEL`) with two modes, like Cursor's Ask/Agent. The panel is titled just "Agent"; Shift+Tab in its message box (or the chip in the header) switches the mode, and it starts in `ask`:
-- `ask` is a tutor: hints and explanations, no edits.
-- `agent` can also call `propose_edit`. The tool is gated by `is_enabled` reading `AgentContext.mode`.
+There is one `Agent` (`tutor.py`, model from `OPENAI_MODEL`) with two modes, like Cursor's Ask/Agent. It starts in `ask`; Shift+Tab in the message box (or the mode label under it) switches:
+- `ask`, shown as **Tutor** (mascot `public/mascot-tutor.png`, the red pill): hints and explanations, no edits.
+- `agent`, shown as **Agent** (`public/mascot-agent.png`, the red cloud): can also call `write_code`. The tool is gated by `is_enabled` reading `AgentContext.mode`.
+
+`AgentPanel.tsx` looks like Claude Code's terminal, in the mono font: `>` for the student's messages, `●` for reply text and tool calls in the order they streamed, `⎿` for a tool's result (`write_code`'s summary), a `✻ Σκέφτεται… (3s · esc για διακοπή)` line while it works (Esc aborts the fetch), the current mode's mascot in a welcome box when the chat is empty, and the mode label under the input. The mascots were cut out of their dark backgrounds the way the logo was.
 
 `instructions.py` builds the system prompt per request:
 - It holds the pedagogy rules: reply in Greek; use textbook constructs only; never state output without running the code; hints before solutions in ask mode. Change behavior there.
@@ -119,10 +121,10 @@ There is one `Agent` (`tutor.py`, model from `OPENAI_MODEL`) with two modes, lik
 
 The tools (`tools.py`) run the real interpreter in a thread. `trace_program` is capped at 300 steps for the model's context.
 
-`propose_edit` changes nothing on the server:
-1. It queues a `ProposedEdit` on the run context.
+`write_code` writes the whole program straight into the editor, with no diff or accept step (students wanted it applied, not copy-pasted); Ctrl+Z undoes it. It changes nothing on the server:
+1. It queues a `CodeEdit` on the run context and sets `AgentContext.code`, so later `run_program` calls run the new code.
 2. `stream.py` emits it as an `edit` event after the tool output.
-3. The IDE shows it as a CodeMirror unified diff (`@codemirror/merge`, with per-chunk accept/reject) plus Αποδοχή/Απόρριψη buttons. Rejecting restores the code from before the first pending proposal.
+3. The IDE replaces the editor's code, and the panel lists the edit's summary under the reply. The editor is read-only while an Agent-mode reply runs (`onWriting`), since the edit is built from the code sent with the request and would overwrite anything typed meanwhile.
 
 The SSE events, in order: `conversation {id}` first, then `text {delta}`, `tool {name}`, `edit {code, summary}`, and finally `error {message}` or `done {}`. `result.cancel()` runs when the client disconnects.
 
