@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -13,3 +14,12 @@ class ChatRequest(BaseModel):
     code: str = Field(max_length=MAX_SOURCE_CHARS)  # the editor's current content
     mode: AgentMode = "ask"
     approve: bool = False  # Agent mode: edits wait for the student's approval
+
+
+class AgentUsageOut(BaseModel):
+    """Today's agent use against the daily limit (agent/usage.py)."""
+
+    tokens: int
+    messages: int
+    limit: int  # tokens a day; 0 means no limit
+    resets_at: datetime  # the next midnight, Athens time

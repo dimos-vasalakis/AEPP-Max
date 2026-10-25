@@ -13,6 +13,16 @@ export type ChatRequest = {
   approve?: boolean;
 };
 
+/** GET /agent/usage: today's use against the daily limit (backend schemas/agent.py). */
+export type AgentUsage = {
+  tokens: number;
+  messages: number;
+  /** Tokens a day; 0 means no limit. */
+  limit: number;
+  /** The next midnight, Athens time (ISO). */
+  resets_at: string;
+};
+
 /** The SSE events of POST /agent/chat (backend/app/agent/stream.py). */
 export type AgentEvent =
   | { type: "conversation"; id: string }

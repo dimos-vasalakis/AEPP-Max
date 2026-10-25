@@ -8,13 +8,13 @@ from sqlalchemy import func, select
 from app.agent.context import AgentContext
 from app.agent.session import conversation_session
 from app.agent.stream import stream_reply
-from app.agent.usage import MESSAGE_TOKENS, record_usage, reserve_message
+from app.agent.usage import MESSAGE_TOKENS, read_usage, record_usage, reserve_message
 from app.api.v1.endpoints.programs import owned_program
 from app.core.config import get_settings, is_unset
 from app.core.db import DbSession, has_migration
 from app.core.security import CurrentUserDep
 from app.models import Conversation
-from app.schemas.agent import ChatRequest
+from app.schemas.agent import AgentUsageOut, ChatRequest
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -26,6 +26,16 @@ async def require_agent() -> None:
 
 # Dependencies run in parameter order: auth (401), then this (503), then the DB.
 AgentReady = Annotated[None, Depends(require_agent)]
+
+
+@router.get("/usage")
+async def usage(user: CurrentUserDep, db: DbSession) -> AgentUsageOut:
+    """Today's agent use and the daily limit, for the student's Ρυθμίσεις."""
+    if not await has_migration(db, "0003"):
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Agent needs migration 0003")
+    tokens, messages, resets_at = await read_usage(db, user.id)
+    limit = get_settings().agent_daily_tokens
+    return AgentUsageOut(tokens=tokens, messages=messages, limit=limit, resets_at=resets_at)
 
 
 @router.post("/chat")

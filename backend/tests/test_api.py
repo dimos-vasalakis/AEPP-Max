@@ -130,3 +130,35 @@ def test_negative_daily_limit_is_refused() -> None:
 
     with pytest.raises(ValidationError):
         Settings(agent_daily_tokens=-1)
+
+
+def test_agent_usage_requires_auth(client: TestClient) -> None:
+    assert client.get("/api/v1/agent/usage").status_code == 401
+
+
+def test_agent_usage_reports_today_and_the_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.api.v1.endpoints import agent
+    from app.core.db import get_db
+
+    async def no_db():
+        yield None
+
+    async def migrated(*_):
+        return True
+
+    async def today(*_):
+        return 3_500, 2, datetime(2026, 10, 25, 22, tzinfo=UTC)
+
+    monkeypatch.setattr(agent, "has_migration", migrated)
+    monkeypatch.setattr(agent, "read_usage", today)
+    monkeypatch.setitem(client.app.dependency_overrides, get_db, no_db)
+    res = client.get("/api/v1/agent/usage", headers=auth_header())
+    assert res.status_code == 200
+    body = res.json()
+    assert body["tokens"] == 3_500 and body["messages"] == 2
+    assert body["limit"] == 20_000
+    assert body["resets_at"].startswith("2026-10-25T22:00:00")

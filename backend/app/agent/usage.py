@@ -11,9 +11,10 @@ their up-front charge.
 
 import logging
 import uuid
+from datetime import datetime
 
 from agents import Usage
-from sqlalchemy import Date, cast, func
+from sqlalchemy import Date, cast, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -25,8 +26,25 @@ logger = logging.getLogger("uvicorn.error")
 # Greek students' day: the limit resets at midnight in Greece, not UTC.
 TODAY = cast(func.timezone("Europe/Athens", func.now()), Date)
 
+# The next midnight in Greece, when TODAY's total stops counting (as a timestamptz).
+NEXT_RESET = text(
+    "timezone('Europe/Athens', date_trunc('day', timezone('Europe/Athens', now()))"
+    " + interval '1 day')"
+)
+
 # Charged for every message before it runs; about what a short reply costs.
 MESSAGE_TOKENS = 1_000
+
+
+async def read_usage(db: AsyncSession, user_id: uuid.UUID) -> tuple[int, int, datetime]:
+    """Today's tokens and messages for the student, and when they reset."""
+    used = select(AgentUsage.tokens, AgentUsage.messages).where(
+        AgentUsage.user_id == user_id, AgentUsage.day == TODAY
+    )
+    row = (await db.execute(used)).first()
+    resets_at = await db.scalar(select(NEXT_RESET))
+    tokens, messages = row if row is not None else (0, 0)
+    return tokens, messages, resets_at
 
 
 async def reserve_message(db: AsyncSession, user_id: uuid.UUID, limit: int) -> bool:
