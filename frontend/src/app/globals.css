@@ -183,30 +183,13 @@
 [data-theme="classic"] .output-prompt {
   display: none;
 }
-/* Hidden from sight only: screen readers still announce the input's label. */
-[data-theme="classic"] .output-input-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
+/* The ΔΙΑΒΑΣΕ box is the same as in the other themes, lined up with the text beside the strip. */
 [data-theme="classic"] .output-input {
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  /* Yellow from the strip's edge on, so the strip stays blue beside it. */
-  background: linear-gradient(to right, transparent var(--output-strip), var(--active-line) 0);
+  margin-left: var(--output-indent);
+  margin-right: 0.75rem;
 }
-[data-theme="classic"] .output-input input {
-  font-weight: bold;
-  caret-shape: underscore;
-}
-[data-theme="classic"] .output-input input::placeholder {
-  color: transparent;
+[data-theme="classic"] .output-input .output-num {
+  display: none;
 }
 
 /* The line number of a line with an error turns red (errorLineNumbers in lib/glossa/lint.ts). */

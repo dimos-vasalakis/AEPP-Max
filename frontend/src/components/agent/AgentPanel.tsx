@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 import { type AgentMode, streamChat } from "@/lib/api/agent";
@@ -115,35 +116,44 @@ export function AgentPanel({ code, onProposeEdit }: Props) {
         )}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-auto p-3 text-sm" aria-live="polite">
-        {messages.length === 0 && (
-          <p className="text-muted">
-            Ρώτα για τον κώδικά σου: γιατί βγάζει λάθος, τι τιμές παίρνουν οι μεταβλητές, πώς
-            λύνεται ένα θέμα Πανελλαδικών.
-          </p>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={m.role === "user" ? "ml-8 rounded-lg bg-panel-2 px-3 py-2" : ""}>
-            {m.activity.map((a, j) => (
-              <div key={j} className="mb-1 text-xs text-muted">
-                ⚙ {a}
-              </div>
-            ))}
-            <div className="whitespace-pre-wrap">
-              {m.text || (busy && i === messages.length - 1 ? "…" : "")}
-            </div>
-          </div>
-        ))}
-      </div>
-
       {user === null ? (
-        <p className="border-t border-border p-3 text-sm text-muted">
-          <Link href="/login" className="text-accent hover:underline">
-            Συνδέσου
-          </Link>{" "}
-          για να μιλήσεις με τον βοηθό.
-        </p>
+        // Signed out: the logo in the middle and the way in, instead of an empty chat.
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+          <Image src="/logo-cloud.png" alt="" width={72} height={72} />
+          <p className="max-w-60 text-sm text-muted">
+            <Link href="/login" className="font-medium text-accent hover:underline">
+              Συνδέσου
+            </Link>{" "}
+            για να ρωτήσεις τον agent για τον κώδικά σου.
+          </p>
+        </div>
       ) : (
+        <div className="min-h-0 flex-1 space-y-4 overflow-auto p-3 text-sm" aria-live="polite">
+          {messages.length === 0 && (
+            <p className="text-muted">
+              Ρώτα για τον κώδικά σου: γιατί βγάζει λάθος, τι τιμές παίρνουν οι μεταβλητές, πώς
+              λύνεται ένα θέμα Πανελλαδικών.
+            </p>
+          )}
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={m.role === "user" ? "ml-8 rounded-lg bg-panel-2 px-3 py-2" : ""}
+            >
+              {m.activity.map((a, j) => (
+                <div key={j} className="mb-1 text-xs text-muted">
+                  ⚙ {a}
+                </div>
+              ))}
+              <div className="whitespace-pre-wrap">
+                {m.text || (busy && i === messages.length - 1 ? "…" : "")}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {user !== null && (
         <form onSubmit={send} className="flex gap-2 border-t border-border p-3">
           <textarea
             value={draft}

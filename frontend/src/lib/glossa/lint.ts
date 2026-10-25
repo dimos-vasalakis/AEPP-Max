@@ -54,6 +54,8 @@ export const glossaLinter = [
   linter(
     async (view) => {
       const doc = view.state.doc;
+      // The editor starts blank: an empty program isn't a mistake worth a red mark.
+      if (!doc.toString().trim()) return [];
       try {
         const { error } = await apiFetch<{ error: ErrorInfo | null }>("/check", {
           method: "POST",

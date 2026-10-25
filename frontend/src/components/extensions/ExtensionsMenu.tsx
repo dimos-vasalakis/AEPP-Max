@@ -44,7 +44,12 @@ export function ExtensionsMenu() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={panelId}
-        className={`flex items-center gap-1.5 rounded-md px-2 py-1.5 text-sm hover:bg-panel-2 hover:text-text ${open ? "bg-panel-2 text-text" : "text-muted"}`}
+        title="Επεκτάσεις: θέματα εμφάνισης"
+        className={`group flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors ${
+          open
+            ? "border-accent bg-accent/10 text-text"
+            : "border-border bg-panel-2 text-text hover:border-accent/60 hover:bg-accent/5"
+        }`}
       >
         <ExtensionsIcon />
         <span className="hidden sm:inline">Επεκτάσεις</span>
@@ -154,14 +159,22 @@ function ThemeRow({
   );
 }
 
+/** A puzzle piece (Lucide's "puzzle", ISC license), in the accent color. */
 function ExtensionsIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden>
-      <rect x="1.5" y="6.5" width="4" height="4" rx="0.8" stroke="currentColor" />
-      <rect x="6" y="6.5" width="4" height="4" rx="0.8" stroke="currentColor" />
-      <rect x="6" y="11" width="4" height="4" rx="0.8" stroke="currentColor" />
-      <rect x="1.5" y="11" width="4" height="4" rx="0.8" stroke="currentColor" />
-      <rect x="10" y="1" width="4" height="4" rx="0.8" transform="rotate(12 12 3)" stroke="currentColor" />
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="text-accent transition-transform group-hover:rotate-12"
+      aria-hidden
+    >
+      <path d="M19.44 7.85c-.05.32.06.65.29.88l1.57 1.57c.47.47.7 1.09.7 1.7s-.23 1.24-.7 1.71l-1.61 1.61a.98.98 0 0 1-.84.28c-.47-.07-.8-.48-.97-.93a2.5 2.5 0 1 0-3.21 3.21c.45.17.86.5.93.97a.98.98 0 0 1-.28.84l-1.61 1.61c-.47.47-1.09.7-1.7.7s-1.24-.23-1.71-.7l-1.57-1.57a1.03 1.03 0 0 0-.88-.29c-.49.07-.84.5-1.02.97a2.5 2.5 0 1 1-3.24-3.24c.47-.18.9-.53.97-1.02a1.03 1.03 0 0 0-.29-.88l-1.57-1.57A2.4 2.4 0 0 1 2 12c0-.62.24-1.23.7-1.7l1.53-1.53c.24-.24.58-.35.92-.3.51.08.88.53 1.07 1.01a2.5 2.5 0 1 0 3.26-3.26c-.48-.19-.93-.56-1.01-1.07-.05-.34.06-.68.3-.92L10.3 2.7c.47-.47 1.09-.7 1.7-.7s1.24.23 1.7.7l1.58 1.57c.23.23.55.34.87.29.5-.07.84-.5 1.02-.97a2.5 2.5 0 1 1 3.24 3.24c-.47.18-.9.53-.97 1.02Z" />
     </svg>
   );
 }
