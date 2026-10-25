@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
 import { UserMenu } from "@/components/UserMenu";
 import { ApiError, apiFetch } from "@/lib/api/client";
@@ -19,10 +19,11 @@ export function Ide() {
   const [run, setRun] = useState<RunState>({ kind: "idle" });
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
 
-  function updateCode(value: string) {
+  // Stable identity: CodeEditor must not get a new onChange on every render.
+  const updateCode = useCallback((value: string) => {
     codeRef.current = value;
     setCode(value);
-  }
+  }, []);
 
   async function execute(inputs: string[], marks: number[]) {
     setRun({ kind: "running" });

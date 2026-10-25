@@ -29,3 +29,30 @@ def test_agent_unconfigured_is_503(client: TestClient) -> None:
 def test_run_rejects_oversized_source(client: TestClient) -> None:
     res = client.post("/api/v1/run", json={"code": "Α" * 50_001})
     assert res.status_code == 422
+
+
+def test_check_valid_program(client: TestClient) -> None:
+    res = client.post("/api/v1/check", json={"code": "ΠΡΟΓΡΑΜΜΑ Α\nΑΡΧΗ\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ"})
+    assert res.status_code == 200
+    assert res.json() == {"error": None}
+
+
+def test_check_reports_first_error_with_position(client: TestClient) -> None:
+    res = client.post(
+        "/api/v1/check", json={"code": "ΠΡΟΓΡΑΜΜΑ Α\nΑΡΧΗ\n  ΓΡΑΨΕ y\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ"}
+    )
+    assert res.json()["error"] == {
+        "kind": "syntax",
+        "message": "Η μεταβλητή y δεν έχει δηλωθεί.",
+        "line": 3,
+        "column": 9,
+        "end_column": 10,
+    }
+
+
+def test_run_returns_syntax_errors(client: TestClient) -> None:
+    res = client.post(
+        "/api/v1/run", json={"code": "ΠΡΟΓΡΑΜΜΑ Α\nΑΡΧΗ\n  x = 1\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ"}
+    )
+    assert res.status_code == 200
+    assert res.json()["status"] == "error"

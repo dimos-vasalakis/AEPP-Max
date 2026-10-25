@@ -14,7 +14,7 @@ Supabase provides Auth, and the agent uses the OpenAI Agents SDK (`openai-agents
 ## Status
 
 This is a scaffold. Not built yet:
-- **The interpreter.** `app/glossa/lexer.py`, `parser.py` and `interpreter.py`, plus the AST in `nodes.py`, raise `NotImplementedError`. Until they land, `/run` returns 501 and the agent's tools return `"unavailable"`. `builtins.py` is done.
+- **Executing programs.** `app/glossa/interpreter.py` `execute()` raises `NotImplementedError`. `/run` already returns syntax errors, but a valid program gets 501, and the agent's tools return `"unavailable"`. Done so far: the lexer, parser, static checks (`checker.py`), AST (`nodes.py`) and `builtins.py`.
 - **Step-by-step execution and the trace table (πίνακας τιμών).** The backend contract exists: `trace=true` returns `TraceStep`s.
 - **Smaller pieces:**
   - save/open programs in the UI (the `/programs` API exists);
@@ -82,13 +82,34 @@ Each ΓΛΩΣΣΑ language rule needs a pytest case (program in, expected output
 **ΓΛΩΣΣΑ fidelity comes first.** Students are graded on textbook ΓΛΩΣΣΑ. The interpreter must accept exactly what the textbook and the Διερμηνευτής accept, reject the rest, and report errors in Greek with line numbers. A program that runs here but would lose marks in the exam is a bug. `docs/glossa.md` is the spec. Settle its **Verify** items (textbook or Διερμηνευτής) before implementing them, then update the doc.
 
 **Interpreter (`backend/app/glossa/`).** Pure Python with no web or DB imports.
-- Pipeline: `tokenize → parse → execute`. The entry point is `glossa.run(source, inputs, limits=, trace=) -> RunResult`.
-- It never raises for student mistakes. They come back as status `error` with `ErrorInfo(kind, message, line)`, which it builds from a `GlossaError`.
-- Static checks (undeclared names, assigning to a constant, wrong argument counts) go in the parser, so errors in code that never runs are still reported.
+- Pipeline: `tokenize` (`lexer.py`) → `parse` (`parser.py`, recursive descent, which then runs `checker.check_program`) → `execute`. The entry points are `glossa.run(source, inputs, limits=, trace=) -> RunResult` and `glossa.check(source) -> ErrorInfo | None`.
+- It never raises for student mistakes. They come back as status `error` with `ErrorInfo(kind, message, line, column, end_column)`, built from a `GlossaError`. Use `GlossaError.at(token, msg)` for syntax errors.
+- Only the first error is reported, and it says how to fix common mistakes. Examples: `=` instead of `<-`; `ΤΕΛΟΣ ΑΝ` without the underscore; `0 < x < 10`; Latin look-alike letters (`APXH`); a forgotten ΑΡΧΗ; a procedure called without ΚΑΛΕΣΕ.
+- Keywords and names are compared after `lexer.normalize()`: uppercase, no accents, `ς` → `Σ`. Nodes keep the student's spelling; compare names by `.key`.
+- `checker.py` holds the static checks, so errors in code that never runs are still reported:
+  - undeclared or duplicate names;
+  - assigning to a constant;
+  - array dimensions and indexing;
+  - calls (arity, function vs procedure);
+  - parameters declared in the subprogram;
+  - a function that never assigns its name;
+  - no globals; the main program's constants are visible in subprograms (a Verify item).
+
+  Types are checked at runtime, not here.
 - It is CPU-bound, so async callers use `asyncio.to_thread`. A thread can't be killed, so `execute` must enforce `RunLimits` itself: steps, wall-clock timeout, output lines and trace length.
 - The dataclasses in `result.py` are the `/run` response. `frontend/src/lib/glossa/types.ts` mirrors them, so change both together.
 
 Why the interpreter lives on the backend: one implementation serves the IDE, the agent's tools and, later, exercise checking, which can't trust the client.
+
+**Editor: error marking and autocomplete (no AI, no tokens).**
+- **Error marking.** `lib/glossa/lint.ts` sends the code to `POST /api/v1/check` (public) 500 ms after typing stops. That is the same parser `/run` uses, so the editor and Εκτέλεση never disagree. `toDiagnostic` turns the error's line and columns into a red underline, a gutter dot and a hover message. If the backend is unreachable, nothing is marked.
+- **Autocomplete.** `lib/glossa/completion.ts` is browser-only. Matching ignores case and accents (`πρ` → ΠΡΟΓΡΑΜΜΑ).
+  - At the start of a line it offers whole blocks as snippets (ΑΝ … ΤΕΛΟΣ_ΑΝ, ΓΙΑ, ΟΣΟ, ΕΠΙΛΕΞΕ, the program skeleton, subprograms) plus statement keywords.
+  - Mid-line it offers ΤΟΤΕ, ΑΠΟ, operators and built-ins.
+  - In both positions it offers the student's own names.
+  - Tab accepts a suggestion, then jumps between the block's blanks; Enter stays a plain new line.
+- **Shared vocabulary.** `lib/glossa/vocabulary.ts` holds the word lists for both the highlighter and autocomplete. Keep it in sync with `lexer.py`.
+- **@uiw/react-codemirror caveat.** It reconfigures the whole editor whenever `extensions`, `theme`, `basicSetup` or `onChange` change identity, which also cancels a snippet's Tab stops. Keep them stable: module constants in `CodeEditor.tsx`, `useCallback` for `updateCode` in `Ide.tsx`.
 
 **Running programs and input.** `POST /api/v1/run` is public, since only the agent costs money.
 - `ΔΙΑΒΑΣΕ` reads from `inputs`. When they run out, the status is `needs_input`.

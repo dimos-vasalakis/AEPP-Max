@@ -6,6 +6,9 @@ export type ErrorInfo = {
   kind: "syntax" | "runtime";
   message: string;
   line: number | null;
+  /** 1-based columns of the offending token on `line`; end is exclusive. */
+  column: number | null;
+  end_column: number | null;
 };
 
 export type TraceStep = {

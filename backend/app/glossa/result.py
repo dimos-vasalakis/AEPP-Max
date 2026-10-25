@@ -27,6 +27,9 @@ class ErrorInfo:
     kind: ErrorKind
     message: str
     line: int | None = None
+    # 1-based columns of the offending token on `line`; end is exclusive.
+    column: int | None = None
+    end_column: int | None = None
 
 
 @dataclass

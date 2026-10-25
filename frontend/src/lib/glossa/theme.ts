@@ -24,6 +24,17 @@ export const editorTheme = [
       "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
         backgroundColor: "#e5141b40",
       },
+      ".cm-tooltip": {
+        backgroundColor: "var(--panel-2)",
+        border: "1px solid var(--border)",
+        color: "var(--text)",
+      },
+      ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
+        backgroundColor: "#e5141b40",
+        color: "var(--text)",
+      },
+      ".cm-completionDetail": { color: "var(--muted)", fontStyle: "normal", marginLeft: "1em" },
+      ".cm-diagnostic-error": { borderLeftColor: "var(--danger)" },
     },
     { dark: true },
   ),

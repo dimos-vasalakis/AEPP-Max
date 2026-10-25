@@ -1,27 +1,22 @@
 import { StreamLanguage, type StreamParser } from "@codemirror/language";
+import {
+  BOOLEANS,
+  BUILTINS,
+  DECLARATION_TYPES,
+  KEYWORDS,
+  normalizeWord,
+  OPERATOR_WORDS,
+  RETURN_TYPES,
+} from "./vocabulary";
 
-// Highlighting only; the backend's lexer is the real definition of the language.
-const KEYWORDS = new Set([
-  "ΠΡΟΓΡΑΜΜΑ", "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ", "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ",
-  "ΔΙΑΒΑΣΕ", "ΓΡΑΨΕ",
-  "ΑΝ", "ΤΟΤΕ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΤΕΛΟΣ_ΑΝ",
-  "ΕΠΙΛΕΞΕ", "ΠΕΡΙΠΤΩΣΗ", "ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ",
-  "ΓΙΑ", "ΑΠΟ", "ΜΕΧΡΙ", "ΜΕ_ΒΗΜΑ", "ΟΣΟ", "ΕΠΑΝΑΛΑΒΕ", "ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
-  "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ", "ΜΕΧΡΙΣ_ΟΤΟΥ",
-  "ΣΥΝΑΡΤΗΣΗ", "ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ", "ΔΙΑΔΙΚΑΣΙΑ", "ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ", "ΚΑΛΕΣΕ",
-]);
-const TYPES = new Set([
-  "ΑΚΕΡΑΙΕΣ", "ΠΡΑΓΜΑΤΙΚΕΣ", "ΧΑΡΑΚΤΗΡΕΣ", "ΛΟΓΙΚΕΣ",
-  "ΑΚΕΡΑΙΑ", "ΠΡΑΓΜΑΤΙΚΗ", "ΧΑΡΑΚΤΗΡΑΣ", "ΛΟΓΙΚΗ",
-]);
-const OPERATOR_WORDS = new Set(["DIV", "MOD", "ΚΑΙ", "Η", "ΟΧΙ"]);
-const CONSTANTS = new Set(["ΑΛΗΘΗΣ", "ΨΕΥΔΗΣ"]);
-const BUILTINS = new Set(["Α_Μ", "Α_Τ", "Τ_Ρ", "ΗΜ", "ΣΥΝ", "ΕΦ", "ΛΟΓ", "Ε"]);
+export { normalizeWord } from "./vocabulary";
 
-/** Uppercase without accents, so `αλλιώς_αν` and `ΑΛΛΙΩΣ_ΑΝ` match (ς → Σ too). */
-export function normalizeWord(word: string): string {
-  return word.normalize("NFD").replace(/\p{M}/gu, "").toUpperCase();
-}
+// Highlighting only; errors come from the backend's parser (lint.ts).
+const keywords = new Set(KEYWORDS);
+const types = new Set([...DECLARATION_TYPES, ...RETURN_TYPES]);
+const operatorWords = new Set(OPERATOR_WORDS);
+const booleans = new Set(BOOLEANS);
+const builtins = new Set(Object.keys(BUILTINS));
 
 const parser: StreamParser<null> = {
   name: "glossa",
@@ -41,11 +36,11 @@ const parser: StreamParser<null> = {
     if (stream.match(/^(<-|←|<=|>=|<>|\.\.|[-+*/^=<>&])/)) return "operator";
     if (stream.match(/^[\p{L}_][\p{L}\p{N}_]*/u)) {
       const word = normalizeWord(stream.current());
-      if (KEYWORDS.has(word)) return "keyword";
-      if (TYPES.has(word)) return "typeName";
-      if (OPERATOR_WORDS.has(word)) return "operatorKeyword";
-      if (CONSTANTS.has(word)) return "bool";
-      if (BUILTINS.has(word)) return "standard(variableName)";
+      if (keywords.has(word)) return "keyword";
+      if (types.has(word)) return "typeName";
+      if (operatorWords.has(word)) return "operatorKeyword";
+      if (booleans.has(word)) return "bool";
+      if (builtins.has(word)) return "standard(variableName)";
       return "variableName";
     }
     stream.next();

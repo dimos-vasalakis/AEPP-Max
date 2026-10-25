@@ -164,6 +164,22 @@ Report errors in Greek, with the line number, in the style of the Διερμην
 
 Report syntax errors at the first problem. Students fix one error at a time.
 
+## What the parser does on uncertain points
+
+The parser (`backend/app/glossa/parser.py`, `checker.py`) had to pick something for several **Verify** items above. These choices are provisional. Change them once confirmed, and update the tests in `backend/tests/test_glossa_parser.py`.
+
+| Point | Current choice |
+|---|---|
+| Name case and accents | Ignored, as for keywords: `Σύνολο`, `ΣΥΝΟΛΟ` and `συνολο` are one variable. |
+| Name after `ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ` | Optional; if present, it must match the program's name. |
+| `^` and unary minus | `^` is left-associative; `-2^2` is `-(2^2)` (as js-glossa does). |
+| `ΓΙΑ` counter | A simple variable only, not an array element. |
+| Main-program constants in subprograms | Visible; variables are not. |
+| Functions with no parameters | Allowed. |
+| `0 < x < 10` | An error that suggests `0 < x ΚΑΙ x < 10`. |
+| Latin look-alikes (`APXH`, `TOTE`) | An error that suggests the Greek keyword. Not raised for `H`, which is a valid Latin variable name. |
+| Constant values | A literal, a signed number, or an earlier constant. No other expressions. |
+
 ## Optional: inputs stored in the program
 
 js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `ΔΙΑΒΑΣΕ`. If we support it, a shared program can carry its test inputs. The IDE would then pass them as `inputs`.
