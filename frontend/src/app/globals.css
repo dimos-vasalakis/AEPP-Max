@@ -73,8 +73,8 @@
 [data-theme="classic"] {
   color-scheme: light;
   --bg: #ffffff;
-  --panel: #ece9d8;
-  --panel-2: #f1efe2;
+  --panel: #ffffff;
+  --panel-2: #f3f3f3;
   --border: #aca899;
   --text: #000000;
   --muted: #5a5850;
@@ -83,8 +83,10 @@
   --ok: #107c10;
   --warn: #8a5a00;
   --danger: #c50f1f;
-  --active-line: #ffffe1;
-  --output-bg: #ffffe1;
+  --active-line: #f0f0f0;
+  --output-bg: #ffffff;
+  --run: #2ebd4a;
+  --font-size-default: 18px;
   --gutter-bg: linear-gradient(to right, #dddefd, #b2c4e4);
   --gutter-text: #1a1a1a;
   --gutter-border: 1px solid #aca899;
@@ -159,5 +161,5 @@ body {
 
 .cm-editor .cm-scroller {
   font-family: var(--editor-font);
-  font-size: var(--editor-font-size, 14px);
+  font-size: var(--editor-font-size, var(--font-size-default, 14px));
 }

@@ -1,11 +1,15 @@
 "use client";
 
 import { NavPopover } from "@/components/NavPopover";
-import { DEFAULT_FONT_SIZE, FONT_SIZES, setFontSize, useFontSize } from "@/lib/useSettings";
+import { defaultFontSize } from "@/lib/fontSize";
+import { FONT_SIZES, setFontSize, useFontSize } from "@/lib/useSettings";
+import { useTheme } from "@/lib/useTheme";
 
 /** The gear: preferences kept in this browser. Colors live in Επεκτάσεις. */
 export function SettingsMenu() {
-  const size = useFontSize();
+  const chosen = useFontSize();
+  const theme = useTheme();
+  const size = chosen ?? defaultFontSize(theme);
   return (
     <NavPopover label="Ρυθμίσεις" icon={<GearIcon />}>
       <h2 className="mb-3 font-semibold">Ρυθμίσεις</h2>
@@ -30,10 +34,10 @@ export function SettingsMenu() {
         >
           +
         </button>
-        {size !== DEFAULT_FONT_SIZE && (
+        {chosen !== null && (
           <button
             type="button"
-            onClick={() => setFontSize(DEFAULT_FONT_SIZE)}
+            onClick={() => setFontSize(null)}
             className="ml-auto text-xs text-muted hover:text-text"
           >
             Επαναφορά

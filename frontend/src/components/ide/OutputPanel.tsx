@@ -82,7 +82,7 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
       <div
         ref={body}
         className="output-body min-h-0 flex-1 overflow-auto p-3 font-mono leading-6"
-        style={{ fontSize: "var(--editor-font-size, 14px)" }}
+        style={{ fontSize: "var(--editor-font-size, var(--font-size-default, 14px))" }}
         aria-live="polite"
       >
         {run.kind === "idle" && (
