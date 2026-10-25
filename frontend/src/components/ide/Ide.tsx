@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
@@ -47,7 +47,8 @@ export function Ide() {
   // doesn't swallow the key first. Re-attached each render to see the latest run state.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const isRun = e.key === "F9" || e.code === "F9" || ((e.ctrlKey || e.metaKey) && e.key === "Enter");
+      const isRun =
+        e.key === "F9" || e.code === "F9" || ((e.ctrlKey || e.metaKey) && e.key === "Enter");
       if (!isRun) return;
       e.preventDefault();
       e.stopPropagation();
@@ -83,11 +84,8 @@ export function Ide() {
           aria-label="Εκτέλεση"
           title="Εκτέλεση (F9 ή Ctrl+Enter)"
           className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
-          style={{ color: "var(--run, var(--accent))" }}
         >
-<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
-            <path d="M3.5 1.5v13l11-6.5z" fill="currentColor" />
-          </svg>
+          <RunIcon />
         </button>
       </Navbar>
 
@@ -128,5 +126,31 @@ export function Ide() {
         <AgentPanel code={code} onProposeEdit={proposeEdit} />
       </div>
     </div>
+  );
+}
+
+/**
+ * The run triangle. Flat in the theme's --run color (the accent by default); a
+ * theme can add a gradient and an outline (--run-light, --run-outline), as the
+ * Διερμηνευτής's green XP button has.
+ */
+function RunIcon() {
+  // A unique gradient id, in case the icon is ever drawn twice (useId's colons aren't valid in url(#…)).
+  const fill = `run-fill-${useId().replace(/[^\w-]/g, "")}`;
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+      <defs>
+        <linearGradient id={fill} x1="0" y1="0" x2="0.6" y2="1">
+          <stop offset="0" style={{ stopColor: "var(--run-light, var(--run, var(--accent)))" }} />
+          <stop offset="1" style={{ stopColor: "var(--run, var(--accent))" }} />
+        </linearGradient>
+      </defs>
+      <path
+        d="M4 2v14l11.5-7z"
+        fill={`url(#${fill})`}
+        strokeLinejoin="round"
+        style={{ stroke: "var(--run-outline, none)", strokeWidth: 1.2 }}
+      />
+    </svg>
   );
 }

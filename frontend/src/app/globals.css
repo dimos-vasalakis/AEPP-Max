@@ -83,9 +83,11 @@
   --ok: #107c10;
   --warn: #8a5a00;
   --danger: #c50f1f;
-  --active-line: #f0f0f0;
+  --active-line: #ffffe1;
   --output-bg: #ffffff;
-  --run: #2ebd4a;
+  --run: #22a81e;
+  --run-light: #7dec5f;
+  --run-outline: #0e6b0c;
   --font-size-default: 18px;
   --gutter-bg: linear-gradient(to right, #dddefd, #b2c4e4);
   --gutter-text: #1a1a1a;
@@ -109,25 +111,102 @@
   --syn-comment: #808080;
 }
 
-/* Its output screen numbers the lines in a pink-red strip; the others hide the numbers. */
+/*
+ * Its output screen, as in the Διερμηνευτής: a tab-like title, a blue-gray number
+ * strip down the left (like the editor's), program output in bold black, typed
+ * values in blue italic, and the line waiting for input in yellow. The other
+ * themes hide the numbers.
+ */
+[data-theme="classic"] .output-header {
+  background: var(--panel-2);
+}
+[data-theme="classic"] .output-title {
+  align-self: flex-end;
+  margin-bottom: -1px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-bottom-color: var(--output-bg);
+  border-radius: 3px 3px 0 0;
+  background: var(--output-bg);
+  color: var(--text);
+  font-weight: normal;
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+/*
+ * --output-strip is the number strip's width; text starts --output-indent in.
+ * The strip is the body's background, so it runs the full height however short
+ * the output. Lines indent their text and pull the number back into the strip,
+ * so a wrapped line continues beside the strip, not over it.
+ */
 [data-theme="classic"] .output-body {
-  padding-left: 0;
+  --output-strip: 2.25rem;
+  --output-indent: calc(var(--output-strip) + 0.4rem);
+  padding: 0 0 0.5rem;
+  background:
+    linear-gradient(var(--border), var(--border)) var(--output-strip) 0 / 1px 100% no-repeat,
+    var(--gutter-bg) left top / var(--output-strip) 100% no-repeat,
+    var(--output-bg);
 }
 [data-theme="classic"] .output-body > p {
-  padding-left: 0.75rem;
+  margin-left: calc(var(--output-indent) + 0.1rem);
+  margin-right: 0.75rem;
+}
+[data-theme="classic"] .output-line,
+[data-theme="classic"] .output-typed {
+  padding-left: var(--output-indent);
 }
 [data-theme="classic"] .output-num {
   display: inline-block;
-  min-width: 2.5rem;
-  padding: 0 0.4rem;
-  margin-right: 0.6rem;
+  width: var(--output-strip);
+  padding-right: 0.3rem;
+  margin-right: 0.4rem;
   text-align: right;
-  color: #1a1a1a;
-  background: linear-gradient(to right, #ffd8d8, #fe9d9c);
+  color: var(--gutter-text);
+  font-size: 0.75em;
+  font-style: normal;
+  font-weight: normal;
+}
+[data-theme="classic"] .output-line .output-num,
+[data-theme="classic"] .output-typed .output-num {
+  margin-left: calc(-1 * var(--output-indent));
+}
+[data-theme="classic"] .output-line {
+  color: var(--text);
+  font-weight: bold;
 }
 [data-theme="classic"] .output-typed {
-  color: #0000ff;
+  color: var(--syn-keyword);
   font-style: italic;
+}
+[data-theme="classic"] .output-prompt {
+  display: none;
+}
+/* Hidden from sight only: screen readers still announce the input's label. */
+[data-theme="classic"] .output-input-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+[data-theme="classic"] .output-input {
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  /* Yellow from the strip's edge on, so the strip stays blue beside it. */
+  background: linear-gradient(to right, transparent var(--output-strip), var(--active-line) 0);
+}
+[data-theme="classic"] .output-input input {
+  font-weight: bold;
+  caret-shape: underscore;
+}
+[data-theme="classic"] .output-input input::placeholder {
+  color: transparent;
 }
 
 /* The line number of a line with an error turns red (errorLineNumbers in lib/glossa/lint.ts). */
@@ -157,6 +236,11 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* The output screen writes in the editor's font (Courier New in the Διερμηνευτής theme). */
+.output-body {
+  font-family: var(--editor-font);
 }
 
 .cm-editor .cm-scroller {

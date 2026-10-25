@@ -57,8 +57,10 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
 
   return (
     <section className="flex min-h-0 flex-col border-t border-border bg-output">
-      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
-        <span className="font-semibold uppercase tracking-wide text-muted">Οθόνη εκτέλεσης</span>
+      <div className="output-header flex h-9 shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
+        <span className="output-title font-semibold uppercase tracking-wide text-muted">
+          Οθόνη εκτέλεσης
+        </span>
         {badge && (
           <span className={`flex items-center gap-1.5 font-medium ${badge.tone}`}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
@@ -81,7 +83,7 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
       </div>
       <div
         ref={body}
-        className="output-body min-h-0 flex-1 overflow-auto p-3 font-mono leading-6"
+        className="output-body min-h-0 flex-1 overflow-auto p-3 leading-6"
         style={{ fontSize: "var(--editor-font-size, var(--font-size-default, 14px))" }}
         aria-live="polite"
       >
@@ -123,14 +125,24 @@ function RunOutput({
   return (
     <>
       {lines.map((line, i) => (
-        <div key={i} className={line.input ? "output-typed text-accent" : "whitespace-pre-wrap"}>
+        <div
+          key={i}
+          className={line.input ? "output-typed text-accent" : "output-line whitespace-pre-wrap"}
+        >
           <span className="output-num" aria-hidden>
             {i + 1}
           </span>
-          {line.input ? `› ${line.text}` : line.text}
+          {line.input && (
+            <span className="output-prompt" aria-hidden>
+              ›{" "}
+            </span>
+          )}
+          {line.text}
         </div>
       ))}
-      {result.status === "needs_input" && <InputLine key={inputs.length} onSubmit={onInput} />}
+      {result.status === "needs_input" && (
+        <InputLine key={inputs.length} number={lines.length + 1} onSubmit={onInput} />
+      )}
       {result.status === "error" && result.error && (
         <p className="mt-2 rounded-md border-l-2 border-danger bg-danger/10 px-3 py-2 text-danger">
           {result.error.line !== null && <strong>Γραμμή {result.error.line}: </strong>}
@@ -148,17 +160,23 @@ function RunOutput({
   );
 }
 
-function InputLine({ onSubmit }: { onSubmit: (value: string) => void }) {
+function InputLine({ number, onSubmit }: { number: number; onSubmit: (value: string) => void }) {
   const [value, setValue] = useState("");
   return (
     <form
-      className="mt-1 flex items-center gap-2 rounded-md border border-accent/50 bg-bg px-2 py-1 focus-within:border-accent"
+      className="output-input mt-1 flex items-center gap-2 rounded-md border border-accent/50 bg-bg px-2 py-1 focus-within:border-accent"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit(value);
       }}
     >
-      <label htmlFor="read-input" className="shrink-0 text-xs font-medium text-accent">
+      <span className="output-num" aria-hidden>
+        {number}
+      </span>
+      <label
+        htmlFor="read-input"
+        className="output-input-label shrink-0 text-xs font-medium text-accent"
+      >
         ΔΙΑΒΑΣΕ ›
       </label>
       <input

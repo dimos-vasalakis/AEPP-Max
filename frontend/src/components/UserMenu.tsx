@@ -9,9 +9,17 @@ export function UserMenu() {
   if (user === undefined) return null;
   if (user === null) {
     return (
-      <Link href="/login" className="text-sm text-muted hover:text-text">
-        Σύνδεση
-      </Link>
+      <div className="flex items-center gap-3 text-sm">
+        <Link href="/login" className="text-muted hover:text-text">
+          Σύνδεση
+        </Link>
+        <Link
+          href="/login?mode=signup"
+          className="rounded-md bg-accent px-2.5 py-1 font-medium text-on-accent hover:brightness-110"
+        >
+          Εγγραφή
+        </Link>
+      </div>
     );
   }
   return (

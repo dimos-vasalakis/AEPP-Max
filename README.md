@@ -32,7 +32,7 @@ AEPP Max lets students write and run **ΓΛΩΣΣΑ**, the teaching pseudo-langu
 
 **A tutor that doesn't guess.** The agent runs your code on the real interpreter before it says anything about its output, replies in Greek, and uses only constructs from the textbook. In **Ερώτηση** mode it gives hints before solutions. In **Αλλαγές** mode it proposes edits that you review as a diff and accept or reject, change by change. Shift+Tab switches between the two.
 
-**Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs a sign-in (Google or an email link), since it is the part that costs money.
+**Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs an account (email link, Google or Apple), since it is the part that costs money.
 
 **Made for the screen you have.** Three built-in themes, including **Διερμηνευτής**, which looks like the desktop program students know. Make your own theme from 11 colors in the Επεκτάσεις panel.
 
