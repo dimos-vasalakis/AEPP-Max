@@ -33,7 +33,7 @@
   --syn-comment: #6b6b76;
 }
 
-/* Λευκό: the logo's colors, white and red. */
+/* Λευκό: the logo's white and red, with the same range of syntax colors as Σκούρο. */
 [data-theme="light"] {
   color-scheme: light;
   --bg: #ffffff;
@@ -51,11 +51,11 @@
   --output-bg: var(--panel);
   --editor-font: var(--font-jetbrains), ui-monospace, monospace;
   --syn-keyword: #d0101a;
-  --syn-type: #9c1218;
-  --syn-number: #b45309;
-  --syn-operator: #9c1218;
-  --syn-builtin: #8f1f6b;
-  --syn-string: #0f766e;
+  --syn-type: #c2410c;
+  --syn-number: #a16207;
+  --syn-operator: #7c3aed;
+  --syn-builtin: #1d4ed8;
+  --syn-string: #15803d;
   --syn-comment: #9a8c8e;
 }
 
@@ -159,5 +159,5 @@ body {
 
 .cm-editor .cm-scroller {
   font-family: var(--editor-font);
-  font-size: 14px;
+  font-size: var(--editor-font-size, 14px);
 }

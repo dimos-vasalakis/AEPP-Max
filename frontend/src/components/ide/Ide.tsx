@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
@@ -42,6 +42,21 @@ export function Ide() {
     }
   }
 
+  // F9 and Ctrl/Cmd+Enter run the program, like the button. (On a Mac, F9 only reaches
+  // the page with fn held, hence the second shortcut.) Capture phase, so the editor
+  // doesn't swallow the key first. Re-attached each render to see the latest run state.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const isRun = e.key === "F9" || e.code === "F9" || ((e.ctrlKey || e.metaKey) && e.key === "Enter");
+      if (!isRun) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (!e.repeat && run.kind !== "running") void execute([], []);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  });
+
   function readInput(value: string) {
     if (run.kind !== "done") return;
     execute([...run.inputs, value], [...run.marks, run.result.output.length]);
@@ -65,9 +80,13 @@ export function Ide() {
           type="button"
           onClick={() => execute([], [])}
           disabled={run.kind === "running"}
-          className="ml-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-60"
+          aria-label="Εκτέλεση"
+          title="Εκτέλεση (F9 ή Ctrl+Enter)"
+          className="flex h-8 w-8 items-center justify-center rounded-md text-accent hover:bg-panel-2 disabled:opacity-50"
         >
-          ▶ Εκτέλεση
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M5.5 2.5 12.5 9l-7 6.5" />
+          </svg>
         </button>
       </Navbar>
 

@@ -4,7 +4,7 @@ import { isThemeId, THEME_INIT_SCRIPT, THEME_STORAGE_KEY, THEMES } from "./theme
 
 /** Run the inline <head> script against a fake page with `saved` in storage. */
 function boot(saved: string | null, css: string | null = null): string | undefined {
-  const html = { dataset: {} as Record<string, string> };
+  const html = { dataset: {} as Record<string, string>, style: { setProperty: () => {} } };
   const values: Record<string, string | null> = { [THEME_STORAGE_KEY]: saved, [CUSTOM_CSS_KEY]: css };
   const storage = { getItem: (key: string) => values[key] ?? null };
   const doc = {

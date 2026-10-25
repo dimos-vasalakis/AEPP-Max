@@ -58,7 +58,7 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
   return (
     <section className="flex min-h-0 flex-col border-t border-border bg-output">
       <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
-        <span className="font-semibold uppercase tracking-wide text-muted">Έξοδος</span>
+        <span className="font-semibold uppercase tracking-wide text-muted">Οθόνη εκτέλεσης</span>
         {badge && (
           <span className={`flex items-center gap-1.5 font-medium ${badge.tone}`}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
@@ -81,7 +81,8 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
       </div>
       <div
         ref={body}
-        className="output-body min-h-0 flex-1 overflow-auto p-3 font-mono text-sm leading-6"
+        className="output-body min-h-0 flex-1 overflow-auto p-3 font-mono leading-6"
+        style={{ fontSize: "var(--editor-font-size, 14px)" }}
         aria-live="polite"
       >
         {run.kind === "idle" && (

@@ -3,6 +3,7 @@
 // hook lives in useTheme.ts.
 
 import { CUSTOM_CSS_KEY, CUSTOM_STYLE_ID, type CustomTheme } from "./customTheme";
+import { FONT_SIZE_KEY } from "./fontSize";
 
 export type BuiltinThemeId = "dark" | "light" | "classic";
 /** Built-in ids, or `custom-…` for a theme the user made (lib/customTheme.ts). */
@@ -53,7 +54,9 @@ export function themeInfo(id: ThemeId): ThemeInfo {
  * first paint, so a light theme never flashes dark on load. Custom themes ship
  * their generated CSS in localStorage, which the script injects first.
  */
-export const THEME_INIT_SCRIPT = `try{var d=document,s=localStorage,c=s.getItem(${JSON.stringify(
+export const THEME_INIT_SCRIPT = `try{var d=document,s=localStorage,f=Number(s.getItem(${JSON.stringify(
+  FONT_SIZE_KEY,
+)}));if(f>=10&&f<=28)d.documentElement.style.setProperty("--editor-font-size",f+"px");var c=s.getItem(${JSON.stringify(
   CUSTOM_CSS_KEY,
 )}),t=s.getItem(${JSON.stringify(THEME_STORAGE_KEY)});if(c){var e=d.createElement("style");e.id=${JSON.stringify(
   CUSTOM_STYLE_ID,
