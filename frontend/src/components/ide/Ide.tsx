@@ -1,12 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import { useCallback, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
-import { UserMenu } from "@/components/UserMenu";
+import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { WELCOME_PROGRAM } from "@/lib/glossa/samples";
 import type { RunResult } from "@/lib/glossa/types";
+import { themeInfo } from "@/lib/theme";
+import { useTheme } from "@/lib/useTheme";
 import { CodeEditor } from "./CodeEditor";
 import { OutputPanel, type RunState } from "./OutputPanel";
 
@@ -18,6 +19,7 @@ export function Ide() {
   const codeRef = useRef(code);
   const [run, setRun] = useState<RunState>({ kind: "idle" });
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+  const darkTheme = themeInfo(useTheme()).dark;
 
   // Stable identity: CodeEditor must not get a new onChange on every render.
   const updateCode = useCallback((value: string) => {
@@ -60,24 +62,20 @@ export function Ide() {
 
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-panel px-3">
-        <Image src="/logo.png" alt="" width={28} height={28} priority />
-        <span className="font-semibold tracking-tight">AEPP-Max</span>
+      <Navbar>
         <button
           type="button"
           onClick={() => execute([], [])}
           disabled={run.kind === "running"}
-          className="ml-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:brightness-110 disabled:opacity-60"
+          className="ml-2 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-60"
         >
           ▶ Εκτέλεση
         </button>
-        <div className="ml-auto">
-          <UserMenu />
-        </div>
-      </header>
+      </Navbar>
 
-      <div className="grid flex-1 grid-cols-1 lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <div className="grid grid-rows-[60dvh_40dvh] lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_minmax(140px,35%)]">
+      {/* minmax(0,1fr), not 1fr: long code lines scroll inside the editor instead of widening the page. */}
+      <div className="grid flex-1 grid-cols-[minmax(0,1fr)] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[60dvh_40dvh] lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_minmax(140px,35%)]">
           <main className="flex min-h-0 flex-col">
             {pendingEdit && (
               <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border bg-panel-2 px-3 py-2 text-sm">
@@ -99,7 +97,12 @@ export function Ide() {
               </div>
             )}
             <div className="min-h-0 flex-1">
-              <CodeEditor value={code} onChange={updateCode} original={pendingEdit?.original} />
+              <CodeEditor
+                value={code}
+                onChange={updateCode}
+                original={pendingEdit?.original}
+                dark={darkTheme}
+              />
             </div>
           </main>
           <OutputPanel run={run} onInput={readInput} />

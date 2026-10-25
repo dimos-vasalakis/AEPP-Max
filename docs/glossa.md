@@ -183,3 +183,22 @@ The parser (`backend/app/glossa/parser.py`, `checker.py`) had to pick something 
 ## Optional: inputs stored in the program
 
 js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `ΔΙΑΒΑΣΕ`. If we support it, a shared program can carry its test inputs. The IDE would then pass them as `inputs`.
+
+## What the interpreter does on uncertain points
+
+`backend/app/glossa/interpreter.py` follows the Διερμηνευτής's own defaults, as its help describes them (Εργαλεία → Επιλογές → Γλώσσα / Ασάφειες), where the textbook is silent. Tests: `backend/tests/test_glossa_interpreter.py`.
+
+| Point | Choice |
+|---|---|
+| Printing reals | 2 decimals, trailing zeros dropped: `1/3` → `0.33`, `10/4` → `2.5`, `4/2` → `2`. |
+| Comparing reals | Rounded to 8 decimals first, so `10 / 3 * 3 = 10` and `0.1 + 0.2 = 0.3` are ΑΛΗΘΗΣ. |
+| `ΓΡΑΨΕ a, b` | Values are joined with no separator, except a space between two numbers (`ΓΡΑΨΕ 1, 2` → `1 2`). |
+| `ΓΡΑΨΕ` ending in a space | The line stays open and the next ΓΡΑΨΕ continues it; that one trailing space is dropped (two spaces leave one). ΔΙΑΒΑΣΕ closes the line. |
+| ΚΑΙ / Ή | Both sides are always evaluated, so `ΟΣΟ i <= 10 ΚΑΙ Α[i] <> 0` fails at `i = 11`, as the textbook warns. |
+| DIV / MOD | Floored (the Διερμηνευτής's default, Knuth's definition): `-7 DIV 2 = -4`, `-7 MOD 2 = 1`. **Verify.** |
+| `=` / `<>` on ΛΟΓΙΚΗ | Allowed; `<`, `>` on ΛΟΓΙΚΗ are errors. |
+| `ΓΙΑ` | Bounds and step evaluated once; the counter is updated as `counter + step` each round, so after the loop it holds the first value past the bound. `ΜΕ_ΒΗΜΑ 0` is an error. Real counters and steps work. |
+| Input | An integer variable takes only an integer; a real one also accepts a decimal comma (`2,5`); a ΛΟΓΙΚΗ one accepts ΑΛΗΘΗΣ/ΨΕΥΔΗΣ in any case or accents; ΧΑΡΑΚΤΗΡΕΣ take the text as typed. A wrong value ends the run with an error. |
+| Strings with `+` | An error (no concatenation), as the textbook says. |
+| Limits | Call depth 200, arrays up to 1,000,000 cells, integers up to 10^100: past them, a runtime error instead of a hung worker. |
+

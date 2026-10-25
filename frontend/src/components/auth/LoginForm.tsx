@@ -40,7 +40,7 @@ export function LoginForm() {
   return (
     <div className="w-full max-w-sm rounded-xl border border-border bg-panel p-6">
       <Link href="/" className="mb-6 flex items-center gap-2">
-        <Image src="/logo.png" alt="" width={32} height={32} />
+        <Image src="/logo-cloud.png" alt="" width={32} height={32} />
         <span className="font-semibold">AEPP-Max</span>
       </Link>
       <h1 className="mb-1 text-lg font-semibold">Σύνδεση</h1>
@@ -77,7 +77,7 @@ export function LoginForm() {
             <button
               type="submit"
               disabled={state === "sending"}
-              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent disabled:opacity-60"
             >
               Στείλε μου σύνδεσμο
             </button>

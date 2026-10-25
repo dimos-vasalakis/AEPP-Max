@@ -21,13 +21,7 @@ def _run(code: str, inputs: list[str], trace: bool) -> str:
         max_trace_steps=AGENT_TRACE_STEPS,
         timeout_seconds=settings.run_timeout_seconds,
     )
-    try:
-        result = glossa.run(code, inputs, limits=limits, trace=trace)
-    except NotImplementedError:
-        return json.dumps(
-            {"status": "unavailable", "message": "Ο διερμηνευτής δεν είναι έτοιμος."},
-            ensure_ascii=False,
-        )
+    result = glossa.run(code, inputs, limits=limits, trace=trace)
     return json.dumps(asdict(result), ensure_ascii=False)
 
 

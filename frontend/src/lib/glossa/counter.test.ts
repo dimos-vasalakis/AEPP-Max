@@ -1,0 +1,115 @@
+import { EditorSelection, EditorState, Text } from "@codemirror/state";
+import { describe, expect, it } from "vitest";
+import { glossaAutocase } from "./autocase";
+import { forCounter, glossaCounter, latinCounter, renameInUnit } from "./counter";
+import { glossaIndent } from "./indent";
+import { glossa } from "./language";
+
+describe("latinCounter", () => {
+  it("maps a Greek letter to the Latin one on the same key", () => {
+    expect(latinCounter("ι")).toBe("i");
+    expect(latinCounter("ξ")).toBe("j");
+    expect(latinCounter("κ")).toBe("k");
+    expect(latinCounter("η")).toBe("h");
+    expect(latinCounter("ί")).toBe("i");
+    expect(latinCounter("Ι")).toBe("I");
+  });
+
+  it("leaves Latin letters and longer names alone", () => {
+    expect(latinCounter("i")).toBeNull();
+    expect(latinCounter("θεση")).toBeNull();
+    expect(latinCounter("ι1")).toBeNull();
+  });
+});
+
+describe("forCounter", () => {
+  it("finds the name after ΓΙΑ, in any case", () => {
+    expect(forCounter("  για ι απο 1 μεχρι 10")).toEqual({ from: 6, to: 7, name: "ι" });
+    expect(forCounter("ΓΙΑ θεση ΑΠΟ 1")).toEqual({ from: 4, to: 8, name: "θεση" });
+    expect(forCounter("ΓΡΑΨΕ ι")).toBeNull();
+  });
+});
+
+describe("renameInUnit", () => {
+  it("renames the declaration and every use, not strings or comments", () => {
+    const doc = Text.of([
+      "ΠΡΟΓΡΑΜΜΑ Α",
+      "ΜΕΤΑΒΛΗΤΕΣ",
+      "  ΑΚΕΡΑΙΕΣ: ι, ν",
+      "ΑΡΧΗ",
+      "  ΓΙΑ ι ΑΠΟ 1 ΜΕΧΡΙ ν",
+      "    ΓΡΑΨΕ 'ι =', Ι ! το ι",
+      "  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+      "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ",
+      "ΔΙΑΔΙΚΑΣΙΑ Δ(ι)",
+    ]);
+    const changes = renameInUnit(doc, 5, "ι", "i");
+    const renamed = EditorState.create({ doc }).update({ changes }).state.doc.toString();
+    expect(renamed).toBe(
+      [
+        "ΠΡΟΓΡΑΜΜΑ Α",
+        "ΜΕΤΑΒΛΗΤΕΣ",
+        "  ΑΚΕΡΑΙΕΣ: i, ν",
+        "ΑΡΧΗ",
+        "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ ν",
+        "    ΓΡΑΨΕ 'ι =', i ! το ι",
+        "  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ",
+        "ΔΙΑΔΙΚΑΣΙΑ Δ(ι)",
+      ].join("\n"),
+    );
+  });
+});
+
+function typing(doc: string) {
+  let state = EditorState.create({
+    doc,
+    selection: EditorSelection.cursor(doc.length),
+    extensions: [glossa, glossaIndent, glossaCounter, glossaAutocase],
+  });
+  return {
+    type(text: string) {
+      for (const ch of text) {
+        const head = state.selection.main.head;
+        state = state.update({
+          changes: { from: head, insert: ch },
+          selection: { anchor: head + 1 },
+          userEvent: "input.type",
+        }).state;
+      }
+      return state.doc.toString();
+    },
+  };
+}
+
+describe("typing a ΓΙΑ", () => {
+  const top = "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: ι\nΑΡΧΗ\n  ";
+
+  it("turns the counter Latin once it's finished, declaration included", () => {
+    const t = typing(top);
+    expect(t.type("για ι")).toBe(`${top}ΓΙΑ ι`);
+    expect(t.type(" απο 1 μεχρι 10")).toBe(
+      "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i\nΑΡΧΗ\n  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10",
+    );
+  });
+
+  it("keeps «η» a name, not the operator Η", () => {
+    expect(typing(top).type("για η απο 1")).toBe(`${top}ΓΙΑ h ΑΠΟ 1`);
+  });
+
+  it("leaves longer Greek counters as they are", () => {
+    expect(typing(top).type("για θεση απο 1")).toBe(`${top}ΓΙΑ θεση ΑΠΟ 1`);
+  });
+
+  it("turns a Greek ι in the loop's body into the counter", () => {
+    const t = typing(top);
+    t.type("για ι απο 1 μεχρι 10");
+    const loop = "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i\nΑΡΧΗ\n  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10";
+    expect(t.type("\n    γραψε ι, 'ι'")).toBe(`${loop}\n    ΓΡΑΨΕ i, 'ι'`);
+  });
+
+  it("keeps a Greek name that is a variable of its own", () => {
+    const own = "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i, ι\nΑΡΧΗ\n  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10\n    ";
+    expect(typing(own).type("ι <- 1")).toBe(`${own}ι <- 1`);
+  });
+});

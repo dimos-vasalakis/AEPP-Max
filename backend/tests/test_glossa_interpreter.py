@@ -1,0 +1,394 @@
+import pytest
+
+from app.glossa import RunLimits, RunResult, run
+
+
+def program(body: str, declarations: str = "", subprograms: str = "") -> str:
+    return f"ΠΡΟΓΡΑΜΜΑ Δοκιμή\n{declarations}\nΑΡΧΗ\n{body}\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n{subprograms}"
+
+
+def output(body: str, declarations: str = "", inputs: list[str] | None = None) -> list[str]:
+    result = run(program(body, declarations), inputs)
+    assert result.status == "ok", result.error
+    return result.output
+
+
+def error(body: str, declarations: str = "", inputs: list[str] | None = None) -> tuple[str, int]:
+    result = run(program(body, declarations), inputs)
+    assert result.status == "error", result
+    assert result.error is not None and result.error.kind == "runtime"
+    assert result.error.line is not None
+    return result.error.message, result.error.line
+
+
+WATER = """ΠΡΟΓΡΑΜΜΑ Υπολογισμός_Ποσότητας_Νερού
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: άτομα
+  ΑΚΕΡΑΙΕΣ: ημέρες
+  ΠΡΑΓΜΑΤΙΚΕΣ: ποσότητα
+
+ΑΡΧΗ
+! Είσοδος
+  ΔΙΑΒΑΣΕ άτομα
+  ΔΙΑΒΑΣΕ ημέρες
+
+! Επεξεργασία
+  ποσότητα <- ημέρες* 2.5
+  ποσότητα <- ποσότητα + 5
+  ποσότητα <- ποσότητα* άτομα
+
+! Έξοδος
+  ΓΡΑΨΕ ποσότητα
+ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ
+"""
+
+
+class TestRunning:
+    def test_a_whole_program(self) -> None:
+        result = run(WATER, ["4", "3"])
+        assert result.status == "ok"
+        assert result.output == ["50"]
+        assert result.steps == 6
+
+    def test_asks_for_input_when_it_runs_out(self) -> None:
+        result = run(WATER, ["4"])
+        assert result.status == "needs_input"
+        assert result.output == []
+        assert run(WATER, ["4", "3"]).status == "ok"
+
+    def test_the_prompt_comes_before_the_question(self) -> None:
+        body = "  ΓΡΑΨΕ 'Δώσε αριθμό: '\n  ΔΙΑΒΑΣΕ x\n  ΓΡΑΨΕ 'Διπλάσιο: ', 2 * x"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x"), [])
+        assert result.status == "needs_input"
+        assert result.output == ["Δώσε αριθμό:"]
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", ["21"]) == ["Δώσε αριθμό:", "Διπλάσιο: 42"]
+
+
+class TestWrite:
+    def test_joins_values_with_a_space_only_between_numbers(self) -> None:
+        assert output("  ΓΡΑΨΕ 'α=', 1, 2, ' ', ΑΛΗΘΗΣ") == ["α=1 2 ΑΛΗΘΗΣ"]
+
+    def test_prints_reals_with_two_decimals(self) -> None:
+        assert output("  ΓΡΑΨΕ 1 / 3\n  ΓΡΑΨΕ 10 / 4\n  ΓΡΑΨΕ 4 / 2\n  ΓΡΑΨΕ -0.001") == [
+            "0.33",
+            "2.5",
+            "2",
+            "0",
+        ]
+
+    def test_a_trailing_space_keeps_the_line_open(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 3\n    ΓΡΑΨΕ i, ' '\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ 'τέλος'"
+        # The line stays open until a ΓΡΑΨΕ that doesn't end with a space.
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i") == ["123τέλος"]
+        two_spaces = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 3\n    ΓΡΑΨΕ i, '  '\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ ''"
+        assert output(two_spaces, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i") == ["1 2 3 "]
+
+
+class TestExpressions:
+    @pytest.mark.parametrize(
+        ("expr", "expected"),
+        [
+            ("7 DIV 2", "3"),
+            ("7 MOD 2", "1"),
+            ("2 ^ 10", "1024"),
+            ("2 ^ -1", "0.5"),
+            ("-2 ^ 2", "-4"),
+            ("1 + 2 * 3", "7"),
+            ("10 / 3 * 3 = 10", "ΑΛΗΘΗΣ"),
+            ("0.1 + 0.2 = 0.3", "ΑΛΗΘΗΣ"),
+            ("'αβ' < 'αγ'", "ΑΛΗΘΗΣ"),
+            ("ΟΧΙ 1 > 2 ΚΑΙ ΑΛΗΘΗΣ", "ΑΛΗΘΗΣ"),
+            ("Τ_Ρ(16) + Α_Τ(-3)", "7"),
+            ("Α_Μ(7 / 2)", "3"),
+            ("ΗΜ(30)", "0.5"),
+        ],
+    )
+    def test_values(self, expr: str, expected: str) -> None:
+        assert output(f"  ΓΡΑΨΕ {expr}") == [expected]
+
+    @pytest.mark.parametrize(
+        ("expr", "message"),
+        [
+            ("1 / 0", "Διαίρεση με το μηδέν."),
+            ("5 MOD 0", "Διαίρεση με το μηδέν."),
+            ("5.5 DIV 2", "Ο τελεστής DIV εφαρμόζεται μόνο σε ακέραιους."),
+            ("'α' + 1", "Ο τελεστής + εφαρμόζεται μόνο σε αριθμούς, όχι σε αλφαριθμητική τιμή."),
+            ("1 = 'α'", "Δεν συγκρίνεται ακέραια με αλφαριθμητική τιμή."),
+            ("1 ΚΑΙ ΑΛΗΘΗΣ", "Το ΚΑΙ εφαρμόζεται μόνο σε λογικές τιμές."),
+            ("Τ_Ρ(-1)", "Η συνάρτηση Τ_Ρ δεν μπορεί να λάβει αρνητική τιμή."),
+            ("9 ^ 9 ^ 9", "Το αποτέλεσμα είναι πολύ μεγάλο."),
+        ],
+    )
+    def test_errors(self, expr: str, message: str) -> None:
+        assert error(f"  ΓΡΑΨΕ 1\n  ΓΡΑΨΕ {expr}") == (message, 5)
+
+
+class TestVariables:
+    def test_unset_variable(self) -> None:
+        assert error("  y <- x + 1", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x, y") == (
+            "Η μεταβλητή x δεν έχει πάρει τιμή.",
+            5,
+        )
+
+    def test_types(self) -> None:
+        declarations = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x\n  ΠΡΑΓΜΑΤΙΚΕΣ: y"
+        assert output("  y <- 3\n  ΓΡΑΨΕ y / 2", declarations) == ["1.5"]
+        assert error("  x <- 7 / 2", declarations) == (
+            "Δεν μπορεί να εκχωρηθεί πραγματική τιμή στη ακέραια μεταβλητή x.",
+            6,
+        )
+
+    def test_constants(self) -> None:
+        declarations = "ΣΤΑΘΕΡΕΣ\n  Ν = 3\n  Κ = 3.14\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Π[Ν]"
+        assert output("  Π[Ν] <- 2\n  ΓΡΑΨΕ Π[3] * Κ", declarations) == ["6.28"]
+
+    def test_arrays(self) -> None:
+        declarations = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Μ[2, 3], i, j"
+        body = (
+            "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 2\n    ΓΙΑ j ΑΠΟ 1 ΜΕΧΡΙ 3\n      Μ[i, j] <- 10 * i + j\n"
+            "    ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ Μ[2, 3]"
+        )
+        assert output(body, declarations) == ["23"]
+        assert error("  Μ[3, 1] <- 0", declarations) == (
+            "Ο δείκτης 3 είναι εκτός ορίων του πίνακα Μ (1..2).",
+            5,
+        )
+        assert error("  ΓΡΑΨΕ Μ[1, 2]", declarations) == (
+            "Το στοιχείο Μ[1, 2] δεν έχει πάρει τιμή.",
+            5,
+        )
+
+
+class TestInput:
+    def test_converts_to_the_variables_type(self) -> None:
+        declarations = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: α\n  ΠΡΑΓΜΑΤΙΚΕΣ: β\n  ΧΑΡΑΚΤΗΡΕΣ: γ\n  ΛΟΓΙΚΕΣ: δ"
+        body = "  ΔΙΑΒΑΣΕ α, β, γ, δ\n  ΓΡΑΨΕ α + β, ' ', γ, ' ', δ"
+        assert output(body, declarations, [" -3 ", "2,5", "Γιάννης", "αληθής"]) == [
+            "-0.5 Γιάννης ΑΛΗΘΗΣ"
+        ]
+
+    def test_rejects_a_value_of_the_wrong_kind(self) -> None:
+        assert error("  ΔΙΑΒΑΣΕ α", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: α", ["3.5"]) == (
+            "Δόθηκε «3.5», αλλά η α περιμένει ακέραιο αριθμό.",
+            5,
+        )
+
+
+class TestControlFlow:
+    def test_if_chain(self) -> None:
+        body = (
+            "  ΓΙΑ x ΑΠΟ -1 ΜΕΧΡΙ 1\n    ΑΝ x < 0 ΤΟΤΕ\n      ΓΡΑΨΕ 'αρνητικός'\n"
+            "    ΑΛΛΙΩΣ_ΑΝ x = 0 ΤΟΤΕ\n      ΓΡΑΨΕ 'μηδέν'\n    ΑΛΛΙΩΣ\n      ΓΡΑΨΕ 'θετικός'\n"
+            "    ΤΕΛΟΣ_ΑΝ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        )
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x") == ["αρνητικός", "μηδέν", "θετικός"]
+
+    def test_for_leaves_the_counter_past_the_bound(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 10 ΜΕΧΡΙ 1 ΜΕ_ΒΗΜΑ -3\n    ΓΡΑΨΕ i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ i"
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i") == ["10", "7", "4", "1", "-2"]
+
+    def test_for_that_never_runs(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 5 ΜΕΧΡΙ 1\n    ΓΡΑΨΕ i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ i"
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i") == ["5"]
+
+    def test_for_with_a_real_step(self) -> None:
+        body = "  ΓΙΑ x ΑΠΟ 0 ΜΕΧΡΙ 1 ΜΕ_ΒΗΜΑ 0.1\n    y <- x\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ y"
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΠΡΑΓΜΑΤΙΚΕΣ: x, y") == ["1"]
+
+    def test_zero_step(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 5 ΜΕ_ΒΗΜΑ 0\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        assert (
+            error(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i")[0]
+            == "Το βήμα της ΓΙΑ δεν μπορεί να είναι μηδέν."
+        )
+
+    def test_while_and_repeat(self) -> None:
+        body = (
+            "  x <- 1\n  ΟΣΟ x < 100 ΕΠΑΝΑΛΑΒΕ\n    x <- x * 2\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n"
+            "  ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ\n    x <- x - 50\n  ΜΕΧΡΙΣ_ΟΤΟΥ x < 0\n  ΓΡΑΨΕ x"
+        )
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x") == ["-22"]
+
+    def test_select(self) -> None:
+        body = (
+            "  ΓΙΑ x ΑΠΟ 1 ΜΕΧΡΙ 12 ΜΕ_ΒΗΜΑ 4\n    ΕΠΙΛΕΞΕ x\n"
+            "      ΠΕΡΙΠΤΩΣΗ 1, 2\n        ΓΡΑΨΕ 'μικρό'\n"
+            "      ΠΕΡΙΠΤΩΣΗ 3..6\n        ΓΡΑΨΕ 'μεσαίο'\n"
+            "      ΠΕΡΙΠΤΩΣΗ > 10\n        ΓΡΑΨΕ 'μεγάλο'\n"
+            "      ΠΕΡΙΠΤΩΣΗ ΑΛΛΙΩΣ\n        ΓΡΑΨΕ 'άλλο'\n"
+            "    ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        )
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x") == ["μικρό", "μεσαίο", "άλλο"]
+
+    def test_conditions_are_evaluated_in_full(self) -> None:
+        declarations = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Α[3], i"
+        body = (
+            "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 3\n    Α[i] <- i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  i <- 1\n"
+            "  ΟΣΟ i <= 3 ΚΑΙ Α[i] <> 0 ΕΠΑΝΑΛΑΒΕ\n    i <- i + 1\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        )
+        assert error(body, declarations) == (
+            "Ο δείκτης 4 είναι εκτός ορίων του πίνακα Α (1..3).",
+            9,
+        )
+
+    def test_a_number_is_not_a_condition(self) -> None:
+        assert error("  ΑΝ 1 ΤΟΤΕ\n    ΓΡΑΨΕ 1\n  ΤΕΛΟΣ_ΑΝ")[0] == (
+            "Η συνθήκη πρέπει να έχει λογική τιμή (ΑΛΗΘΗΣ ή ΨΕΥΔΗΣ)."
+        )
+
+
+SUBPROGRAMS = """
+ΣΥΝΑΡΤΗΣΗ Παραγοντικό(ν): ΑΚΕΡΑΙΑ
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: ν
+ΑΡΧΗ
+  ΑΝ ν <= 1 ΤΟΤΕ
+    Παραγοντικό <- 1
+  ΑΛΛΙΩΣ
+    Παραγοντικό <- ν * Παραγοντικό(ν - 1)
+  ΤΕΛΟΣ_ΑΝ
+ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ
+
+ΔΙΑΔΙΚΑΣΙΑ Αντιμετάθεση(α, β)
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: α, β, τ
+ΑΡΧΗ
+  τ <- α
+  α <- β
+  β <- τ
+ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ
+
+ΔΙΑΔΙΚΑΣΙΑ Γέμισε(Π, πλήθος)
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: Π[3], πλήθος, i
+ΑΡΧΗ
+  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 3
+    Π[i] <- i * i
+  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ
+  πλήθος <- 3
+ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ
+
+ΣΥΝΑΡΤΗΣΗ Άθροισμα(Π): ΑΚΕΡΑΙΑ
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: Π[3], i, σ
+ΑΡΧΗ
+  σ <- 0
+  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 3
+    σ <- σ + Π[i]
+  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ
+  Π[1] <- 0
+  Άθροισμα <- σ
+ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ
+
+ΣΥΝΑΡΤΗΣΗ Ατέρμονη(ν): ΑΚΕΡΑΙΑ
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: ν
+ΑΡΧΗ
+  Ατέρμονη <- Ατέρμονη(ν + 1)
+ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ
+
+ΣΥΝΑΡΤΗΣΗ Μισή(ν): ΑΚΕΡΑΙΑ
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: ν
+ΑΡΧΗ
+  ΑΝ ν > 0 ΤΟΤΕ
+    Μισή <- ν DIV 2
+  ΤΕΛΟΣ_ΑΝ
+ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ
+"""
+
+
+def with_subprograms(body: str, inputs: list[str] | None = None) -> RunResult:
+    declarations = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x, y, Α[3], ν"
+    return run(program(body, declarations, SUBPROGRAMS), inputs)
+
+
+class TestSubprograms:
+    def test_recursive_function(self) -> None:
+        result = with_subprograms("  ΓΡΑΨΕ Παραγοντικό(10)")
+        assert result.output == ["3628800"]
+
+    def test_procedure_copies_its_parameters_back(self) -> None:
+        result = with_subprograms("  x <- 1\n  y <- 2\n  ΚΑΛΕΣΕ Αντιμετάθεση(x, y)\n  ΓΡΑΨΕ x, y")
+        assert result.output == ["2 1"]
+
+    def test_procedure_fills_an_array_and_an_unset_variable(self) -> None:
+        result = with_subprograms("  ΚΑΛΕΣΕ Γέμισε(Α, ν)\n  ΓΡΑΨΕ Α[1], Α[2], Α[3], ν")
+        assert result.output == ["1 4 9 3"]
+
+    def test_function_gets_a_copy_of_an_array(self) -> None:
+        body = "  ΚΑΛΕΣΕ Γέμισε(Α, ν)\n  ΓΡΑΨΕ Άθροισμα(Α), ' ', Α[1]"
+        assert with_subprograms(body).output == ["14 1"]
+
+    def test_expressions_as_procedure_arguments_are_not_copied_back(self) -> None:
+        result = with_subprograms("  x <- 5\n  ΚΑΛΕΣΕ Αντιμετάθεση(x + 1, x)\n  ΓΡΑΨΕ x")
+        assert result.output == ["6"]
+
+    def test_runaway_recursion(self) -> None:
+        result = with_subprograms("  ΓΡΑΨΕ Ατέρμονη(1)")
+        assert result.status == "error" and result.error is not None
+        assert result.error.message.startswith("Πάρα πολλές κλήσεις του Ατέρμονη")
+
+    def test_function_that_ends_without_a_value(self) -> None:
+        result = with_subprograms("  ΓΡΑΨΕ Μισή(-4)")
+        assert result.error is not None
+        assert result.error.message == "Η συνάρτηση Μισή τελείωσε χωρίς να πάρει τιμή."
+        assert result.error.line == 5
+
+
+class TestLimits:
+    def test_infinite_loop(self) -> None:
+        body = "  x <- 1\n  ΟΣΟ x > 0 ΕΠΑΝΑΛΑΒΕ\n    x <- 1\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x"), limits=RunLimits(max_steps=1000))
+        assert result.status == "limit"
+        assert result.steps == 1001
+
+    def test_too_much_output(self) -> None:
+        body = "  ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n    ΓΡΑΨΕ 'ξανά'\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        result = run(program(body), limits=RunLimits(max_output_lines=10))
+        assert result.status == "limit"
+        assert len(result.output) == 10
+
+    def test_timeout(self) -> None:
+        body = "  ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        result = run(program(body), limits=RunLimits(max_steps=10**9, timeout_seconds=0.05))
+        assert result.status == "limit"
+
+
+class TestTrace:
+    def test_records_lines_changes_conditions_and_output(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 2\n    ΓΡΑΨΕ i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i"), trace=True)
+        assert result.trace is not None
+        steps = [(s.line, s.changes, s.condition, s.output) for s in result.trace]
+        assert steps == [
+            (5, {"i": "1"}, True, []),
+            (6, {}, None, ["1"]),
+            (5, {"i": "2"}, True, []),
+            (6, {}, None, ["2"]),
+            (5, {"i": "3"}, False, []),
+        ]
+
+    def test_scope_names_the_subprogram(self) -> None:
+        result = run(
+            program(
+                "  x <- 1\n  y <- 2\n  ΚΑΛΕΣΕ Αντιμετάθεση(x, y)",
+                "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x, y",
+                SUBPROGRAMS,
+            ),
+            trace=True,
+        )
+        assert result.trace is not None
+        assert {s.scope for s in result.trace} == {"Δοκιμή", "Αντιμετάθεση"}
+        assert result.trace[2].changes == {"x": "2", "y": "1"}
+
+    def test_truncates(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 100\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        result = run(
+            program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i"),
+            limits=RunLimits(max_trace_steps=10),
+            trace=True,
+        )
+        assert result.status == "ok"
+        assert result.trace is not None and len(result.trace) == 10
+        assert result.trace_truncated

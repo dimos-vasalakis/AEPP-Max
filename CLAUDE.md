@@ -13,9 +13,8 @@ Supabase provides Auth, and the agent uses the OpenAI Agents SDK (`openai-agents
 
 ## Status
 
-This is a scaffold. Not built yet:
-- **Executing programs.** `app/glossa/interpreter.py` `execute()` raises `NotImplementedError`. `/run` already returns syntax errors, but a valid program gets 501, and the agent's tools return `"unavailable"`. Done so far: the lexer, parser, static checks (`checker.py`), AST (`nodes.py`) and `builtins.py`.
-- **Step-by-step execution and the trace table (πίνακας τιμών).** The backend contract exists: `trace=true` returns `TraceStep`s.
+Programs run: the whole interpreter is in place (lexer, parser, static checks, `interpreter.py`). Not built yet:
+- **Step-by-step execution and the trace table (πίνακας τιμών) in the UI.** The backend side works: `trace=true` returns `TraceStep`s.
 - **Smaller pieces:**
   - save/open programs in the UI (the `/programs` API exists);
   - a list of past agent conversations;
@@ -30,7 +29,7 @@ Update this section as features land.
 Frontend (run from `frontend/`):
 ```bash
 npm run dev        # http://localhost:3000
-npm run build
+npm run build      # stop `npm run dev` first: both use .next/ and the dev server can end up serving stale CSS
 npm run lint       # eslint
 npm run typecheck  # next typegen && tsc --noEmit
 npm test           # vitest: src/**/*.test.ts
@@ -96,7 +95,11 @@ Each ΓΛΩΣΣΑ language rule needs a pytest case (program in, expected output
   - no globals; the main program's constants are visible in subprograms (a Verify item).
 
   Types are checked at runtime, not here.
-- It is CPU-bound, so async callers use `asyncio.to_thread`. A thread can't be killed, so `execute` must enforce `RunLimits` itself: steps, wall-clock timeout, output lines and trace length.
+- `interpreter.py` walks the checked AST. The checker has already resolved names, calls and dimensions, so it handles only what depends on values: types, unset variables, indices, division by zero, input, limits. Runtime errors carry the node's line and columns.
+  - Values are Python `int`/`float`/`str`/`bool`. A variable starts `UNSET`; arrays are flat lists. An integer stored in a ΠΡΑΓΜΑΤΙΚΗ becomes a float, and a real into an ΑΚΕΡΑΙΑ is an error.
+  - Procedures copy their parameters back to the caller's variables (or array elements) on return; expressions and constants passed in are not written back. Functions get copies only. An unset variable may be passed in (the procedure may fill it).
+  - It follows the Διερμηνευτής's defaults where the textbook is silent (docs/glossa.md, "What the interpreter does"): reals print with 2 decimals, comparisons round reals to 8 decimals, ΓΡΑΨΕ joins values with no separator except a space between two numbers, a ΓΡΑΨΕ ending in a space keeps the line open, and ΚΑΙ/Ή evaluate both sides.
+- It is CPU-bound, so async callers use `asyncio.to_thread`. A thread can't be killed, so `execute` enforces `RunLimits` itself: steps, wall-clock timeout (checked every 256 steps), output lines and trace length. It also caps call depth (200), array size and integer size, so no program can hang the worker.
 - The dataclasses in `result.py` are the `/run` response. `frontend/src/lib/glossa/types.ts` mirrors them, so change both together.
 
 Why the interpreter lives on the backend: one implementation serves the IDE, the agent's tools and, later, exercise checking, which can't trust the client.
@@ -105,9 +108,13 @@ Why the interpreter lives on the backend: one implementation serves the IDE, the
 - **Error marking.** `lib/glossa/lint.ts` sends the code to `POST /api/v1/check` (public) 500 ms after typing stops. That is the same parser `/run` uses, so the editor and Εκτέλεση never disagree. `toDiagnostic` turns the error's line and columns into a red underline, a gutter dot and a hover message. If the backend is unreachable, nothing is marked.
 - **Autocomplete.** `lib/glossa/completion.ts` is browser-only. Matching ignores case and accents (`πρ` → ΠΡΟΓΡΑΜΜΑ).
   - At the start of a line it offers whole blocks as snippets (ΑΝ … ΤΕΛΟΣ_ΑΝ, ΓΙΑ, ΟΣΟ, ΕΠΙΛΕΞΕ, the program skeleton, subprograms) plus statement keywords.
-  - Mid-line it offers ΤΟΤΕ, ΑΠΟ, operators and built-ins.
-  - In both positions it offers the student's own names.
-  - Tab accepts a suggestion, then jumps between the block's blanks; Enter stays a plain new line.
+  - Mid-line, `placeOf()` decides from the text before the word what fits there. Where a value goes (after `<-`, ΓΡΑΨΕ, ΑΝ, `(`, `,`, an operator) it offers names, built-in functions (`Α_Τ()`, kept on offer even when fully typed, since accepting adds the parentheses), ΑΛΗΘΗΣ/ΨΕΥΔΗΣ and ΟΧΙ. Right after a value it offers what continues that statement (ΤΟΤΕ on an ΑΝ line, ΑΠΟ/ΜΕΧΡΙ/ΜΕ_ΒΗΜΑ on a ΓΙΑ line, ΚΑΙ/DIV/MOD). After ΓΙΑ, ΔΙΑΒΑΣΕ and in declarations, only names.
+  - The student's own names come from code only (`words.ts` `codeWords`), never from comments or strings.
+  - Tab accepts a suggestion, then jumps between the block's blanks; Enter stays a plain new line. The blanks are empty (`ΓΙΑ ▯ ΑΠΟ ▯ ΜΕΧΡΙ ▯`): students asked for nothing pre-written.
+- **Auto-capitals.** `lib/glossa/autocase.ts` is a transaction filter. When a reserved word is finished (space, Enter or punctuation typed after it), it rewrites the word in capitals without accents (`γραψε ` → `ΓΡΑΨΕ `). It only reacts to typing and Enter, never to pastes or completions, and skips strings, comments and the student's own names.
+- **Indentation.** `lib/glossa/indent.ts` is an `indentService`. Enter after a block's first line (ΑΝ … ΤΟΤΕ, ΓΙΑ, ΟΣΟ, ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ, ΕΠΙΛΕΞΕ, ΠΕΡΙΠΤΩΣΗ, ΑΡΧΗ, ΜΕΤΑΒΛΗΤΕΣ) goes one level in. ΤΕΛΟΣ_ΑΝ, ΑΛΛΙΩΣ, ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ, ΜΕΧΡΙΣ_ΟΤΟΥ, ΠΕΡΙΠΤΩΣΗ and ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ line up with the line that opened their block (found by counting nested blocks backwards), and section words go to column 0. Such a word moves into place once finished: a transaction filter on space, and the Enter key binding (`newlineAndIndent`) before the new line. Other lines keep whatever indentation the student gave them.
+- **Loop counters.** `lib/glossa/counter.ts`: students type ΓΙΑ with the Greek keyboard on, so a one-letter Greek counter becomes the Latin letter on the same key (ι → i, ξ → j, κ → k) once finished, renamed everywhere in that program or subprogram, declaration included. After that, a one-letter Greek word typed in the body that maps to a counter becomes the counter too, unless that Greek name is used elsewhere (a variable of its own) or is η/ε (also OR / e^x). `autocase.ts` never capitalizes a ΓΙΑ counter.
+- **Filter order.** Transaction filters run last to first, so `glossaAutocase` sits after `glossaIndent` and `glossaCounter` in `CodeEditor`'s `BASE`: it must see the keystroke before they add their changes.
 - **Shared vocabulary.** `lib/glossa/vocabulary.ts` holds the word lists for both the highlighter and autocomplete. Keep it in sync with `lexer.py`.
 - **@uiw/react-codemirror caveat.** It reconfigures the whole editor whenever `extensions`, `theme`, `basicSetup` or `onChange` change identity, which also cancels a snippet's Tab stops. Keep them stable: module constants in `CodeEditor.tsx`, `useCallback` for `updateCode` in `Ide.tsx`.
 
@@ -168,12 +175,22 @@ The SSE events, in order: `conversation {id}` first, then `text {delta}`, `tool 
 **Frontend.**
 - `/` is the IDE, `components/ide/Ide.tsx` (a client component): editor, output panel, agent panel.
 - The editor is CodeMirror 6 via `@uiw/react-codemirror`. It was chosen over Monaco because it works on phones and has the merge view.
-- ΓΛΩΣΣΑ highlighting is a `StreamLanguage` in `lib/glossa/language.ts`, matching keywords without regard to case or accents. Its colors are in `lib/glossa/theme.ts`.
+- ΓΛΩΣΣΑ highlighting is a `StreamLanguage` in `lib/glossa/language.ts`, matching keywords without regard to case or accents. Its colors are in `lib/glossa/theme.ts`. Token names are `@lezer/highlight` tags, with modifiers after a dot (`variableName.standard`, not `standard(variableName)`, which CodeMirror silently drops with a console warning); a test checks for the warning. It tells integers from reals (`integer`/`float`), symbols (`punctuation`) and names with Latin letters (`variableName.special`).
 - `lib/api/client.ts` `apiFetch()` adds the Supabase token, and `ApiError.message` carries FastAPI's `detail`.
 - `lib/api/agent.ts` `streamChat()` reads the SSE stream with `fetch` plus `lib/api/sse.ts`, because EventSource can't POST or send headers.
-- Design tokens are in `globals.css` and give `bg-panel`, `text-muted`, `bg-accent` (the logo red) and so on. It is dark only.
+- **Navbar.** `components/Navbar.tsx` is shared by pages; page actions such as Εκτέλεση go in as `children`. It holds the Επεκτάσεις panel (`components/extensions/ExtensionsMenu.tsx`) and the account menu.
+- **Themes.** The panel lists them; the registry is `lib/theme.ts`.
+  - The three themes are `dark` (default), `light` (the logo's white and red) and `classic`, the Διερμηνευτής της ΓΛΩΣΣΑΣ as students see it, matched to its help pages (alkisg.mysch.gr, Επιλογές → Χρώματα κώδικα) and a student's screenshot: Courier New, bold blue words, bold red symbols, green integers, olive reals, purple italic strings, gray italic comments, gray Latin names, a light yellow current line, a blue-gray gradient line-number strip, a blue error region and a light yellow output screen.
+  - Optional tokens fall back to their neighbors when a theme leaves them out (`--syn-real` → `--syn-number`, `--syn-punctuation`, `--syn-latin`, `--syn-keyword-weight`, `--syn-type-weight`, `--syn-operator-weight`, `--syn-string-style`, `--gutter-*` (`--gutter-bg` may be a gradient), `--selection`), so only `classic` sets them. In `lib/glossa/theme.ts`, keep one HighlightStyle rule per tag: a later rule for the same tag replaces an earlier one.
+  - Every UI and editor color is a CSS token in `globals.css`: `--bg`, `--panel`, `--accent`, `--on-accent`, `--syn-*` for syntax, `--editor-font`. Tailwind exposes them as `bg-panel`, `text-muted`, `bg-accent`, `text-on-accent` and so on. Never hard-code colors.
+  - Token blocks are keyed on `[data-theme]`, so any element can preview another theme by carrying the attribute; the panel's previews do this.
+  - The active theme is `<html data-theme>`. It's saved in localStorage and applied before paint by `THEME_INIT_SCRIPT`, inlined in the layout's `<head>`; that's why `<html>` has `suppressHydrationWarning`.
+  - Components read and set it with `useTheme()` / `setTheme()` in `lib/useTheme.ts`. That file is client-only; `theme.ts` stays server-safe.
+  - The editor takes `darkEditorTheme` or `lightEditorTheme` (`lib/glossa/theme.ts`). The two differ only in CodeMirror's dark flag; their colors come from the same tokens.
+  - To add a theme: add an entry to `THEMES` and a token block in `globals.css`.
+- **Layout.** Grid tracks use `minmax(0,1fr)`, not `1fr`, so long code lines scroll inside the editor instead of widening the page on phones.
 - Fonts are Inter and JetBrains Mono, both with the Greek subset. JetBrains Mono's ligature draws `<-` as `←`, as the textbook does.
-- `src/app/icon.png`, `apple-icon.png` and `public/logo.png` are resized from the root `logo.png`.
+- The root `logo.png` is the original (cloud on black). `public/logo-cloud.png` and `src/app/icon.png` are cut out onto a transparent background (black flood-filled from the edges, rim un-premultiplied, cropped), so the logo sits on any theme. `apple-icon.png` keeps the black, since iOS fills transparency with black anyway.
 
 **Deploy.**
 - **Vercel:** set Root Directory to `frontend` and add the `NEXT_PUBLIC_*` env vars. `NEXT_PUBLIC_API_URL` is the Render URL.

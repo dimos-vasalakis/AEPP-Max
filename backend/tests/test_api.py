@@ -56,3 +56,20 @@ def test_run_returns_syntax_errors(client: TestClient) -> None:
     )
     assert res.status_code == 200
     assert res.json()["status"] == "error"
+
+
+def test_run_runs_a_program_and_asks_for_input(client: TestClient) -> None:
+    code = (
+        "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x\nΑΡΧΗ\n"
+        "  ΓΡΑΨΕ 'Δώσε αριθμό: '\n  ΔΙΑΒΑΣΕ x\n  ΓΡΑΨΕ x * x\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ"
+    )
+    first = client.post("/api/v1/run", json={"code": code})
+    assert first.status_code == 200
+    assert first.json()["status"] == "needs_input"
+    assert first.json()["output"] == ["Δώσε αριθμό:"]
+
+    done = client.post("/api/v1/run", json={"code": code, "inputs": ["7"], "trace": True})
+    body = done.json()
+    assert body["status"] == "ok"
+    assert body["output"] == ["Δώσε αριθμό:", "49"]
+    assert [step["line"] for step in body["trace"]] == [5, 6, 7]

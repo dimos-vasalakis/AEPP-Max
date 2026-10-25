@@ -90,7 +90,7 @@ export function AgentPanel({ code, onProposeEdit }: Props) {
               aria-checked={mode === m.value}
               title={m.hint}
               onClick={() => setMode(m.value)}
-              className={`rounded px-2 py-1 ${mode === m.value ? "bg-accent text-white" : "text-muted hover:text-text"}`}
+              className={`rounded px-2 py-1 ${mode === m.value ? "bg-accent text-on-accent" : "text-muted hover:text-text"}`}
             >
               {m.label}
             </button>
@@ -155,7 +155,7 @@ export function AgentPanel({ code, onProposeEdit }: Props) {
           <button
             type="submit"
             disabled={busy || !draft.trim() || user === undefined}
-            className="self-end rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            className="self-end rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent disabled:opacity-50"
           >
             Αποστολή
           </button>

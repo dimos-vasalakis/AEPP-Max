@@ -1,39 +1,85 @@
 import { describe, expect, it } from "vitest";
-import { completionOptions, inCommentOrString, namesIn } from "./completion";
+import { completionOptions, inCommentOrString, namesIn, type Place, placeOf } from "./completion";
 
-const labels = (typed: string, atLineStart: boolean, names: string[] = []) =>
-  completionOptions(typed, atLineStart, names).map((o) => o.label);
+const labels = (typed: string, place: Place, names: string[] = [], first = "") =>
+  completionOptions(typed, place, names, first).map((o) => o.label);
+
+describe("placeOf", () => {
+  it("knows where a value is expected", () => {
+    for (const before of ["x <- ", "  ΓΡΑΨΕ ", "ΓΡΑΨΕ 'α', ", "ΑΝ ", "y <- Α_Τ(", "z <- 1 + ", "ΑΝ x ΚΑΙ "]) {
+      expect(placeOf(before), before).toBe("value");
+    }
+  });
+
+  it("knows when a value was just finished", () => {
+    for (const before of ["ΑΝ x ", "ΓΙΑ i ΑΠΟ 1 ", "ΟΣΟ Α[i] ", "x <- (1 + 2) ", "ΓΡΑΨΕ 'α' ", "ΑΝ ΑΛΗΘΗΣ "]) {
+      expect(placeOf(before), before).toBe("after-value");
+    }
+  });
+
+  it("knows the other places", () => {
+    expect(placeOf("   ")).toBe("line-start");
+    expect(placeOf("ΓΙΑ ")).toBe("name");
+    expect(placeOf("ΔΙΑΒΑΣΕ ")).toBe("name");
+    expect(placeOf("ΔΙΑΒΑΣΕ α, ")).toBe("name");
+    expect(placeOf("  ΑΚΕΡΑΙΕΣ: ")).toBe("name");
+    expect(placeOf("  ΠΕΡΙΠΤΩΣΗ ")).toBe("case");
+    expect(placeOf("ΣΥΝΑΡΤΗΣΗ Φ(α): ")).toBe("return-type");
+    expect(placeOf("ΑΝ x > 0 ΤΟΤΕ ")).toBe("none");
+  });
+});
 
 describe("completionOptions", () => {
   it("offers ΠΡΟΓΡΑΜΜΑ for «πρ», ignoring case and accents", () => {
-    expect(labels("πρ", true)[0]).toBe("ΠΡΟΓΡΑΜΜΑ");
-    expect(labels("Πρό", true)[0]).toBe("ΠΡΟΓΡΑΜΜΑ");
+    expect(labels("πρ", "line-start")[0]).toBe("ΠΡΟΓΡΑΜΜΑ");
+    expect(labels("Πρό", "line-start")[0]).toBe("ΠΡΟΓΡΑΜΜΑ");
   });
 
   it("offers whole blocks at the start of a line", () => {
-    expect(labels("αν", true)).toEqual(["ΑΝ", "ΑΝ … ΑΛΛΙΩΣ"]);
+    expect(labels("αν", "line-start")).toEqual(["ΑΝ", "ΑΝ … ΑΛΛΙΩΣ"]);
     // The block stays on offer even once the keyword is fully typed.
-    expect(labels("ΑΝ", true)).toEqual(["ΑΝ", "ΑΝ … ΑΛΛΙΩΣ"]);
+    expect(labels("ΑΝ", "line-start")).toEqual(["ΑΝ", "ΑΝ … ΑΛΛΙΩΣ"]);
   });
 
-  it("offers mid-line keywords after something on the line", () => {
-    expect(labels("το", false)).toEqual(["ΤΟΤΕ"]);
-    expect(labels("τε", false)).not.toContain("ΤΕΛΟΣ_ΑΝ");
-    expect(labels("τε", true)).toContain("ΤΕΛΟΣ_ΑΝ");
+  it("offers built-in functions where a value goes, even once fully typed", () => {
+    expect(labels("τ", "value")).toEqual(["Τ_Ρ"]);
+    expect(labels("α", "value")).toEqual(["Α_Μ", "Α_Τ", "ΑΛΗΘΗΣ"]);
+    expect(labels("ε", "value")).toEqual(["ΕΦ", "Ε"]);
+    expect(labels("Ε", "value")).toEqual(["ΕΦ", "Ε"]);
+    const sqrt = completionOptions("τ", "value", []).find((o) => o.label === "Τ_Ρ");
+    expect(sqrt?.displayLabel).toBe("Τ_Ρ()");
   });
 
-  it("doesn't offer a word that's already fully typed", () => {
-    expect(labels("ΤΟΤΕ", false)).toEqual([]);
+  it("offers the student's names first where a value goes", () => {
+    expect(labels("α", "value", ["άθροισμα"])[0]).toBe("άθροισμα");
+  });
+
+  it("offers what continues the statement after a value", () => {
+    expect(labels("τ", "after-value", [], "ΑΝ")).toEqual(["ΤΟΤΕ"]);
+    expect(labels("μ", "after-value", [], "ΓΙΑ")).toEqual(["ΜΕΧΡΙ", "ΜΕ_ΒΗΜΑ"]);
+    expect(labels("m", "after-value", [], "x")).toEqual(["MOD"]);
+    expect(labels("ε", "after-value", [], "ΟΣΟ")).toEqual(["ΕΠΑΝΑΛΑΒΕ"]);
+    expect(labels("τ", "after-value", [], "x")).toEqual([]);
+    expect(labels("τ", "after-value", [], "ΓΙΑ")).toEqual([]);
+  });
+
+  it("doesn't offer a keyword that's already fully typed", () => {
+    expect(labels("ΤΟΤΕ", "after-value", [], "ΑΝ")).toEqual([]);
   });
 
   it("completes declaration types with the colon", () => {
-    const option = completionOptions("ακ", true, []).find((o) => o.label === "ΑΚΕΡΑΙΕΣ");
+    const option = completionOptions("ακ", "line-start", []).find((o) => o.label === "ΑΚΕΡΑΙΕΣ");
     expect(option?.apply).toBe("ΑΚΕΡΑΙΕΣ: ");
   });
 
-  it("offers the student's own names in both positions", () => {
-    expect(labels("σ", false, ["Σύνολο", "x"])).toContain("Σύνολο");
-    expect(labels("συν", true, ["Σύνολο"])).toContain("Σύνολο");
+  it("offers only names where only a name fits", () => {
+    expect(labels("σ", "name", ["Σύνολο", "x"])).toEqual(["Σύνολο"]);
+    expect(labels("συν", "line-start", ["Σύνολο"])).toContain("Σύνολο");
+  });
+
+  it("offers ΑΛΛΙΩΣ after ΠΕΡΙΠΤΩΣΗ, and return types after a function's header", () => {
+    expect(labels("αλ", "case")).toEqual(["ΑΛΛΙΩΣ", "ΑΛΗΘΗΣ"]);
+    expect(labels("α", "return-type")).toEqual(["ΑΚΕΡΑΙΑ"]);
   });
 });
 
@@ -41,6 +87,11 @@ describe("namesIn", () => {
   it("collects names once, skipping keywords and the word being typed", () => {
     const text = "ΑΚΕΡΑΙΕΣ: Σύνολο, i\nΣΥΝΟΛΟ <- i + Τ_Ρ(4)\nσυ";
     expect(namesIn(text, text.lastIndexOf("συ"))).toEqual(["Σύνολο", "i"]);
+  });
+
+  it("skips words in comments and strings", () => {
+    const text = "! τυπώνει τον μέσο όρο τους\nΓΡΑΨΕ 'Πόσους αριθμούς;', ν ! κι εδώ\n";
+    expect(namesIn(text, text.length)).toEqual(["ν"]);
   });
 });
 

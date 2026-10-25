@@ -18,7 +18,7 @@ type Props = { run: RunState; onInput: (value: string) => void };
 
 export function OutputPanel({ run, onInput }: Props) {
   return (
-    <section className="flex min-h-0 flex-col border-t border-border bg-panel">
+    <section className="flex min-h-0 flex-col border-t border-border bg-output">
       <div className="flex h-9 shrink-0 items-center border-b border-border px-3 text-xs font-medium text-muted">
         Έξοδος
         {run.kind === "done" && <span className="ml-auto">{run.result.steps} βήματα</span>}

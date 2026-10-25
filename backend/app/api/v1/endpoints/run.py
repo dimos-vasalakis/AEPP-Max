@@ -1,6 +1,6 @@
 import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 
 from app import glossa
 from app.core.config import get_settings
@@ -19,13 +19,9 @@ async def run_program(body: RunRequest) -> glossa.RunResult:
         max_trace_steps=settings.run_max_trace_steps,
         timeout_seconds=settings.run_timeout_seconds,
     )
-    try:
-        return await asyncio.to_thread(
-            glossa.run, body.code, body.inputs, limits=limits, trace=body.trace
-        )
-    except NotImplementedError:
-        # Until execute() lands (app/glossa/interpreter.py). Syntax errors already return.
-        raise HTTPException(501, "Ο διερμηνευτής της ΓΛΩΣΣΑΣ δεν είναι έτοιμος ακόμα.") from None
+    return await asyncio.to_thread(
+        glossa.run, body.code, body.inputs, limits=limits, trace=body.trace
+    )
 
 
 @router.post("/check", response_model=CheckResult)

@@ -18,7 +18,9 @@ const operatorWords = new Set(OPERATOR_WORDS);
 const booleans = new Set(BOOLEANS);
 const builtins = new Set(Object.keys(BUILTINS));
 
-const parser: StreamParser<null> = {
+// Token names are @lezer/highlight tags; a modifier goes after a dot
+// ("variableName.standard"), as theme.ts styles them.
+export const glossaParser: StreamParser<null> = {
   name: "glossa",
   token(stream) {
     if (stream.eatSpace()) return null;
@@ -32,15 +34,19 @@ const parser: StreamParser<null> = {
       while (!stream.eol() && stream.next() !== ch);
       return "string";
     }
-    if (stream.match(/^\d+(\.\d+)?/)) return "number";
+    if (stream.match(/^\d+\.\d+/)) return "float";
+    if (stream.match(/^\d+/)) return "integer";
     if (stream.match(/^(<-|←|<=|>=|<>|\.\.|[-+*/^=<>&])/)) return "operator";
+    if (stream.match(/^[,:()[\]]/)) return "punctuation";
     if (stream.match(/^[\p{L}_][\p{L}\p{N}_]*/u)) {
       const word = normalizeWord(stream.current());
       if (keywords.has(word)) return "keyword";
       if (types.has(word)) return "typeName";
       if (operatorWords.has(word)) return "operatorKeyword";
       if (booleans.has(word)) return "bool";
-      if (builtins.has(word)) return "standard(variableName)";
+      if (builtins.has(word)) return "variableName.standard";
+      // The Διερμηνευτής shows names with Latin letters apart (gray in its colors).
+      if (/[A-Za-z]/.test(stream.current())) return "variableName.special";
       return "variableName";
     }
     stream.next();
@@ -49,4 +55,4 @@ const parser: StreamParser<null> = {
   languageData: { commentTokens: { line: "!" } },
 };
 
-export const glossa = StreamLanguage.define(parser);
+export const glossa = StreamLanguage.define(glossaParser);
