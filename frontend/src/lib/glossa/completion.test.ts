@@ -1,5 +1,14 @@
+import { snippet } from "@codemirror/autocomplete";
+import { EditorSelection, EditorState, type Transaction } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { completionOptions, inCommentOrString, namesIn, type Place, placeOf } from "./completion";
+import {
+  completionOptions,
+  glossaAutocomplete,
+  inCommentOrString,
+  namesIn,
+  type Place,
+  placeOf,
+} from "./completion";
 
 const labels = (typed: string, place: Place, names: string[] = [], first = "") =>
   completionOptions(typed, place, names, first).map((o) => o.label);
@@ -101,5 +110,43 @@ describe("inCommentOrString", () => {
     expect(inCommentOrString("ΓΡΑΨΕ 'Γει")).toBe(true);
     expect(inCommentOrString("ΓΡΑΨΕ 'α!', ")).toBe(false);
     expect(inCommentOrString("  ΑΝ x > ")).toBe(false);
+  });
+});
+
+describe("picking a keyword", () => {
+  const apply = (typed: string, place: Place, first = "") =>
+    completionOptions(typed, place, [], first).map((o) => o.apply ?? o.label);
+
+  it("types the space after it, so the next word can follow", () => {
+    expect(apply("απ", "after-value", "ΓΙΑ")).toContain("ΑΠΟ ");
+    expect(apply("δια", "line-start")).toContain("ΔΙΑΒΑΣΕ ");
+  });
+
+  it("adds no space after a word that ends the line", () => {
+    expect(apply("το", "after-value", "ΑΝ")).toContain("ΤΟΤΕ");
+    expect(apply("τελος_α", "line-start")).toContain("ΤΕΛΟΣ_ΑΝ");
+  });
+});
+
+describe("a name typed in two linked blanks", () => {
+  it("goes back to one cursor once the cursor leaves the blanks", () => {
+    const editor = {
+      // The editor's basic setup allows several cursors; a bare state doesn't.
+      state: EditorState.create({
+        doc: "",
+        extensions: [EditorState.allowMultipleSelections.of(true), glossaAutocomplete],
+      }),
+      dispatch(tr: Transaction) {
+        this.state = tr.state;
+      },
+    };
+    snippet("Αλγόριθμος ${1}\n${2}\nΤέλος ${1}")(editor as never, null as never, 0, 0);
+    expect(editor.state.selection.ranges).toHaveLength(2);
+    editor.dispatch(editor.state.update(editor.state.replaceSelection("Α")));
+    expect(editor.state.doc.toString()).toBe("Αλγόριθμος Α\n\nΤέλος Α");
+    // An arrow key moves both cursors off the name.
+    const moved = EditorSelection.create(editor.state.selection.ranges.map((r) => EditorSelection.cursor(r.head - 2)));
+    editor.dispatch(editor.state.update({ selection: moved, userEvent: "select" }));
+    expect(editor.state.selection.ranges).toHaveLength(1);
   });
 });

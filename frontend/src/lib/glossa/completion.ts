@@ -5,13 +5,15 @@ import {
   type Completion,
   type CompletionContext,
   type CompletionResult,
+  hasNextSnippetField,
+  hasPrevSnippetField,
   moveCompletionSelection,
   nextSnippetField,
   prevSnippetField,
   snippetCompletion,
   startCompletion,
 } from "@codemirror/autocomplete";
-import { Prec } from "@codemirror/state";
+import { EditorSelection, EditorState, Prec } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
 import { editorLanguage } from "./editorLanguage";
 import type { Language } from "./types";
@@ -194,6 +196,21 @@ function continuations(first: string): string[] {
   return operators;
 }
 
+/** Words that end their line: no space after them when picked (normalized). */
+const LINE_ENDS = new Set([
+  "ΤΟΤΕ", "ΕΠΑΝΑΛΑΒΕ", "ΑΛΛΙΩΣ", "ΤΕΛΟΣ_ΑΝ", "ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ", "ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ",
+  "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ", "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ", "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ",
+  "ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ", "ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ", ...BOOLEANS,
+]);
+
+/** A keyword to pick. Picking it also types the space after it, so the next word can
+ * follow at once («ΓΙΑ i ΑΠΟ » ▯); not after a word that ends the line («ΤΟΤΕ»). */
+function keywordOption(label: string): Completion {
+  return LINE_ENDS.has(normalizeWord(label))
+    ? { label, type: "keyword" }
+    : { label, apply: `${label} `, type: "keyword" };
+}
+
 const snippets = (blocks: typeof BLOCKS) =>
   blocks.map((b) =>
     snippetCompletion(b.template, { label: b.label, detail: b.detail, type: "keyword", boost: 1 }),
@@ -204,16 +221,16 @@ const blockOptions: Record<Language, Completion[]> = {
 };
 const lineStartOptions: Record<Language, Completion[]> = {
   glossa: [
-    ...LINE_START.glossa.map((label) => ({ label, type: "keyword" })),
+    ...LINE_START.glossa.map(keywordOption),
     ...DECLARATION_TYPES.map((label) => ({ label, apply: `${label}: `, type: "type" })),
   ],
-  pseudocode: LINE_START.pseudocode.map((label) => ({ label, type: "keyword" })),
+  pseudocode: LINE_START.pseudocode.map(keywordOption),
 };
 const functionOptions: Completion[] = Object.entries(BUILTINS).map(([name, detail]) =>
   snippetCompletion(`${name}(\${})`, { label: name, displayLabel: `${name}()`, detail, type: "function" }),
 );
 const valueWordOptions = (language: Language): Completion[] =>
-  [...BOOLEANS, "ΟΧΙ"].map((word) => ({ label: spell(word, language), type: "keyword" }));
+  [...BOOLEANS, "ΟΧΙ"].map((word) => keywordOption(spell(word, language)));
 const returnTypeOptions: Completion[] = RETURN_TYPES.map((label) => ({ label, type: "type" }));
 
 /** True when `lineBefore` (the line up to the cursor) ends inside a comment or string. */
@@ -267,7 +284,7 @@ export function completionOptions(
     matches(o) && (o.type === "function" || normalizeWord(o.label) !== prefix);
   const nameOptions: Completion[] = names.map((label) => ({ label, type: "variable" }));
   const keywords = (words: string[]) =>
-    words.map((word) => ({ label: spell(word, language), type: "keyword" }));
+    words.map((word) => keywordOption(spell(word, language)));
 
   switch (place) {
     case "line-start":
@@ -310,14 +327,38 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
   return options.length ? { from: word.from, options, filter: false } : null;
 }
 
+/** Whether the cursor is in the blanks of an inserted block. */
+function inBlock(state: EditorState): boolean {
+  return hasNextSnippetField(state) || hasPrevSnippetField(state);
+}
+
 /**
- * Tab accepts a suggestion; otherwise, inside an inserted block, it jumps to the
- * next blank (i → αρχή → τέλος → body); otherwise it indents. Enter stays a plain
- * new line, so typing a word and pressing Enter never inserts a suggestion by
- * surprise. Ctrl-Space opens the list.
+ * Enter in a blank that is typed in two places at once («Αλγόριθμος ▯ … Τέλος ▯»):
+ * on to the next blank, as Tab does, instead of a new line in both places.
+ */
+function enterInLinkedBlank(view: EditorView): boolean {
+  return view.state.selection.ranges.length > 1 && inBlock(view.state) && nextSnippetField(view);
+}
+
+/**
+ * A name typed in two linked blanks has a cursor in each. Once the cursor leaves
+ * them some other way (an arrow key, a click), it's one cursor again: otherwise
+ * whatever comes next would be typed in both places.
+ */
+const oneCursorAfterBlock = EditorState.transactionFilter.of((tr) => {
+  if (tr.newSelection.ranges.length < 2 || !inBlock(tr.startState) || inBlock(tr.state)) return tr;
+  // `sequential`: the position is in the document after `tr`.
+  return [tr, { selection: EditorSelection.single(tr.newSelection.main.head), sequential: true }];
+});
+
+/**
+ * Tab or Enter accepts a suggestion; otherwise, inside an inserted block, Tab
+ * jumps to the next blank (i → αρχή → τέλος → body); otherwise Tab indents and
+ * Enter starts a new line (indent.ts). Ctrl-Space opens the list.
  */
 export const glossaAutocomplete = [
   autocompletion({ override: [glossaCompletions], defaultKeymap: false, icons: false }),
+  oneCursorAfterBlock,
   Prec.highest(
     keymap.of([
       {
@@ -325,6 +366,7 @@ export const glossaAutocomplete = [
         run: (view: EditorView) => acceptCompletion(view) || nextSnippetField(view),
         shift: prevSnippetField,
       },
+      { key: "Enter", run: (view: EditorView) => acceptCompletion(view) || enterInLinkedBlank(view) },
       { key: "ArrowDown", run: moveCompletionSelection(true) },
       { key: "ArrowUp", run: moveCompletionSelection(false) },
       { key: "PageDown", run: moveCompletionSelection(true, "page") },

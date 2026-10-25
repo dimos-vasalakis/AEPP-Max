@@ -178,7 +178,8 @@ function reindent(state: EditorState, pos: number): ChangeSpec | null {
 }
 
 const WORD_THEN_SEPARATOR = /^\s*[\p{L}_][\p{L}\p{N}_]*[^\p{L}\p{N}_]$/u;
-const WORD_ONLY = /^\s*[\p{L}_][\p{L}\p{N}_]*$/u;
+// A picked suggestion: the word, and the space a keyword brings along (completion.ts).
+const WORD_ONLY = /^\s*[\p{L}_][\p{L}\p{N}_]* ?$/u;
 
 // «τελος_αν» followed by a space, or picked from the completion list.
 function reindentFinishedWord(tr: Transaction): Transaction | readonly TransactionSpec[] {
