@@ -1,22 +1,34 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import type { CustomTheme } from "@/lib/customTheme";
 import { type ThemeId, THEMES } from "@/lib/theme";
-import { setTheme, useTheme } from "@/lib/useTheme";
+import { deleteCustomTheme, setTheme, useCustomThemes, useTheme } from "@/lib/useTheme";
+import { ThemeEditor } from "./ThemeEditor";
+import { ThemePreview } from "./ThemePreview";
 
-/** The navbar's Επεκτάσεις button and its panel. For now it holds the color themes. */
+/** The navbar's Επεκτάσεις button and its panel. For now it holds the color themes, built-in and the user's own. */
 export function ExtensionsMenu() {
   const [open, setOpen] = useState(false);
   const active = useTheme();
+  const custom = useCustomThemes();
+  // null: the theme list; "new" or a theme: the editor.
+  const [editing, setEditing] = useState<CustomTheme | "new" | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
   useEffect(() => {
     if (!open) return;
     const onPointer = (e: PointerEvent) => {
-      if (!root.current?.contains(e.target as Node)) setOpen(false);
+      if (root.current?.contains(e.target as Node)) return;
+      setOpen(false);
+      setEditing(null);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      setEditing(null);
+    };
     document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -45,72 +57,100 @@ export function ExtensionsMenu() {
           aria-label="Επεκτάσεις"
           className="fixed inset-x-3 top-14 z-50 max-h-[calc(100dvh-4.5rem)] overflow-auto rounded-lg border border-border bg-panel p-3 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem]"
         >
-          <h2 className="text-sm font-semibold">Επεκτάσεις</h2>
-          <p className="mb-3 text-xs text-muted">Θέματα εμφάνισης · {THEMES.length}</p>
-          <ul className="space-y-2">
-            {THEMES.map((theme) => {
-              const isActive = theme.id === active;
-              return (
-                <li
-                  key={theme.id}
-                  className={`flex gap-3 rounded-md border p-2 ${isActive ? "border-accent" : "border-border"}`}
-                >
-                  <ThemePreview id={theme.id} />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="text-sm font-medium">{theme.name}</span>
-                    <p className="mb-2 text-xs text-muted">{theme.description}</p>
-                    <button
-                      type="button"
-                      onClick={() => setTheme(theme.id)}
-                      disabled={isActive}
-                      aria-pressed={isActive}
-                      className={`mt-auto self-start rounded px-2.5 py-1 text-xs font-medium ${
-                        isActive
-                          ? "bg-panel-2 text-muted"
-                          : "bg-accent text-on-accent hover:brightness-110"
-                      }`}
-                    >
-                      {isActive ? "✓ Ενεργό" : "Ενεργοποίηση"}
-                    </button>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+          {editing ? (
+            <ThemeEditor
+              theme={editing === "new" ? null : editing}
+              onDone={() => setEditing(null)}
+            />
+          ) : (
+            <>
+              <h2 className="text-sm font-semibold">Επεκτάσεις</h2>
+              <p className="mb-3 text-xs text-muted">
+                Θέματα εμφάνισης · {THEMES.length + custom.length}
+              </p>
+              <ul className="space-y-2">
+                {THEMES.map((theme) => (
+                  <ThemeRow
+                    key={theme.id}
+                    id={theme.id}
+                    name={theme.name}
+                    description={theme.description}
+                    active={theme.id === active}
+                  />
+                ))}
+                {custom.map((theme) => (
+                  <ThemeRow
+                    key={theme.id}
+                    id={theme.id}
+                    name={theme.name}
+                    description="Δικό σου θέμα"
+                    active={theme.id === active}
+                    onEdit={() => setEditing(theme)}
+                    onDelete={() => deleteCustomTheme(theme.id)}
+                  />
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setEditing("new")}
+                className="mt-3 w-full rounded-md border border-dashed border-border px-3 py-2 text-sm text-muted hover:border-accent hover:text-text"
+              >
+                + Φτιάξε δικό σου θέμα
+              </button>
+            </>
+          )}
         </div>
       )}
     </div>
   );
 }
 
-/** A few lines of ΓΛΩΣΣΑ in the theme's own colors (its tokens apply via data-theme). */
-function ThemePreview({ id }: { id: ThemeId }) {
-  const kw = { color: "var(--syn-keyword)", fontWeight: "var(--syn-keyword-weight, 600)" };
+function ThemeRow({
+  id,
+  name,
+  description,
+  active,
+  onEdit,
+  onDelete,
+}: {
+  id: ThemeId;
+  name: string;
+  description: string;
+  active: boolean;
+  onEdit?: () => void;
+  onDelete?: () => void;
+}) {
   return (
-    <div
-      data-theme={id}
-      aria-hidden
-      className="w-36 shrink-0 overflow-hidden rounded border border-border bg-panel text-[10px] leading-4"
-    >
-      <div className="flex items-center gap-1 border-b border-border px-1.5 py-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-        <span className="h-1 w-8 rounded bg-border" />
+    <li className={`flex gap-3 rounded-md border p-2 ${active ? "border-accent" : "border-border"}`}>
+      <ThemePreview id={id} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm font-medium">{name}</span>
+        <p className="mb-2 text-xs text-muted">{description}</p>
+        <div className="mt-auto flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setTheme(id)}
+            disabled={active}
+            aria-pressed={active}
+            className={`rounded px-2.5 py-1 text-xs font-medium ${
+              active ? "bg-panel-2 text-muted" : "bg-accent text-on-accent hover:brightness-110"
+            }`}
+          >
+            {active ? "✓ Ενεργό" : "Ενεργοποίηση"}
+          </button>
+          {onEdit && (
+            <button type="button" onClick={onEdit} className="text-xs text-muted hover:text-text">
+              Επεξεργασία
+            </button>
+          )}
+          {onDelete && (
+            <button type="button" onClick={onDelete} className="text-xs text-muted hover:text-danger">
+              Διαγραφή
+            </button>
+          )}
+        </div>
       </div>
-      <div className="whitespace-pre bg-bg px-1.5 py-1 text-text" style={{ fontFamily: "var(--editor-font)" }}>
-        <div>
-          <span style={kw}>ΑΝ</span> x <span style={{ color: "var(--syn-operator)" }}>&gt;</span>{" "}
-          <span style={{ color: "var(--syn-number)" }}>0</span> <span style={kw}>ΤΟΤΕ</span>
-        </div>
-        <div>
-          {"  "}
-          <span style={kw}>ΓΡΑΨΕ</span> <span style={{ color: "var(--syn-string)", fontStyle: "var(--syn-string-style, normal)" }}>&apos;ναι&apos;</span>
-        </div>
-        <div>
-          <span style={kw}>ΤΕΛΟΣ_ΑΝ</span>{" "}
-          <span style={{ color: "var(--syn-comment)", fontStyle: "italic" }}>! τέλος</span>
-        </div>
-      </div>
-    </div>
+    </li>
   );
 }
 

@@ -1,5 +1,6 @@
-import { type Diagnostic, linter, lintGutter } from "@codemirror/lint";
-import type { Text } from "@codemirror/state";
+import { type Diagnostic, linter, setDiagnosticsEffect } from "@codemirror/lint";
+import { RangeSet, type Text, StateField } from "@codemirror/state";
+import { GutterMarker, lineNumberMarkers } from "@codemirror/view";
 import { apiFetch } from "@/lib/api/client";
 import type { ErrorInfo } from "./types";
 
@@ -21,12 +22,35 @@ export function toDiagnostic(doc: Text, error: ErrorInfo): Diagnostic | null {
   return { from, to, severity: "error", message: error.message, source: "ΓΛΩΣΣΑ" };
 }
 
+class ErrorLineMarker extends GutterMarker {
+  elementClass = "cm-errorLineNumber";
+}
+const errorLineMarker = new ErrorLineMarker();
+
+/** Turns the number of a line with an error red (styled in globals.css). */
+const errorLineNumbers = StateField.define<RangeSet<GutterMarker>>({
+  create: () => RangeSet.empty,
+  update(markers, tr) {
+    markers = markers.map(tr.changes);
+    for (const effect of tr.effects) {
+      if (!effect.is(setDiagnosticsEffect)) continue;
+      const starts = new Set(
+        effect.value.map((d) => tr.newDoc.lineAt(Math.min(d.from, tr.newDoc.length)).from),
+      );
+      markers = RangeSet.of([...starts].sort((a, b) => a - b).map((from) => errorLineMarker.range(from)));
+    }
+    return markers;
+  },
+  provide: (field) => lineNumberMarkers.from(field),
+});
+
 /**
  * Marks syntax errors while the student types. Half a second after they stop,
  * the code goes to the backend's parser (POST /check), the same one /run uses,
  * so the editor and Εκτέλεση never disagree. No AI is involved.
  */
 export const glossaLinter = [
+  errorLineNumbers,
   linter(
     async (view) => {
       const doc = view.state.doc;
@@ -43,5 +67,4 @@ export const glossaLinter = [
     },
     { delay: 500 },
   ),
-  lintGutter(),
 ];

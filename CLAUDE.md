@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-AEPP-Max is an online fork of the **Διερμηνευτής της ΓΛΩΣΣΑΣ** with an AI agent built in, as Cursor is to VS Code. It is for Γ' Λυκείου students preparing for Πληροφορική (formerly ΑΕΠΠ) in the Greek Panhellenic exams. ΓΛΩΣΣΑ is the Greek teaching pseudo-language of the school textbook, and the exams still use it (Πληροφορική is on 2 June 2027).
+AEPP Max is an online fork of the **Διερμηνευτής της ΓΛΩΣΣΑΣ** with an AI agent built in, as Cursor is to VS Code. It is for Γ' Λυκείου students preparing for Πληροφορική (formerly ΑΕΠΠ) in the Greek Panhellenic exams. ΓΛΩΣΣΑ is the Greek teaching pseudo-language of the school textbook, and the exams still use it (Πληροφορική is on 2 June 2027).
 
 The repo is a monorepo:
 - `frontend/`: Next.js 16, deployed on Vercel with Root Directory `frontend`.
@@ -105,7 +105,7 @@ Each ΓΛΩΣΣΑ language rule needs a pytest case (program in, expected output
 Why the interpreter lives on the backend: one implementation serves the IDE, the agent's tools and, later, exercise checking, which can't trust the client.
 
 **Editor: error marking and autocomplete (no AI, no tokens).**
-- **Error marking.** `lib/glossa/lint.ts` sends the code to `POST /api/v1/check` (public) 500 ms after typing stops. That is the same parser `/run` uses, so the editor and Εκτέλεση never disagree. `toDiagnostic` turns the error's line and columns into a red underline, a gutter dot and a hover message. If the backend is unreachable, nothing is marked.
+- **Error marking.** Red wavy underline and hover message only; there is no gutter marker (students asked for it removed). `lib/glossa/lint.ts` sends the code to `POST /api/v1/check` (public) 500 ms after typing stops. That is the same parser `/run` uses, so the editor and Εκτέλεση never disagree. `toDiagnostic` turns the error's line and columns into a red underline, a gutter dot and a hover message. If the backend is unreachable, nothing is marked.
 - **Autocomplete.** `lib/glossa/completion.ts` is browser-only. Matching ignores case and accents (`πρ` → ΠΡΟΓΡΑΜΜΑ).
   - At the start of a line it offers whole blocks as snippets (ΑΝ … ΤΕΛΟΣ_ΑΝ, ΓΙΑ, ΟΣΟ, ΕΠΙΛΕΞΕ, the program skeleton, subprograms) plus statement keywords.
   - Mid-line, `placeOf()` decides from the text before the word what fits there. Where a value goes (after `<-`, ΓΡΑΨΕ, ΑΝ, `(`, `,`, an operator) it offers names, built-in functions (`Α_Τ()`, kept on offer even when fully typed, since accepting adds the parentheses), ΑΛΗΘΗΣ/ΨΕΥΔΗΣ and ΟΧΙ. Right after a value it offers what continues that statement (ΤΟΤΕ on an ΑΝ line, ΑΠΟ/ΜΕΧΡΙ/ΜΕ_ΒΗΜΑ on a ΓΙΑ line, ΚΑΙ/DIV/MOD). After ΓΙΑ, ΔΙΑΒΑΣΕ and in declarations, only names.
@@ -126,7 +126,7 @@ Why the interpreter lives on the backend: one implementation serves the IDE, the
 
 **Agent (`backend/app/agent/`).** `POST /api/v1/agent/chat` needs auth. Dependencies run in parameter order (user → `AgentReady` → db), so callers get 401 before a 503.
 
-There is one `Agent` (`tutor.py`, model from `OPENAI_MODEL`) with two modes, like Cursor's Ask/Agent:
+There is one `Agent` (`tutor.py`, model from `OPENAI_MODEL`) with two modes, like Cursor's Ask/Agent. The panel is titled just "Agent"; Shift+Tab in its message box (or the chip in the header) switches the mode, and it starts in `ask`:
 - `ask` is a tutor: hints and explanations, no edits.
 - `agent` can also call `propose_edit`. The tool is gated by `is_enabled` reading `AgentContext.mode`.
 
@@ -173,14 +173,14 @@ The SSE events, in order: `conversation {id}` first, then `text {delta}`, `tool 
   - `agent_sessions` / `agent_messages`: backend only.
 
 **Frontend.**
-- `/` is the IDE, `components/ide/Ide.tsx` (a client component): editor, output panel, agent panel.
+- `/` is the IDE, `components/ide/Ide.tsx` (a client component): editor, output panel, agent panel. The editor starts blank (no sample program).
 - The editor is CodeMirror 6 via `@uiw/react-codemirror`. It was chosen over Monaco because it works on phones and has the merge view.
 - ΓΛΩΣΣΑ highlighting is a `StreamLanguage` in `lib/glossa/language.ts`, matching keywords without regard to case or accents. Its colors are in `lib/glossa/theme.ts`. Token names are `@lezer/highlight` tags, with modifiers after a dot (`variableName.standard`, not `standard(variableName)`, which CodeMirror silently drops with a console warning); a test checks for the warning. It tells integers from reals (`integer`/`float`), symbols (`punctuation`) and names with Latin letters (`variableName.special`).
 - `lib/api/client.ts` `apiFetch()` adds the Supabase token, and `ApiError.message` carries FastAPI's `detail`.
 - `lib/api/agent.ts` `streamChat()` reads the SSE stream with `fetch` plus `lib/api/sse.ts`, because EventSource can't POST or send headers.
 - **Navbar.** `components/Navbar.tsx` is shared by pages; page actions such as Εκτέλεση go in as `children`. It holds the Επεκτάσεις panel (`components/extensions/ExtensionsMenu.tsx`) and the account menu.
 - **Themes.** The panel lists them; the registry is `lib/theme.ts`.
-  - The three themes are `dark` (default), `light` (the logo's white and red) and `classic`, the Διερμηνευτής της ΓΛΩΣΣΑΣ as students see it, matched to its help pages (alkisg.mysch.gr, Επιλογές → Χρώματα κώδικα) and a student's screenshot: Courier New, bold blue words, bold red symbols, green integers, olive reals, purple italic strings, gray italic comments, gray Latin names, a light yellow current line, a blue-gray gradient line-number strip, a blue error region and a light yellow output screen.
+  - The three themes are `dark` (default), `light` (the logo's white and red) and `classic`, the Διερμηνευτής της ΓΛΩΣΣΑΣ as students see it, matched to its help pages (alkisg.mysch.gr, Επιλογές → Χρώματα κώδικα) and a student's screenshot: Windows XP beige chrome (`#ece9d8`, borders `#aca899`), Courier New, bold blue words, bold red symbols, green integers, olive reals, purple italic strings, gray italic comments, gray Latin names, a light yellow current line, a blue-gray gradient line-number strip, a blue error region and a light yellow output screen whose lines are numbered in a pink-red strip, with typed input in blue italic (`.output-num`, hidden in the other themes).
   - Optional tokens fall back to their neighbors when a theme leaves them out (`--syn-real` → `--syn-number`, `--syn-punctuation`, `--syn-latin`, `--syn-keyword-weight`, `--syn-type-weight`, `--syn-operator-weight`, `--syn-string-style`, `--gutter-*` (`--gutter-bg` may be a gradient), `--selection`), so only `classic` sets them. In `lib/glossa/theme.ts`, keep one HighlightStyle rule per tag: a later rule for the same tag replaces an earlier one.
   - Every UI and editor color is a CSS token in `globals.css`: `--bg`, `--panel`, `--accent`, `--on-accent`, `--syn-*` for syntax, `--editor-font`. Tailwind exposes them as `bg-panel`, `text-muted`, `bg-accent`, `text-on-accent` and so on. Never hard-code colors.
   - Token blocks are keyed on `[data-theme]`, so any element can preview another theme by carrying the attribute; the panel's previews do this.
@@ -188,6 +188,7 @@ The SSE events, in order: `conversation {id}` first, then `text {delta}`, `tool 
   - Components read and set it with `useTheme()` / `setTheme()` in `lib/useTheme.ts`. That file is client-only; `theme.ts` stays server-safe.
   - The editor takes `darkEditorTheme` or `lightEditorTheme` (`lib/glossa/theme.ts`). The two differ only in CodeMirror's dark flag; their colors come from the same tokens.
   - To add a theme: add an entry to `THEMES` and a token block in `globals.css`.
+  - **Custom themes.** Users make their own in the Επεκτάσεις panel (`ThemeEditor.tsx`): 11 hex colors, with the other tokens derived by `themeVars()` in `lib/customTheme.ts` (`color-mix` for borders and muted text, dark or light from the background's luminance). They are stored in localStorage (`aepp-custom-themes`) with their generated CSS (`aepp-custom-css`), which `THEME_INIT_SCRIPT` injects as a `<style>` before paint; ids are `custom-[a-z0-9]+` and colors are validated hex, so nothing else reaches the CSS. Read them with `useCustomThemes()`/`useThemeInfo()`; they are per browser, not saved to the account.
 - **Layout.** Grid tracks use `minmax(0,1fr)`, not `1fr`, so long code lines scroll inside the editor instead of widening the page on phones.
 - Fonts are Inter and JetBrains Mono, both with the Greek subset. JetBrains Mono's ligature draws `<-` as `←`, as the textbook does.
 - The root `logo.png` is the original (cloud on black). `public/logo-cloud.png` and `src/app/icon.png` are cut out onto a transparent background (black flood-filled from the edges, rim un-premultiplied, cropped), so the logo sits on any theme. `apple-icon.png` keeps the black, since iOS fills transparency with black anyway.

@@ -14,10 +14,19 @@ const TOOL_LABELS: Record<string, string> = {
   propose_edit: "Πρότεινε αλλαγή στον κώδικα",
 };
 
-const MODES: { value: AgentMode; label: string; hint: string }[] = [
-  { value: "ask", label: "Ερώτηση", hint: "Εξηγεί και δίνει υποδείξεις, χωρίς να αλλάζει τον κώδικα" },
-  { value: "agent", label: "Agent", hint: "Μπορεί να προτείνει αλλαγές στον κώδικά σου" },
-];
+// Shift+Tab in the message box switches between the two.
+const MODES: Record<AgentMode, { label: string; hint: string; placeholder: string }> = {
+  ask: {
+    label: "Ερώτηση",
+    hint: "Εξηγεί και δίνει υποδείξεις, χωρίς να αλλάζει τον κώδικα",
+    placeholder: "Γράψε την ερώτησή σου…",
+  },
+  agent: {
+    label: "Αλλαγές",
+    hint: "Μπορεί να προτείνει αλλαγές στον κώδικά σου",
+    placeholder: "Πες στον agent τι να κάνει…",
+  },
+};
 
 type Props = {
   code: string;
@@ -72,6 +81,10 @@ export function AgentPanel({ code, onProposeEdit }: Props) {
     }
   }
 
+  function toggleMode() {
+    setMode((m) => (m === "ask" ? "agent" : "ask"));
+  }
+
   function newConversation() {
     setMessages([]);
     setConversationId(null);
@@ -80,22 +93,16 @@ export function AgentPanel({ code, onProposeEdit }: Props) {
   return (
     <aside className="flex h-[80dvh] min-h-0 flex-col border-t border-border bg-panel lg:h-auto lg:border-t-0 lg:border-l">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-        <h2 className="text-sm font-semibold">Βοηθός</h2>
-        <div className="ml-auto flex rounded-md bg-panel-2 p-0.5 text-xs" role="radiogroup">
-          {MODES.map((m) => (
-            <button
-              key={m.value}
-              type="button"
-              role="radio"
-              aria-checked={mode === m.value}
-              title={m.hint}
-              onClick={() => setMode(m.value)}
-              className={`rounded px-2 py-1 ${mode === m.value ? "bg-accent text-on-accent" : "text-muted hover:text-text"}`}
-            >
-              {m.label}
-            </button>
-          ))}
-        </div>
+        <h2 className="text-sm font-semibold">Agent</h2>
+        <button
+          type="button"
+          onClick={toggleMode}
+          title={`${MODES[mode].hint} · Shift+Tab για αλλαγή`}
+          className="ml-auto rounded-md bg-panel-2 px-2 py-1 text-xs hover:text-text"
+        >
+          <span className="text-accent">●</span> {MODES[mode].label}
+          <kbd className="ml-1.5 hidden text-[10px] text-muted sm:inline">⇧⇥</kbd>
+        </button>
         {messages.length > 0 && (
           <button
             type="button"
@@ -142,14 +149,17 @@ export function AgentPanel({ code, onProposeEdit }: Props) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === "Tab" && e.shiftKey) {
+                e.preventDefault();
+                toggleMode();
+              } else if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 e.currentTarget.form?.requestSubmit();
               }
             }}
             rows={2}
-            placeholder="Γράψε την ερώτησή σου…"
-            aria-label="Μήνυμα προς τον βοηθό"
+            placeholder={MODES[mode].placeholder}
+            aria-label="Μήνυμα προς τον agent"
             className="min-w-0 flex-1 resize-none rounded-md border border-border bg-bg px-2 py-1.5 text-sm outline-none focus:border-accent"
           />
           <button

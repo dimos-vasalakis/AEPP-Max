@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RunResult } from "@/lib/glossa/types";
 
 /**
@@ -14,18 +14,83 @@ export type RunState =
   | { kind: "done"; inputs: string[]; marks: number[]; result: RunResult }
   | { kind: "failed"; message: string };
 
-type Props = { run: RunState; onInput: (value: string) => void };
+type Props = { run: RunState; onInput: (value: string) => void; onClear: () => void };
 
-export function OutputPanel({ run, onInput }: Props) {
+/** The badge in the header: where the last run ended up. */
+function statusBadge(run: RunState): { label: string; tone: string } | null {
+  if (run.kind === "running") return { label: "Εκτελείται…", tone: "text-muted" };
+  if (run.kind === "failed") return { label: "Αποτυχία σύνδεσης", tone: "text-danger" };
+  if (run.kind !== "done") return null;
+  switch (run.result.status) {
+    case "ok":
+      return { label: "Ολοκληρώθηκε", tone: "text-ok" };
+    case "needs_input":
+      return { label: "Περιμένει τιμή", tone: "text-warn" };
+    case "limit":
+      return { label: "Σταμάτησε (όριο)", tone: "text-warn" };
+    case "error":
+      return { label: "Σφάλμα", tone: "text-danger" };
+  }
+}
+
+export function OutputPanel({ run, onInput, onClear }: Props) {
+  const body = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+  const badge = statusBadge(run);
+  const hasContent = run.kind === "done" || run.kind === "failed";
+
+  // New output scrolls into view, so a long run ends on its last line.
+  useEffect(() => {
+    body.current?.scrollTo({ top: body.current.scrollHeight });
+  }, [run]);
+
+  async function copy() {
+    if (run.kind !== "done") return;
+    try {
+      await navigator.clipboard.writeText(run.result.output.join("\n"));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked: nothing to do.
+    }
+  }
+
   return (
     <section className="flex min-h-0 flex-col border-t border-border bg-output">
-      <div className="flex h-9 shrink-0 items-center border-b border-border px-3 text-xs font-medium text-muted">
-        Έξοδος
-        {run.kind === "done" && <span className="ml-auto">{run.result.steps} βήματα</span>}
+      <div className="flex h-9 shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
+        <span className="font-semibold uppercase tracking-wide text-muted">Έξοδος</span>
+        {badge && (
+          <span className={`flex items-center gap-1.5 font-medium ${badge.tone}`}>
+            <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+            {badge.label}
+          </span>
+        )}
+        <span className="ml-auto flex items-center gap-3 text-muted">
+          {run.kind === "done" && <span>{run.result.steps} βήματα</span>}
+          {run.kind === "done" && run.result.output.length > 0 && (
+            <button type="button" onClick={copy} className="hover:text-text">
+              {copied ? "✓ Αντιγράφηκε" : "Αντιγραφή"}
+            </button>
+          )}
+          {hasContent && (
+            <button type="button" onClick={onClear} className="hover:text-text">
+              Καθαρισμός
+            </button>
+          )}
+        </span>
       </div>
-      <div className="min-h-0 flex-1 overflow-auto p-3 font-mono text-sm" aria-live="polite">
+      <div
+        ref={body}
+        className="output-body min-h-0 flex-1 overflow-auto p-3 font-mono text-sm leading-6"
+        aria-live="polite"
+      >
         {run.kind === "idle" && (
-          <p className="text-muted">Πάτησε «Εκτέλεση» για να τρέξει το πρόγραμμα.</p>
+          <p className="flex items-center gap-2 text-muted">
+            <span className="text-accent" aria-hidden>
+              ▶
+            </span>
+            Πάτησε «Εκτέλεση» για να τρέξει το πρόγραμμα.
+          </p>
         )}
         {run.kind === "running" && <p className="text-muted">Εκτέλεση…</p>}
         {run.kind === "failed" && <p className="text-danger">{run.message}</p>}
@@ -57,24 +122,27 @@ function RunOutput({
   return (
     <>
       {lines.map((line, i) => (
-        <div key={i} className={line.input ? "text-accent" : "whitespace-pre-wrap"}>
+        <div key={i} className={line.input ? "output-typed text-accent" : "whitespace-pre-wrap"}>
+          <span className="output-num" aria-hidden>
+            {i + 1}
+          </span>
           {line.input ? `› ${line.text}` : line.text}
         </div>
       ))}
       {result.status === "needs_input" && <InputLine key={inputs.length} onSubmit={onInput} />}
       {result.status === "error" && result.error && (
-        <p className="mt-2 text-danger">
-          {result.error.line !== null && `Γραμμή ${result.error.line}: `}
+        <p className="mt-2 rounded-md border-l-2 border-danger bg-danger/10 px-3 py-2 text-danger">
+          {result.error.line !== null && <strong>Γραμμή {result.error.line}: </strong>}
           {result.error.message}
         </p>
       )}
       {result.status === "limit" && (
-        <p className="mt-2 text-warn">
+        <p className="mt-2 rounded-md border-l-2 border-warn bg-warn/10 px-3 py-2 text-warn">
           Η εκτέλεση σταμάτησε γιατί ξεπέρασε το όριο βημάτων ή χρόνου. Μήπως υπάρχει ατέρμονος
           βρόχος;
         </p>
       )}
-      {result.status === "ok" && <p className="mt-2 text-muted">Τέλος προγράμματος.</p>}
+      {result.status === "ok" && <p className="mt-2 text-xs text-muted">— Τέλος προγράμματος —</p>}
     </>
   );
 }
@@ -83,13 +151,13 @@ function InputLine({ onSubmit }: { onSubmit: (value: string) => void }) {
   const [value, setValue] = useState("");
   return (
     <form
-      className="flex items-center gap-2"
+      className="mt-1 flex items-center gap-2 rounded-md border border-accent/50 bg-bg px-2 py-1 focus-within:border-accent"
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit(value);
       }}
     >
-      <label htmlFor="read-input" className="text-accent">
+      <label htmlFor="read-input" className="shrink-0 text-xs font-medium text-accent">
         ΔΙΑΒΑΣΕ ›
       </label>
       <input
@@ -98,7 +166,8 @@ function InputLine({ onSubmit }: { onSubmit: (value: string) => void }) {
         autoComplete="off"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        className="min-w-0 flex-1 bg-transparent outline-none"
+        placeholder="γράψε μια τιμή και πάτα Enter"
+        className="min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-muted"
       />
     </form>
   );

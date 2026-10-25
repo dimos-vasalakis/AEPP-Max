@@ -7,7 +7,7 @@ const sans = Inter({ variable: "--font-inter", subsets: ["latin", "greek"] });
 const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin", "greek"] });
 
 export const metadata: Metadata = {
-  title: "AEPP-Max",
+  title: "AEPP Max",
   description:
     "Ο Διερμηνευτής της ΓΛΩΣΣΑΣ με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
 };

@@ -10,7 +10,7 @@ export function Navbar({ children }: { children?: ReactNode }) {
     <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-panel px-3">
       <Link href="/" className="flex items-center gap-2">
         <Image src="/logo-cloud.png" alt="" width={28} height={28} priority />
-        <span className="font-semibold tracking-tight">AEPP-Max</span>
+        <span className="font-semibold tracking-tight">AEPP Max</span>
       </Link>
       {children}
       <nav aria-label="Κύριο μενού" className="ml-auto flex items-center gap-1">

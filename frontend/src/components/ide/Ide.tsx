@@ -4,22 +4,20 @@ import { useCallback, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
-import { WELCOME_PROGRAM } from "@/lib/glossa/samples";
 import type { RunResult } from "@/lib/glossa/types";
-import { themeInfo } from "@/lib/theme";
-import { useTheme } from "@/lib/useTheme";
+import { useThemeInfo } from "@/lib/useTheme";
 import { CodeEditor } from "./CodeEditor";
 import { OutputPanel, type RunState } from "./OutputPanel";
 
 type PendingEdit = { original: string; summary: string };
 
 export function Ide() {
-  const [code, setCode] = useState(WELCOME_PROGRAM);
+  const [code, setCode] = useState("");
   // Agent edits arrive mid-stream; the ref gives them the editor's latest text.
   const codeRef = useRef(code);
   const [run, setRun] = useState<RunState>({ kind: "idle" });
   const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
-  const darkTheme = themeInfo(useTheme()).dark;
+  const darkTheme = useThemeInfo().dark;
 
   // Stable identity: CodeEditor must not get a new onChange on every render.
   const updateCode = useCallback((value: string) => {
@@ -105,7 +103,7 @@ export function Ide() {
               />
             </div>
           </main>
-          <OutputPanel run={run} onInput={readInput} />
+          <OutputPanel run={run} onInput={readInput} onClear={() => setRun({ kind: "idle" })} />
         </div>
         <AgentPanel code={code} onProposeEdit={proposeEdit} />
       </div>

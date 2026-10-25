@@ -59,6 +59,10 @@
   --syn-comment: #9a8c8e;
 }
 
+.output-num {
+  display: none;
+}
+
 /*
  * Διερμηνευτής: the Διερμηνευτής της ΓΛΩΣΣΑΣ as students see it (alkisg.mysch.gr,
  * Επιλογές → Χρώματα κώδικα, and a student's screenshot). Courier New; bold
@@ -69,21 +73,21 @@
 [data-theme="classic"] {
   color-scheme: light;
   --bg: #ffffff;
-  --panel: #f0f0f0;
-  --panel-2: #e3e3e3;
-  --border: #c4c4c4;
+  --panel: #ece9d8;
+  --panel-2: #f1efe2;
+  --border: #aca899;
   --text: #000000;
-  --muted: #5c5c5c;
-  --accent: #0d5eaf;
+  --muted: #5a5850;
+  --accent: #0338db;
   --on-accent: #ffffff;
   --ok: #107c10;
   --warn: #8a5a00;
   --danger: #c50f1f;
   --active-line: #ffffe1;
   --output-bg: #ffffe1;
-  --gutter-bg: linear-gradient(to right, #b4c3e2, #96afd0);
+  --gutter-bg: linear-gradient(to right, #dddefd, #b2c4e4);
   --gutter-text: #1a1a1a;
-  --gutter-border: 1px solid #c3d2e3;
+  --gutter-border: 1px solid #aca899;
   --selection: #3399ff4d;
   --editor-font: "Courier New", Courier, monospace;
   --syn-keyword: #0000ff;
@@ -103,13 +107,31 @@
   --syn-comment: #808080;
 }
 
-/* The Διερμηνευτής marks an error's region in blue, not with a wavy line. */
-[data-theme="classic"] .cm-editor .cm-lintRange-error {
-  background: #3399ff;
+/* Its output screen numbers the lines in a pink-red strip; the others hide the numbers. */
+[data-theme="classic"] .output-body {
+  padding-left: 0;
 }
-[data-theme="classic"] .cm-editor .cm-lintRange-error,
-[data-theme="classic"] .cm-editor .cm-lintRange-error * {
-  color: #ffffff;
+[data-theme="classic"] .output-body > p {
+  padding-left: 0.75rem;
+}
+[data-theme="classic"] .output-num {
+  display: inline-block;
+  min-width: 2.5rem;
+  padding: 0 0.4rem;
+  margin-right: 0.6rem;
+  text-align: right;
+  color: #1a1a1a;
+  background: linear-gradient(to right, #ffd8d8, #fe9d9c);
+}
+[data-theme="classic"] .output-typed {
+  color: #0000ff;
+  font-style: italic;
+}
+
+/* The line number of a line with an error turns red (errorLineNumbers in lib/glossa/lint.ts). */
+.cm-editor .cm-gutterElement.cm-errorLineNumber {
+  color: var(--danger);
+  font-weight: bold;
 }
 
 @theme inline {

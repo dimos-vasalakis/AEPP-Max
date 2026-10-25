@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/LoginForm";
 
-export const metadata: Metadata = { title: "Σύνδεση · AEPP-Max" };
+export const metadata: Metadata = { title: "Σύνδεση · AEPP Max" };
 
 export default function LoginPage() {
   return (
