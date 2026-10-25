@@ -1,0 +1,163 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import type { ReactNode } from "react";
+
+export const metadata: Metadata = { title: "Πολιτική απορρήτου · AEPP Max" };
+
+// Set NEXT_PUBLIC_CONTACT_EMAIL to show a contact address; GDPR asks for one.
+const CONTACT = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
+
+/**
+ * The privacy policy (GDPR art. 13), in plain Greek for students. Keep it true:
+ * when what the app stores or sends changes, change this page too.
+ */
+export default function PrivacyPage() {
+  return (
+    <main className="min-h-dvh bg-bg px-4 py-10 text-text">
+      <article className="mx-auto max-w-2xl space-y-6 text-sm leading-relaxed">
+        <Link href="/" className="text-accent hover:underline">
+          ← Πίσω στον editor
+        </Link>
+        <header>
+          <h1 className="text-2xl font-semibold">Πολιτική απορρήτου</h1>
+          <p className="mt-1 text-muted">Τελευταία ενημέρωση: 25 Οκτωβρίου 2026</p>
+        </header>
+
+        <p>
+          Το AEPP Max είναι ένα εργαλείο για να γράφεις και να τρέχεις ΓΛΩΣΣΑ, με έναν βοηθό
+          τεχνητής νοημοσύνης. Εδώ εξηγούμε ποια δεδομένα σου χρησιμοποιεί, γιατί, ποιος άλλος τα
+          βλέπει και πώς τα σβήνεις.
+        </p>
+
+        <Section title="Ποιος είναι υπεύθυνος">
+          <p>
+            Υπεύθυνος για τα δεδομένα σου είναι ο δημιουργός του AEPP Max, Dimos Vasalakis.
+            {CONTACT ? (
+              <>
+                {" "}
+                Για οτιδήποτε σχετικό, γράψε στο{" "}
+                <a href={`mailto:${CONTACT}`} className="text-accent hover:underline">
+                  {CONTACT}
+                </a>
+                .
+              </>
+            ) : null}
+          </p>
+        </Section>
+
+        <Section title="Χωρίς λογαριασμό">
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              Ο κώδικας που γράφεις στέλνεται στον διακομιστή μας για να ελεγχθεί για λάθη και να
+              εκτελεστεί. <b>Δεν αποθηκεύεται</b>: μόλις βγει το αποτέλεσμα, ξεχνιέται.
+            </li>
+            <li>
+              Οι ρυθμίσεις σου (θέμα, χρώματα, μέγεθος γραμμάτων) μένουν μόνο στον browser σου.
+            </li>
+            <li>
+              Δεν χρησιμοποιούμε διαφημίσεις, στατιστικά επισκεψιμότητας ή cookies παρακολούθησης.
+            </li>
+          </ul>
+        </Section>
+
+        <Section title="Με λογαριασμό">
+          <p>Όταν κάνεις εγγραφή και χρησιμοποιείς τον agent, κρατάμε:</p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              το <b>email</b> σου και, αν το δώσεις, το <b>όνομά</b> σου. Αν μπεις με Google ή
+              Apple, παίρνουμε από εκεί το όνομα και το email σου (και την εικόνα προφίλ, αν τη
+              δίνει ο πάροχος).
+            </li>
+            <li>τα προγράμματα που αποθηκεύεις.</li>
+            <li>
+              τις <b>συζητήσεις σου με τον agent</b>: τα μηνύματά σου, τις απαντήσεις του και τον
+              κώδικα που έτρεξε ή έγραψε, ώστε να συνεχίζεται η συζήτηση.
+            </li>
+            <li>ένα cookie σύνδεσης, για να μένεις συνδεδεμένος.</li>
+          </ul>
+          <p>
+            Τα χρησιμοποιούμε μόνο για να λειτουργεί η υπηρεσία που ζήτησες (άρθρο 6 παρ. 1 β του
+            GDPR). Δεν τα πουλάμε και δεν τα δίνουμε για διαφήμιση.
+          </p>
+        </Section>
+
+        <Section title="Ο agent και η OpenAI">
+          <p>
+            Ο agent λειτουργεί με μοντέλο της <b>OpenAI</b>. Όταν του γράφεις, στέλνουμε στην
+            OpenAI το μήνυμά σου, την προηγούμενη συζήτηση και τον κώδικα που έχεις στον editor.
+            Σύμφωνα με τους όρους του API της, η OpenAI δεν τα χρησιμοποιεί για να εκπαιδεύσει τα
+            μοντέλα της. Μην γράφεις στον agent προσωπικά στοιχεία που δεν χρειάζονται.
+          </p>
+          <p>
+            Ο agent μπορεί να κάνει λάθη. Έλεγχε ό,τι σου λέει, ειδικά πριν από τις εξετάσεις.
+          </p>
+        </Section>
+
+        <Section title="Ποιοι άλλοι επεξεργάζονται δεδομένα">
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              <b>Supabase</b>: η βάση δεδομένων και η σύνδεση (λογαριασμοί, προγράμματα,
+              συζητήσεις).
+            </li>
+            <li>
+              <b>Vercel</b> και <b>Render</b>: φιλοξενούν την ιστοσελίδα και τον διακομιστή. Όπως
+              κάθε φιλοξενία, κρατούν για λίγο τεχνικά αρχεία καταγραφής, όπως τη διεύθυνση IP.
+            </li>
+            <li>
+              <b>OpenAI</b>: ο agent, όπως περιγράφεται παραπάνω.
+            </li>
+            <li>
+              <b>Google</b> ή <b>Apple</b>, μόνο αν μπεις μέσω αυτών.
+            </li>
+          </ul>
+          <p>
+            Κάποιοι από αυτούς επεξεργάζονται δεδομένα και εκτός Ευρωπαϊκής Ένωσης, κυρίως στις
+            ΗΠΑ, με τις εγγυήσεις που προβλέπει ο GDPR (όπως οι τυποποιημένες συμβατικές ρήτρες).
+          </p>
+        </Section>
+
+        <Section title="Πόσο τα κρατάμε και πώς τα σβήνεις">
+          <p>
+            Τα κρατάμε όσο έχεις λογαριασμό. Από το εικονίδιο του λογαριασμού, πάνω δεξιά, πάτα{" "}
+            <b>Διαγραφή λογαριασμού</b>: σβήνονται αμέσως και οριστικά ο λογαριασμός, τα
+            προγράμματα και οι συζητήσεις σου.
+          </p>
+        </Section>
+
+        <Section title="Ηλικία">
+          <p>
+            Στην Ελλάδα μπορείς να κάνεις λογαριασμό μόνος σου από τα 15. Αν είσαι μικρότερος,
+            χρειάζεσαι τη συγκατάθεση γονέα ή κηδεμόνα (ν. 4624/2019, άρθρο 21).
+          </p>
+        </Section>
+
+        <Section title="Τα δικαιώματά σου">
+          <p>
+            Έχεις δικαίωμα να δεις τα δεδομένα σου, να τα διορθώσεις, να τα σβήσεις, να ζητήσεις
+            αντίγραφό τους και να αντιταχθείς στην επεξεργασία τους
+            {CONTACT ? " (γράψε μας στο email παραπάνω)" : ""}. Μπορείς επίσης να κάνεις καταγγελία
+            στην{" "}
+            <a
+              href="https://www.dpa.gr"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent hover:underline"
+            >
+              Αρχή Προστασίας Δεδομένων Προσωπικού Χαρακτήρα
+            </a>
+            .
+          </p>
+        </Section>
+      </article>
+    </main>
+  );
+}
+
+function Section({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="space-y-2">
+      <h2 className="text-base font-semibold">{title}</h2>
+      {children}
+    </section>
+  );
+}

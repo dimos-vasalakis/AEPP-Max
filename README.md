@@ -5,7 +5,7 @@
 <h1 align="center">AEPP Max</h1>
 
 <p align="center">
-  <strong>The Διερμηνευτής της ΓΛΩΣΣΑΣ, online, with an AI tutor built in.</strong><br />
+  <strong>ΓΛΩΣΣΑ in the browser, with an AI tutor built in.</strong><br />
   For Γ' Λυκείου students preparing for Πληροφορική (ΑΕΠΠ) in the Panhellenic exams.
 </p>
 
@@ -17,7 +17,9 @@
 
 ---
 
-AEPP Max lets students write and run **ΓΛΩΣΣΑ**, the teaching pseudo-language of the school textbook, directly in the browser. Nothing to install, and it works on a phone. Next to the editor sits an AI assistant that explains errors, gives hints and, when asked, proposes changes to the code. It is to the Διερμηνευτής what Cursor is to VS Code.
+AEPP Max lets students write and run **ΓΛΩΣΣΑ**, the teaching pseudo-language of the school textbook, directly in the browser. Nothing to install, and it works on a phone. Next to the editor sits an AI assistant that explains errors, gives hints and, when asked, writes changes into the code. What Cursor did for code editors, AEPP Max does for ΓΛΩΣΣΑ.
+
+AEPP Max runs the same programs as the Διερμηνευτής της ΓΛΩΣΣΑΣ by Άλκης Γεωργόπουλος, the desktop interpreter schools use, but it is an independent implementation: it contains no code, text or images from it and is not affiliated with its author.
 
 ## Why AEPP Max
 
@@ -34,7 +36,7 @@ AEPP Max lets students write and run **ΓΛΩΣΣΑ**, the teaching pseudo-langu
 
 **Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs an account (email link, Google or Apple), since it is the part that costs money.
 
-**Made for the screen you have.** Three built-in themes, including **Διερμηνευτής**, which looks like the desktop program students know. Make your own theme from 11 colors in the Επεκτάσεις panel.
+**Made for the screen you have.** Three built-in themes, including **Κλασικό**, with the colors students know from the school lab. Make your own theme from 11 colors in the Επεκτάσεις panel.
 
 **One interpreter everywhere.** It lives on the backend, so the editor, the agent's tools and, later, exercise checking all give the same answer and can't be tampered with from the client.
 

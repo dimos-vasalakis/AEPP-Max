@@ -190,6 +190,15 @@ export function LoginForm() {
               </p>
             )}
           </form>
+          {mode === "signup" && (
+            <p className="mt-3 text-xs text-muted">
+              Τι κρατάμε και πώς το σβήνεις:{" "}
+              <Link href="/privacy" className="text-accent hover:underline">
+                Πολιτική απορρήτου
+              </Link>
+              .
+            </p>
+          )}
         </>
       )}
 

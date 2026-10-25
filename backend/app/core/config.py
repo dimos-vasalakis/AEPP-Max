@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     supabase_url: str = ""
     supabase_jwt_secret: str = ""  # legacy HS256 projects only
+    # Secret (or legacy service_role) key, for the Auth Admin API. Empty = account
+    # deletion returns 503.
+    supabase_secret_key: str = ""
 
     database_url: str = ""  # transaction pooler, used by the app
     direct_url: str = ""  # direct connection, used by Alembic

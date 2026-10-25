@@ -9,7 +9,7 @@ const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin", "
 export const metadata: Metadata = {
   title: "AEPP Max",
   description:
-    "Ο Διερμηνευτής της ΓΛΩΣΣΑΣ με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
+    "Γράψε και τρέξε ΓΛΩΣΣΑ στον browser, με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
 };
 
 export const viewport: Viewport = {

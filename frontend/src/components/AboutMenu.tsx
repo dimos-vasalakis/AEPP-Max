@@ -18,13 +18,20 @@ export function AboutMenu() {
       </h3>
       <p>© 2026 Dimos Vasalakis. Με άδεια MIT.</p>
       <p className="mt-2 text-xs text-muted">
-        Εμπνευσμένο από τον Διερμηνευτή της ΓΛΩΣΣΑΣ του Άλκη Γεωργόπουλου. Η ΓΛΩΣΣΑ είναι η
-        γλώσσα του σχολικού βιβλίου «Ανάπτυξη Εφαρμογών σε Προγραμματιστικό Περιβάλλον».
+        Εμπνευσμένο από τον Διερμηνευτή της ΓΛΩΣΣΑΣ του Άλκη Γεωργόπουλου. Το AEPP Max είναι
+        ανεξάρτητη υλοποίηση, χωρίς κώδικα από αυτόν, και δεν σχετίζεται με τον δημιουργό του. Η
+        ΓΛΩΣΣΑ είναι η γλώσσα του σχολικού βιβλίου «Ανάπτυξη Εφαρμογών σε Προγραμματιστικό
+        Περιβάλλον».
       </p>
       <GetApp />
-      <Link href="/" className="mt-3 inline-block text-xs text-accent hover:underline">
-        Αρχική σελίδα
-      </Link>
+      <div className="mt-3 flex gap-4 text-xs">
+        <Link href="/" className="text-accent hover:underline">
+          Αρχική σελίδα
+        </Link>
+        <Link href="/privacy" className="text-accent hover:underline">
+          Πολιτική απορρήτου
+        </Link>
+      </div>
     </NavPopover>
   );
 }

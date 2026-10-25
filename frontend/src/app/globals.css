@@ -88,7 +88,6 @@
   --run: #22a81e;
   --run-light: #7dec5f;
   --run-outline: #0e6b0c;
-  --font-size-default: 18px;
   --gutter-bg: linear-gradient(to right, #dddefd, #b2c4e4);
   --gutter-text: #1a1a1a;
   --gutter-border: 1px solid #aca899;
@@ -228,5 +227,5 @@ body {
 
 .cm-editor .cm-scroller {
   font-family: var(--editor-font);
-  font-size: var(--editor-font-size, var(--font-size-default, 14px));
+  font-size: var(--editor-font-size, 14px);
 }

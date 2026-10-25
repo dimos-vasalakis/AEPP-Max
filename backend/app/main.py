@@ -2,7 +2,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from agents import set_default_openai_key
+from agents import set_default_openai_key, set_tracing_disabled
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -26,6 +26,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # The SDK only reads OPENAI_API_KEY from os.environ, not from backend/.env.
     if not is_unset(settings.openai_api_key):
         set_default_openai_key(settings.openai_api_key)
+    # The SDK uploads every run (messages, code, tool output) to OpenAI's Traces
+    # dashboard by default. Students' conversations stay out of it.
+    set_tracing_disabled(True)
     yield
     if not is_unset(settings.database_url):
         await get_engine().dispose()

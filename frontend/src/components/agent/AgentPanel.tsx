@@ -147,7 +147,12 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
   }
 
   function toggleMode() {
-    setMode((m) => (m === "ask" ? "agent" : "ask"));
+    // Back to Tutor starts a clean chat, without the history of code the agent wrote.
+    if (mode === "agent") {
+      abort.current?.abort();
+      newConversation();
+    }
+    setMode(mode === "ask" ? "agent" : "ask");
   }
 
   function newConversation() {

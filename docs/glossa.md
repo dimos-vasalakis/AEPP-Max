@@ -3,7 +3,7 @@
 The interpreter in `backend/app/glossa/` must accept what students are taught and graded on, and reject the rest. Sources, in order of authority:
 
 1. The school textbook *Ανάπτυξη Εφαρμογών σε Προγραμματιστικό Περιβάλλον* (Γ' Λυκείου; the course is now called Πληροφορική).
-2. The **Διερμηνευτής της ΓΛΩΣΣΑΣ** by Άλκης Γεωργόπουλος ([alkisg.mysch.gr](https://alkisg.mysch.gr/downloads/)), the desktop interpreter schools use. AEPP-Max is an online fork of it in spirit. Its forum is [Το Στέκι των Πληροφορικών](https://alkisg.mysch.gr/steki/).
+2. The **Διερμηνευτής της ΓΛΩΣΣΑΣ** by Άλκης Γεωργόπουλος ([alkisg.mysch.gr](https://alkisg.mysch.gr/downloads/)), the desktop interpreter schools use. AEPP-Max aims to run the same programs, but it is an independent implementation: no code, text or images from it, and no claim of affiliation. It is freeware for non-commercial use with no published source, so it can't be forked the way Cursor forked VS Code's MIT-licensed Code - OSS. Its forum is [Το Στέκι των Πληροφορικών](https://alkisg.mysch.gr/steki/).
 3. [js-glossa](https://github.com/armados/js-glossa), an independent JavaScript implementation. Its grammar (`src/grammar.js`) is a good cross-check. It has no license, so read it but don't copy code from it.
 
 Items marked **Verify** are uncertain. Settle each one against (1) or (2) before implementing it, then update this file and add a test.

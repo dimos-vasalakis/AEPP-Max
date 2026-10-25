@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
+import { NavPopover } from "@/components/NavPopover";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import type { RunResult } from "@/lib/glossa/types";
@@ -65,6 +66,39 @@ export function Ide() {
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       <Navbar>
+        {/* Clearing asks first: one click opens the question, the second clears. */}
+        <NavPopover
+          label="Καθαρισμός κώδικα"
+          title="Σβήσιμο όλου του κώδικα"
+          icon={<TrashIcon />}
+          disabled={!code || agentWriting}
+        >
+          {(close) => (
+            <>
+              <p className="font-medium">Να σβηστεί όλος ο κώδικας;</p>
+              <p className="mt-1 text-xs text-muted">Αν το μετανιώσεις, Ctrl/Cmd+Z στον editor.</p>
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    updateCode("");
+                    close();
+                  }}
+                  className="rounded-md bg-danger/15 px-2.5 py-1 font-medium text-danger hover:bg-danger/25"
+                >
+                  Σβήσιμο
+                </button>
+                <button
+                  type="button"
+                  onClick={close}
+                  className="rounded-md bg-panel-2 px-2.5 py-1 hover:text-text"
+                >
+                  Άκυρο
+                </button>
+              </div>
+            </>
+          )}
+        </NavPopover>
         <button
           type="button"
           onClick={() => execute([], [])}
@@ -101,6 +135,24 @@ export function Ide() {
         <AgentPanel code={code} onEdit={updateCode} onWriting={setAgentWriting} />
       </div>
     </div>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+    </svg>
   );
 }
 
