@@ -3,7 +3,7 @@
 It reuses the ΓΛΩΣΣΑ parser for statements and expressions; what differs is
 the frame of an algorithm, the Δεδομένα / Αποτελέσματα lines, the output words
 (Εμφάνισε, Εκτύπωσε, Γράψε), Αντιμετάθεσε, and the one-line Αν ... τότε εντολή.
-Rules and open points: docs/glossa.md, "Αλγόριθμοι (ψευδογλώσσα)".
+Rules and open points: docs/glossa.md, "Αλγόριθμος (ψευδογλώσσα)".
 """
 
 from collections.abc import Callable
@@ -75,7 +75,7 @@ class _AlgorithmParser(_Parser):
             ):
                 raise self.fail(
                     "Αυτό είναι πρόγραμμα σε ΓΛΩΣΣΑ. Για να το εκτελέσεις, "
-                    "γύρισε στα Προγράμματα από το κουμπί πάνω αριστερά."
+                    "διάλεξε «Πρόγραμμα» στον διακόπτη πάνω αριστερά."
                 )
             raise self.fail("Ο αλγόριθμος ξεκινά με Αλγόριθμος και το όνομά του.")
         opener = self.advance()

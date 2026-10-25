@@ -2,7 +2,7 @@ import { Facet } from "@codemirror/state";
 import type { Language } from "./types";
 
 /**
- * The language the editor is set to (Προγράμματα or Αλγόριθμοι). CodeEditor puts
+ * The language the editor is set to (Πρόγραμμα or Αλγόριθμος). CodeEditor puts
  * it in the state; highlighting, autocase, indentation, autocomplete and the
  * linter read it from there.
  */

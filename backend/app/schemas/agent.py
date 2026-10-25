@@ -13,7 +13,7 @@ class ChatRequest(BaseModel):
     program_id: uuid.UUID | None = None  # the saved program being edited, if any
     message: str = Field(min_length=1, max_length=4_000)
     code: str = Field(max_length=MAX_SOURCE_CHARS)  # the editor's current content
-    language: Language = "glossa"  # the editor's: Προγράμματα or Αλγόριθμοι
+    language: Language = "glossa"  # the editor's: Πρόγραμμα or Αλγόριθμος
     mode: AgentMode = "ask"
     approve: bool = False  # Agent mode: edits wait for the student's approval
 

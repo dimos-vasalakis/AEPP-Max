@@ -21,7 +21,7 @@ class AgentContext:
 
     code: str
     mode: AgentMode
-    # glossa: a ΓΛΩΣΣΑ program; pseudocode: a ψευδογλώσσα algorithm (the editor's Αλγόριθμοι).
+    # glossa: a ΓΛΩΣΣΑ program; pseudocode: a ψευδογλώσσα algorithm (the editor's Αλγόριθμος).
     language: Language = "glossa"
     # Agent mode only: the student approves each edit (Ctrl+Enter) before it reaches the editor.
     approve: bool = False

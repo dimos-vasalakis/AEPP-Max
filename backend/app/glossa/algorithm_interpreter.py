@@ -1,6 +1,6 @@
 """Runs ψευδογλώσσα algorithms (algorithm_parser.py) on the ΓΛΩΣΣΑ interpreter.
 
-What differs from ΓΛΩΣΣΑ (docs/glossa.md, "Αλγόριθμοι (ψευδογλώσσα)"):
+What differs from ΓΛΩΣΣΑ (docs/glossa.md, "Αλγόριθμος (ψευδογλώσσα)"):
 - Nothing is declared. A variable holds whatever value it was last given, and
   Διάβασε takes the type of what was typed (12 → integer, 2.5 → real).
 - Arrays have no size: an element exists once it gets a value. Indices start at 1.

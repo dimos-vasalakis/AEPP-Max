@@ -41,7 +41,7 @@ const BASIC_SETUP = {
 type Props = {
   value: string;
   onChange: (value: string) => void;
-  /** Προγράμματα or Αλγόριθμοι. Ide remounts the editor when it changes (`key`). */
+  /** Πρόγραμμα or Αλγόριθμος. Ide remounts the editor when it changes (`key`). */
   language: Language;
   /** While the agent is writing to the editor. */
   readOnly?: boolean;

@@ -38,16 +38,16 @@ writing, explain in a few sentences what you changed and why, so the student
 learns from it.
 """
 
-# What the editor holds: the student picks Προγράμματα or Αλγόριθμοι in the navbar.
+# What the editor holds: the student picks Πρόγραμμα or Αλγόριθμος in the navbar.
 NOTATION = {
     "glossa": """\
-The editor is on Προγράμματα: write code only in ΓΛΩΣΣΑ as the school textbook
+The editor is on Πρόγραμμα: write code only in ΓΛΩΣΣΑ as the school textbook
 defines it: keywords in capitals, `<-` for assignment, every variable declared
 under ΜΕΤΑΒΛΗΤΕΣ with its type, arrays indexed from 1, no global variables, and
 none of the features ΓΛΩΣΣΑ lacks (no break, no return statement, no string
 functions).""",
     "pseudocode": """\
-The editor is on Αλγόριθμοι: write code only in ψευδογλώσσα, the textbook's
+The editor is on Αλγόριθμος: write code only in ψευδογλώσσα, the textbook's
 pseudocode (chapter 2.4), not ΓΛΩΣΣΑ: `Αλγόριθμος Όνομα` … `Τέλος Όνομα`, an
 optional `Δεδομένα // α, β //` second line and `Αποτελέσματα // γ //` line before
 Τέλος (names only between the //), no declarations, `←` (or `<-`) for

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
+import { ConfirmDialog } from "@/components/Confirm";
 import { NavPopover } from "@/components/NavPopover";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
@@ -13,8 +14,10 @@ import { OutputPanel, type RunState } from "./OutputPanel";
 import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
 
 export function Ide() {
-  // Προγράμματα (ΓΛΩΣΣΑ) or Αλγόριθμοι (ψευδογλώσσα); every visit starts on Προγράμματα.
+  // Πρόγραμμα (ΓΛΩΣΣΑ) or Αλγόριθμος (ψευδογλώσσα); every visit starts on Πρόγραμμα.
   const [language, setLanguage] = useState<Language>("glossa");
+  // The switch asks first, in a dialog centered on the page.
+  const [askSwitch, setAskSwitch] = useState(false);
   // Each has its own code: switching shows the other one's, as it was left.
   const [codes, setCodes] = useState<Record<Language, string>>({ glossa: "", pseudocode: "" });
   const code = codes[language];
@@ -96,9 +99,25 @@ export function Ide() {
         {/* Not while a run or the agent's edit is on its way: each belongs to the code it was sent. */}
         <LanguageSwitch
           language={language}
-          onSwitch={switchLanguage}
+          onSwitch={() => setAskSwitch(true)}
           disabled={agentWriting || run.kind === "running"}
         />
+        {askSwitch && (
+          <ConfirmDialog
+            title={language === "glossa" ? "Αλλαγή σε Αλγόριθμο;" : "Αλλαγή σε Πρόγραμμα;"}
+            confirmLabel="Αλλαγή"
+            onConfirm={() => {
+              setAskSwitch(false);
+              switchLanguage();
+            }}
+            onCancel={() => setAskSwitch(false)}
+          >
+            {language === "glossa"
+              ? "Ο editor θα δέχεται ψευδογλώσσα (Αλγόριθμος … Τέλος)."
+              : "Ο editor θα δέχεται ΓΛΩΣΣΑ (ΠΡΟΓΡΑΜΜΑ … ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ)."}{" "}
+            Ο κώδικας που γράφεις τώρα δεν χάνεται: θα τον βρεις όταν γυρίσεις.
+          </ConfirmDialog>
+        )}
         {/* A blank page; it asks first: one click opens the question, the second clears. */}
         <NavPopover
           label="Κενή σελίδα"
@@ -203,7 +222,7 @@ export function Ide() {
 }
 
 /**
- * Προγράμματα ⇄ Αλγόριθμοι: one button, both names, the current one highlighted.
+ * Πρόγραμμα ⇄ Αλγόριθμος: one button, both names, the current one highlighted.
  * On a phone only the current one shows, to fit the bar.
  */
 function LanguageSwitch({
@@ -223,14 +242,14 @@ function LanguageSwitch({
       type="button"
       role="switch"
       aria-checked={algorithms}
-      aria-label="Αλγόριθμοι (ψευδογλώσσα) αντί για Προγράμματα (ΓΛΩΣΣΑ)"
-      title={algorithms ? "Αλλαγή σε Προγράμματα (ΓΛΩΣΣΑ)" : "Αλλαγή σε Αλγόριθμους (ψευδογλώσσα)"}
+      aria-label="Αλγόριθμος (ψευδογλώσσα) αντί για Πρόγραμμα (ΓΛΩΣΣΑ)"
+      title={algorithms ? "Αλλαγή σε Πρόγραμμα (ΓΛΩΣΣΑ)" : "Αλλαγή σε Αλγόριθμο (ψευδογλώσσα)"}
       onClick={onSwitch}
       disabled={disabled}
       className="flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-panel-2 p-0.5 text-xs font-medium hover:border-accent/60 disabled:opacity-50"
     >
-      <span className={segment(!algorithms)}>Προγράμματα</span>
-      <span className={segment(algorithms)}>Αλγόριθμοι</span>
+      <span className={segment(!algorithms)}>Πρόγραμμα</span>
+      <span className={segment(algorithms)}>Αλγόριθμος</span>
     </button>
   );
 }
@@ -249,8 +268,13 @@ function BlankPageIcon() {
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
-      <path d="M14 3v5h5" />
+      {/* The sheet tinted in the accent, its fold and two lines of text stronger. */}
+      <path
+        d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z"
+        style={{ fill: "var(--accent)", fillOpacity: 0.22 }}
+      />
+      <path d="M14 3v5h5" style={{ fill: "var(--accent)", fillOpacity: 0.55 }} />
+      <path d="M9 13h6M9 17h4" style={{ stroke: "var(--accent)" }} />
     </svg>
   );
 }

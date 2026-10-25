@@ -1,4 +1,4 @@
-// The editor on Αλγόριθμοι (ψευδογλώσσα): what differs from ΓΛΩΣΣΑ.
+// The editor on Αλγόριθμος (ψευδογλώσσα): what differs from ΓΛΩΣΣΑ.
 import { StringStream } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";

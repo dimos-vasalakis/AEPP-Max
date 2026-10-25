@@ -81,7 +81,7 @@ const BLOCKS: { label: string; detail: string; template: string }[] = [
   },
 ];
 
-/** The same for ψευδογλώσσα (Αλγόριθμοι), in the textbook's spelling. */
+/** The same for ψευδογλώσσα (Αλγόριθμος), in the textbook's spelling. */
 const PSEUDOCODE_BLOCKS: typeof BLOCKS = [
   {
     label: "Αλγόριθμος",

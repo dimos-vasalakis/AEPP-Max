@@ -203,9 +203,9 @@ js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `Δ�
 | Limits | Call depth 200, arrays up to 1,000,000 cells, integers up to 10^100: past them, a runtime error instead of a hung worker. |
 
 
-## Αλγόριθμοι (ψευδογλώσσα)
+## Αλγόριθμος (ψευδογλώσσα)
 
-The editor's **Αλγόριθμοι** switch runs the textbook's pseudocode (ch. 2.4 "Στοιχεία ψευδογλώσσας", with the examples in ch. 2 and 3) instead of ΓΛΩΣΣΑ. The Διερμηνευτής has had a ψευδογλώσσα mode since 1.5.1 (`.psg` files), but its help doesn't describe it, so the choices below come from the textbook. Code: `algorithm_parser.py`, `algorithm_checker.py`, `algorithm_interpreter.py`; tests: `backend/tests/test_glossa_algorithms.py`. The API takes `language: "pseudocode"`.
+The editor's **Αλγόριθμος** switch runs the textbook's pseudocode (ch. 2.4 "Στοιχεία ψευδογλώσσας", with the examples in ch. 2 and 3) instead of ΓΛΩΣΣΑ. The Διερμηνευτής has had a ψευδογλώσσα mode since 1.5.1 (`.psg` files), but its help doesn't describe it, so the choices below come from the textbook. Code: `algorithm_parser.py`, `algorithm_checker.py`, `algorithm_interpreter.py`; tests: `backend/tests/test_glossa_algorithms.py`. The API takes `language: "pseudocode"`.
 
 ```
 Αλγόριθμος Ευκλείδης

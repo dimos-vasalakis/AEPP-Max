@@ -174,4 +174,4 @@ def test_run_and_check_take_the_language(client: TestClient) -> None:
     check = client.post("/api/v1/check", json={"code": algorithm, "language": "pseudocode"})
     assert check.json() == {"error": None}
     as_program = client.post("/api/v1/check", json={"code": algorithm})
-    assert "Αλγόριθμους" in as_program.json()["error"]["message"]
+    assert "«Αλγόριθμος»" in as_program.json()["error"]["message"]

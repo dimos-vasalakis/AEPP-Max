@@ -368,11 +368,11 @@ class TestSyntax:
 
     def test_a_glossa_program_in_algorithm_mode(self) -> None:
         error = check("ΠΡΟΓΡΑΜΜΑ Α\nΑΡΧΗ\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ", "pseudocode")
-        assert error is not None and "Προγράμματα" in error.message
+        assert error is not None and "«Πρόγραμμα»" in error.message
 
     def test_an_algorithm_in_program_mode(self) -> None:
         error = check("Αλγόριθμος Α\nx ← 1\nΤέλος Α")
-        assert error is not None and "Αλγόριθμους" in error.message
+        assert error is not None and "«Αλγόριθμος»" in error.message
 
     def test_glossa_points_to_the_ascii_comparison(self) -> None:
         error = check("ΠΡΟΓΡΑΜΜΑ Α\nΑΡΧΗ\nΓΡΑΨΕ 1 ≤ 2\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ")

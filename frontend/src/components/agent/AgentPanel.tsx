@@ -12,6 +12,7 @@ import {
   useState,
 } from "react";
 import { type AgentMode, streamChat } from "@/lib/api/agent";
+import { PanelConfirm } from "@/components/Confirm";
 import { ApiError } from "@/lib/api/client";
 import type { Language } from "@/lib/glossa/types";
 import { lineDiff } from "@/lib/lineDiff";
@@ -134,7 +135,7 @@ const VERBS = ["Σκέφτεται", "Μελετά", "Υπολογίζει", "Ψ
 
 type Props = {
   code: string;
-  /** The editor's Προγράμματα or Αλγόριθμοι: the agent writes in that language. */
+  /** The editor's Πρόγραμμα or Αλγόριθμος: the agent writes in that language. */
   language: Language;
   /** write_code's new program, for the editor: at once, or once the student approves it. */
   onEdit: (code: string) => void;
@@ -155,6 +156,8 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
   const [draft, setDraft] = useState("");
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The Νέα button asks first, centered over this panel.
+  const [askNew, setAskNew] = useState(false);
   const abort = useRef<AbortController | null>(null);
   // Whether this chat has a message sent in Agent mode: only then does going back to Tutor clear it.
   const usedAgent = useRef(false);
@@ -176,7 +179,7 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
     setConversationId(null);
   }
 
-  // The editor switched between Προγράμματα and Αλγόριθμοι: a proposal waiting was
+  // The editor switched between Πρόγραμμα and Αλγόριθμος: a proposal waiting was
   // written for the other code. An edit still on its way is dropped too (below).
   const [chatLanguage, setChatLanguage] = useState(language);
   const languageNow = useRef(language);
@@ -388,14 +391,27 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
         if (window.getSelection()?.toString()) return;
         input.current?.focus({ preventScroll: true });
       }}
-      className="flex h-[80dvh] min-h-0 flex-col border-t border-border bg-panel font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l"
+      className="relative flex h-[80dvh] min-h-0 flex-col border-t border-border bg-panel font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l"
     >
+      {askNew && (
+        <PanelConfirm
+          title="Νέα συζήτηση;"
+          confirmLabel="Νέα"
+          onConfirm={() => {
+            setAskNew(false);
+            if (!busy) newConversation();
+          }}
+          onCancel={() => setAskNew(false)}
+        >
+          Η τωρινή συζήτηση κλείνει και ο agent δεν θα θυμάται τα παραπάνω.
+        </PanelConfirm>
+      )}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
         <h2 className="text-sm font-semibold">Agent</h2>
         {messages.length > 0 && (
           <button
             type="button"
-            onClick={newConversation}
+            onClick={() => setAskNew(true)}
             disabled={busy}
             className="ml-auto text-xs text-muted hover:text-text"
           >

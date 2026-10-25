@@ -9,7 +9,7 @@ class RunRequest(BaseModel):
     code: str = Field(max_length=MAX_SOURCE_CHARS)
     inputs: list[str] = Field(default_factory=list, max_length=1_000)
     trace: bool = False
-    language: Language = "glossa"  # "pseudocode": the editor is on Αλγόριθμοι
+    language: Language = "glossa"  # "pseudocode": the editor is on Αλγόριθμος
 
 
 class CheckRequest(BaseModel):

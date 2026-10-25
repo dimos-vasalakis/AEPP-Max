@@ -43,7 +43,7 @@ export const RESERVED = new Set([
   ...Object.keys(BUILTINS),
 ]);
 
-/** ψευδογλώσσα (the editor's Αλγόριθμοι), normalized: no declarations or subprogram kinds. */
+/** ψευδογλώσσα (the editor's Αλγόριθμος), normalized: no declarations or subprogram kinds. */
 export const PSEUDOCODE_KEYWORDS = [
   "ΑΛΓΟΡΙΘΜΟΣ", "ΤΕΛΟΣ", "ΔΕΔΟΜΕΝΑ", "ΑΠΟΤΕΛΕΣΜΑΤΑ",
   "ΔΙΑΒΑΣΕ", "ΓΡΑΨΕ", "ΕΜΦΑΝΙΣΕ", "ΕΚΤΥΠΩΣΕ", "ΑΝΤΙΜΕΤΑΘΕΣΕ",
