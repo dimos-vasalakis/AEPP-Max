@@ -1,0 +1,8 @@
+fastapi[standard]>=0.162
+pydantic-settings>=2.16
+pyjwt[crypto]>=2.15
+sqlalchemy[asyncio]>=2.1
+alembic>=1.20
+psycopg[binary]>=3.3
+# 0.x: minor releases can break the API, so upgrade deliberately.
+openai-agents[sqlalchemy]>=0.24,<0.25
