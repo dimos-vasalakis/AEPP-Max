@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavPopover } from "@/components/NavPopover";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
@@ -9,6 +9,8 @@ import { useUser } from "@/lib/supabase/useUser";
 
 export function UserMenu() {
   const user = useUser();
+  // The menu stays open while a deletion runs, so its outcome is always seen.
+  const [deleting, setDeleting] = useState(false);
   if (user === undefined) return null;
   if (user === null) {
     return (
@@ -26,7 +28,12 @@ export function UserMenu() {
     );
   }
   return (
-    <NavPopover label="Λογαριασμός" icon={<PersonIcon />} align="right">
+    <NavPopover
+      label="Λογαριασμός"
+      icon={<PersonIcon />}
+      align="right"
+      locked={deleting}
+    >
       <h2 className="font-semibold">Λογαριασμός</h2>
       <p className="mt-1 truncate text-xs text-muted">{user.email}</p>
       <button
@@ -39,25 +46,26 @@ export function UserMenu() {
       <Link href="/privacy" className="mt-3 inline-block text-xs text-accent hover:underline">
         Πολιτική απορρήτου
       </Link>
-      <DeleteAccount />
+      <DeleteAccount onDeleting={setDeleting} />
     </NavPopover>
   );
 }
 
-/** Two steps: the link, then a warning with the button that really deletes. */
-function DeleteAccount() {
+/**
+ * Two steps: the link, then a warning with the button that really deletes. Its
+ * state resets when the menu closes, so the second step is never left armed.
+ */
+function DeleteAccount({ onDeleting }: { onDeleting: (deleting: boolean) => void }) {
   const [state, setState] = useState<"idle" | "confirm" | "deleting">("idle");
   const [error, setError] = useState<string | null>(null);
+  // The one source of truth is `state`; the menu just follows it.
+  useEffect(() => onDeleting(state === "deleting"), [state, onDeleting]);
 
   async function remove() {
     setState("deleting");
     setError(null);
     try {
       await apiFetch<void>("/account", { method: "DELETE" });
-      // The account is gone, so only the session in this browser is left to clear.
-      // Reload too, so nothing of the old account (the agent chat) stays on screen.
-      await createClient().auth.signOut({ scope: "local" });
-      window.location.reload();
     } catch (err) {
       setError(
         err instanceof ApiError && err.status === 503
@@ -65,7 +73,14 @@ function DeleteAccount() {
           : "Η διαγραφή απέτυχε. Δοκίμασε ξανά.",
       );
       setState("confirm");
+      return;
     }
+    // The account is gone, so only the session in this browser is left to clear.
+    // Even if that fails, reload: nothing of the old account (the agent chat) stays on screen.
+    await createClient()
+      .auth.signOut({ scope: "local" })
+      .catch(() => {});
+    window.location.reload();
   }
 
   if (state === "idle") {

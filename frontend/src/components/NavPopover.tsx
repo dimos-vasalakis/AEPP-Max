@@ -10,19 +10,36 @@ type Props = {
   icon: ReactNode;
   /** Which edge of the button the panel lines up with, on wider screens. */
   align?: "left" | "right";
+  /** Also closes an open panel, so its buttons can't act while the trigger couldn't. */
   disabled?: boolean;
+  /** Keeps the panel open (no outside click, Escape or trigger click), e.g. while it waits for a request. */
+  locked?: boolean;
   /** The panel; a function gets `close`, for panels whose buttons finish the job. */
   children: ReactNode | ((close: () => void) => ReactNode);
 };
 
 /** An icon button in the navbar that opens a small panel; closes on outside click or Escape. */
-export function NavPopover({ label, title, icon, align = "left", disabled, children }: Props) {
+export function NavPopover({
+  label,
+  title,
+  icon,
+  align = "left",
+  disabled,
+  locked,
+  children,
+}: Props) {
   const [open, setOpen] = useState(false);
+  // Close when it becomes disabled (state adjusted during render, not in an effect).
+  const [wasDisabled, setWasDisabled] = useState(disabled);
+  if (disabled !== wasDisabled) {
+    setWasDisabled(disabled);
+    if (disabled) setOpen(false);
+  }
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
   useEffect(() => {
-    if (!open) return;
+    if (!open || locked) return;
     const onPointer = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) setOpen(false);
     };
@@ -33,13 +50,13 @@ export function NavPopover({ label, title, icon, align = "left", disabled, child
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, locked]);
 
   return (
     <div ref={root} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => !locked && setOpen((o) => !o)}
         disabled={disabled}
         aria-expanded={open}
         aria-controls={panelId}

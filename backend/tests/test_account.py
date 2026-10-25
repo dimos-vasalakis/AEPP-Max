@@ -56,3 +56,19 @@ def test_delete_auth_user_reports_failures() -> None:
     with pytest.raises(HTTPException) as err:
         _delete_with(500, [])
     assert err.value.status_code == 502
+
+
+@pytest.mark.usefixtures("admin_settings")
+def test_delete_auth_user_reports_network_errors() -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("unreachable", request=request)
+
+    with pytest.raises(HTTPException) as err:
+        asyncio.run(delete_auth_user("user-1", transport=httpx.MockTransport(fail)))
+    assert err.value.status_code == 502
+
+
+def test_latest_revision_is_the_newest_migration() -> None:
+    from app.core.db import latest_revision
+
+    assert latest_revision() == "0002"

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from agents import Agent
+from agents import Agent, ModelSettings
 
 from app.agent.context import AgentContext
 from app.agent.instructions import instructions
@@ -17,4 +17,8 @@ def get_agent() -> Agent[AgentContext]:
         instructions=instructions,
         model=get_settings().openai_model,
         tools=TOOLS,
+        # Don't keep replies on OpenAI's side (the Responses API stores them by
+        # default); our session sends the history each turn. Reasoning then has to
+        # travel encrypted in that history, or the next turn can't refer to it.
+        model_settings=ModelSettings(store=False, response_include=["reasoning.encrypted_content"]),
     )

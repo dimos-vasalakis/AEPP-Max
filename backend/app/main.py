@@ -6,7 +6,7 @@ from agents import set_default_openai_key, set_tracing_disabled
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
+from sqlalchemy.exc import DBAPIError, IntegrityError, InterfaceError, OperationalError
 
 from app.api.v1.router import api_router
 from app.core.config import get_settings, is_unset
@@ -59,3 +59,23 @@ async def database_unavailable(_: Request, exc: DBAPIError) -> JSONResponse:
     # clear 503 instead of a bare 500; handled here so CORS headers are kept.
     logger.error("Database unavailable: %s", exc.orig)
     return JSONResponse(status_code=503, content={"detail": "Database unavailable"})
+
+
+# Foreign-key failures that are the client's situation, not a bug (Postgres's
+# default constraint names, migration 0001). A deleted account's token stays
+# valid until it expires, so its inserts fail on user_id; a program deleted from
+# another tab fails a new conversation's program_id.
+FOREIGN_KEY_ERRORS = {
+    "programs_user_id_fkey": (401, "Account no longer exists"),
+    "conversations_user_id_fkey": (401, "Account no longer exists"),
+    "conversations_program_id_fkey": (404, "Program not found"),
+}
+
+
+@app.exception_handler(IntegrityError)
+async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
+    constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+    if constraint not in FOREIGN_KEY_ERRORS:
+        raise exc  # a real bug: let it be a 500 with its traceback
+    status_code, detail = FOREIGN_KEY_ERRORS[constraint]
+    return JSONResponse(status_code=status_code, content={"detail": detail})

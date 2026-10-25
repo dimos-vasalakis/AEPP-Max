@@ -59,6 +59,10 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const abort = useRef<AbortController | null>(null);
+  // Whether this chat has a message sent in Agent mode: only then does going back to Tutor clear it.
+  const usedAgent = useRef(false);
+  // The mode of the request in flight, if any.
+  const pending = useRef<AgentMode | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   // Whether the transcript is scrolled to the bottom, so it may follow the reply.
@@ -104,6 +108,7 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
     setBusy(true);
     atBottom.current = true;
     const writing = mode === "agent";
+    pending.current = mode;
     if (writing) onWriting(true);
     setMessages((ms) => [
       ...ms,
@@ -115,7 +120,11 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
     try {
       const request = { conversation_id: conversationId, message, code, mode };
       for await (const event of streamChat(request, controller.signal)) {
-        if (event.type === "conversation") setConversationId(event.id);
+        if (event.type === "conversation") {
+          setConversationId(event.id);
+          // The server took the message: from now on this chat has used Agent mode.
+          if (writing) usedAgent.current = true;
+        }
         else if (event.type === "text") appendText(event.delta);
         else if (event.type === "tool")
           patchParts((parts) => [...parts, { kind: "tool", name: event.name }]);
@@ -136,19 +145,28 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
         appendText(
           err instanceof ApiError && err.status === 503
             ? "Ο βοηθός δεν είναι διαθέσιμος αυτή τη στιγμή."
-            : "Δεν ήταν δυνατή η σύνδεση με τον βοηθό.",
+            : err instanceof ApiError && err.status === 401
+              ? "Η σύνδεσή σου δεν ισχύει πια. Αποσυνδέσου και συνδέσου ξανά."
+              : err instanceof ApiError && err.status === 404
+                ? "Αυτή η συζήτηση δεν υπάρχει πια. Το επόμενο μήνυμα ξεκινά νέα."
+                : "Δεν ήταν δυνατή η σύνδεση με τον βοηθό.",
         );
+        // Deleted (e.g. with the account, from another tab): start over next time.
+        if (err instanceof ApiError && err.status === 404) setConversationId(null);
       }
     } finally {
       abort.current = null;
+      pending.current = null;
       setBusy(false);
       if (writing) onWriting(false);
     }
   }
 
   function toggleMode() {
-    // Back to Tutor starts a clean chat, without the history of code the agent wrote.
-    if (mode === "agent") {
+    // Back to Tutor starts a clean chat, without the history of code the agent wrote
+    // (a quick look at Agent mode, with nothing sent, keeps the Tutor chat).
+    if (mode === "agent" && (usedAgent.current || pending.current === "agent")) {
+      // An Agent request still waiting (e.g. on a cold server) must not write later.
       abort.current?.abort();
       newConversation();
     }
@@ -156,6 +174,7 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
   }
 
   function newConversation() {
+    usedAgent.current = false;
     setMessages([]);
     setConversationId(null);
   }

@@ -64,7 +64,7 @@
 }
 
 /*
- * Διερμηνευτής: the Διερμηνευτής της ΓΛΩΣΣΑΣ as students see it (alkisg.mysch.gr,
+ * Κλασικό (classic): modeled on the Διερμηνευτής της ΓΛΩΣΣΑΣ as students see it (alkisg.mysch.gr,
  * Επιλογές → Χρώματα κώδικα, and a student's screenshot). Courier New; bold
  * blue words, bold red symbols, green integers, olive reals, purple italic
  * strings, gray italic comments, a light yellow current line and a blue-gray
@@ -220,7 +220,7 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-/* The output screen writes in the editor's font (Courier New in the Διερμηνευτής theme). */
+/* The output screen writes in the editor's font (Courier New in the Κλασικό theme). */
 .output-body {
   font-family: var(--editor-font);
 }

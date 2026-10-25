@@ -2,12 +2,10 @@ from typing import Annotated
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import delete, select
 
 from app.core.config import get_settings, is_unset
-from app.core.db import DbSession
+from app.core.db import DbSession, schema_is_current
 from app.core.security import CurrentUserDep
-from app.models import Conversation, Program, agent_sessions
 
 router = APIRouter(prefix="/account", tags=["account"])
 
@@ -25,14 +23,17 @@ AdminReady = Annotated[None, Depends(require_admin)]
 
 
 async def delete_auth_user(user_id: str, transport: httpx.AsyncBaseTransport | None = None) -> None:
-    """Delete the user from Supabase Auth (Admin API). That cascades to profiles."""
+    """Delete the user from Supabase Auth (Admin API)."""
     settings = get_settings()
     key = settings.supabase_secret_key
-    async with httpx.AsyncClient(transport=transport, timeout=10) as client:
-        res = await client.delete(
-            f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_id}",
-            headers={"apikey": key, "Authorization": f"Bearer {key}"},
-        )
+    try:
+        async with httpx.AsyncClient(transport=transport, timeout=10) as client:
+            res = await client.delete(
+                f"{settings.supabase_url.rstrip('/')}/auth/v1/admin/users/{user_id}",
+                headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            )
+    except httpx.HTTPError as err:  # unreachable or timed out
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not delete the account") from err
     # 404: already gone (e.g. a retry after a timeout), which is what we wanted.
     if res.status_code != status.HTTP_404_NOT_FOUND and res.is_error:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not delete the account")
@@ -40,17 +41,15 @@ async def delete_auth_user(user_id: str, transport: httpx.AsyncBaseTransport | N
 
 @router.delete("", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(user: CurrentUserDep, _: AdminReady, db: DbSession) -> Response:
-    """Delete everything the user has, then the account itself."""
-    # agent_sessions has no foreign key to conversations (the SDK owns it), so
-    # the cascade from auth.users wouldn't reach it: delete it by id first.
-    conversation_ids = await db.scalars(
-        select(Conversation.id).where(Conversation.user_id == user.id)
-    )
-    session_ids = [str(i) for i in conversation_ids]
-    if session_ids:
-        await db.execute(delete(agent_sessions).where(agent_sessions.c.session_id.in_(session_ids)))
-    await db.execute(delete(Conversation).where(Conversation.user_id == user.id))
-    await db.execute(delete(Program).where(Program.user_id == user.id))
-    await db.commit()
+    """Delete the account and everything it owns, in one step that either happens
+    or doesn't: auth.users cascades to profiles, programs and conversations, and
+    deleting a conversation deletes its agent session (migration 0002)."""
+    # Without 0002's triggers the chat history would stay behind.
+    if not await schema_is_current(db):
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Account deletion needs the latest migrations"
+        )
+    # Release the pooled connection: the Admin API call can take seconds.
+    await db.close()
     await delete_auth_user(str(user.id))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
