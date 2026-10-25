@@ -12,7 +12,9 @@ import { codeWords } from "./words";
 // «i» comes out «ι». When a ΓΙΑ's counter is a single Greek letter it becomes
 // the Latin letter on the same key (ι → i, ξ → j, κ → k), everywhere in that
 // program or subprogram: the declaration at the top too. Longer names stay.
-// After that, a «ι» typed in the loop's body becomes «i» as well.
+// After that, a «ι» typed anywhere else in that program becomes «i» as well,
+// once it's finished: by typing what comes after it, or by moving the cursor
+// away (a click, an arrow key, typing over an auto-closed «]» in «Α[ι]»).
 
 const GREEK_KEYS = "ςερτυθιοπασδφγηξκλζχψωβνμ";
 const LATIN_KEYS = "wertyuiopasdfghjklzxcvbnm";
@@ -93,7 +95,25 @@ export function counterTypo(doc: Text, end: number): ChangeSpec | null {
   return { from, to: from + word.text.length, insert: counter };
 }
 
+/**
+ * The cursor just left the end of a one-letter Greek word without changing the
+ * text: that finishes the word as much as typing a space after it.
+ */
+function leftTypo(tr: Transaction): ChangeSpec | null {
+  if (tr.docChanged || !tr.selection || !tr.annotation(Transaction.userEvent)) return null;
+  const before = tr.startState.selection.main;
+  const after = tr.newSelection.main;
+  if (!before.empty) return null;
+  const change = counterTypo(tr.startState.doc, before.head) as { from: number; to: number } | null;
+  if (!change) return null;
+  // Still on the word (e.g. ← onto it): not finished yet.
+  if (after.empty && after.head >= change.from && after.head <= change.to) return null;
+  return change;
+}
+
 function latinizeCounter(tr: Transaction): Transaction | readonly TransactionSpec[] {
+  const left = leftTypo(tr);
+  if (left) return [tr, { changes: left, sequential: true }];
   const typed =
     tr.isUserEvent("input.type") ||
     tr.isUserEvent("input.complete") ||

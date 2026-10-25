@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { NavPopover } from "@/components/NavPopover";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
@@ -9,8 +9,17 @@ import { useUser } from "@/lib/supabase/useUser";
 
 export function UserMenu() {
   const user = useUser();
-  // The menu stays open while a deletion runs, so its outcome is always seen.
-  const [deleting, setDeleting] = useState(false);
+  // One state for the delete steps, here so the menu can lock on it: it stays
+  // open while a deletion runs, and closing it resets to idle, so the second
+  // step is never left armed.
+  const [deletion, setDeletion] = useState<Deletion>(IDLE);
+  const reset = useCallback(() => setDeletion(IDLE), []);
+  // Signed out (another tab) and in again without a reload: start over too.
+  const [deletionUser, setDeletionUser] = useState(user?.id);
+  if (user?.id !== deletionUser) {
+    setDeletionUser(user?.id);
+    setDeletion(IDLE);
+  }
   if (user === undefined) return null;
   if (user === null) {
     return (
@@ -32,7 +41,8 @@ export function UserMenu() {
       label="Λογαριασμός"
       icon={<PersonIcon />}
       align="right"
-      locked={deleting}
+      locked={deletion.step === "deleting"}
+      onClose={reset}
     >
       <h2 className="font-semibold">Λογαριασμός</h2>
       <p className="mt-1 truncate text-xs text-muted">{user.email}</p>
@@ -46,33 +56,34 @@ export function UserMenu() {
       <Link href="/privacy" className="mt-3 inline-block text-xs text-accent hover:underline">
         Πολιτική απορρήτου
       </Link>
-      <DeleteAccount onDeleting={setDeleting} />
+      <DeleteAccount deletion={deletion} setDeletion={setDeletion} />
     </NavPopover>
   );
 }
 
-/**
- * Two steps: the link, then a warning with the button that really deletes. Its
- * state resets when the menu closes, so the second step is never left armed.
- */
-function DeleteAccount({ onDeleting }: { onDeleting: (deleting: boolean) => void }) {
-  const [state, setState] = useState<"idle" | "confirm" | "deleting">("idle");
-  const [error, setError] = useState<string | null>(null);
-  // The one source of truth is `state`; the menu just follows it.
-  useEffect(() => onDeleting(state === "deleting"), [state, onDeleting]);
+type Deletion = { step: "idle" | "confirm" | "deleting"; error: string | null };
+const IDLE: Deletion = { step: "idle", error: null };
 
+/** Two steps: the link, then a warning with the button that really deletes. */
+function DeleteAccount({
+  deletion: { step, error },
+  setDeletion,
+}: {
+  deletion: Deletion;
+  setDeletion: (deletion: Deletion) => void;
+}) {
   async function remove() {
-    setState("deleting");
-    setError(null);
+    setDeletion({ step: "deleting", error: null });
     try {
       await apiFetch<void>("/account", { method: "DELETE" });
     } catch (err) {
-      setError(
-        err instanceof ApiError && err.status === 503
-          ? "Η διαγραφή δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκίμασε αργότερα."
-          : "Η διαγραφή απέτυχε. Δοκίμασε ξανά.",
-      );
-      setState("confirm");
+      setDeletion({
+        step: "confirm",
+        error:
+          err instanceof ApiError && err.status === 503
+            ? "Η διαγραφή δεν είναι διαθέσιμη αυτή τη στιγμή. Δοκίμασε αργότερα."
+            : "Η διαγραφή απέτυχε. Δοκίμασε ξανά.",
+      });
       return;
     }
     // The account is gone, so only the session in this browser is left to clear.
@@ -83,12 +94,12 @@ function DeleteAccount({ onDeleting }: { onDeleting: (deleting: boolean) => void
     window.location.reload();
   }
 
-  if (state === "idle") {
+  if (step === "idle") {
     return (
       <div className="mt-4 border-t border-border pt-3">
         <button
           type="button"
-          onClick={() => setState("confirm")}
+          onClick={() => setDeletion({ step: "confirm", error: null })}
           className="text-xs text-danger hover:underline"
         >
           Διαγραφή λογαριασμού
@@ -107,15 +118,15 @@ function DeleteAccount({ onDeleting }: { onDeleting: (deleting: boolean) => void
         <button
           type="button"
           onClick={remove}
-          disabled={state === "deleting"}
+          disabled={step === "deleting"}
           className="rounded-md bg-danger/15 px-2.5 py-1 font-medium text-danger hover:bg-danger/25 disabled:opacity-60"
         >
-          {state === "deleting" ? "Διαγραφή…" : "Ναι, διαγραφή"}
+          {step === "deleting" ? "Διαγραφή…" : "Ναι, διαγραφή"}
         </button>
         <button
           type="button"
-          onClick={() => setState("idle")}
-          disabled={state === "deleting"}
+          onClick={() => setDeletion(IDLE)}
+          disabled={step === "deleting"}
           className="rounded-md bg-panel-2 px-2.5 py-1 hover:text-text"
         >
           Άκυρο

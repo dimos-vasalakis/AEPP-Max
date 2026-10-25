@@ -1,3 +1,4 @@
+import pytest
 from fastapi.testclient import TestClient
 
 from tests.conftest import auth_header
@@ -73,3 +74,26 @@ def test_run_runs_a_program_and_asks_for_input(client: TestClient) -> None:
     assert body["status"] == "ok"
     assert body["output"] == ["Δώσε αριθμό:", "49"]
     assert [step["line"] for step in body["trace"]] == [5, 6, 7]
+
+
+def test_agent_refuses_past_the_daily_limit(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api.v1.endpoints import agent
+    from app.core.config import get_settings
+    from app.core.db import get_db
+
+    async def no_db():  # the limit check is the first thing to use it
+        yield None
+
+    async def used(*_):
+        return get_settings().agent_daily_tokens
+
+    monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
+    monkeypatch.setattr(agent, "tokens_today", used)
+    monkeypatch.setitem(client.app.dependency_overrides, get_db, no_db)
+    res = client.post(
+        "/api/v1/agent/chat", json={"message": "Γεια", "code": ""}, headers=auth_header()
+    )
+    assert res.status_code == 429
+    assert res.json()["detail"] == "Daily agent limit reached"

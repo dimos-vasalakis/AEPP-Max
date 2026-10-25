@@ -1,9 +1,12 @@
+import asyncio
+import logging
 from collections.abc import AsyncIterator
 from functools import lru_cache
 from pathlib import Path
 from typing import Annotated
 
 from alembic.script import ScriptDirectory
+from alembic.script.revision import ResolutionError
 from fastapi import Depends, HTTPException
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
@@ -42,13 +45,30 @@ DbSession = Annotated[AsyncSession, Depends(get_db)]
 
 
 @lru_cache
-def latest_revision() -> str | None:
-    """The newest migration in alembic/versions (read once; it ships with the image)."""
-    return ScriptDirectory(str(Path(__file__).resolve().parents[2] / "alembic")).get_current_head()
+def _migrations() -> ScriptDirectory:
+    return ScriptDirectory(str(Path(__file__).resolve().parents[2] / "alembic"))
 
 
-async def schema_is_current(db: AsyncSession) -> bool:
-    """Whether production ran the latest migration. Migrations don't run on deploy,
-    so features that rely on one (account deletion on 0002's triggers) check first."""
-    version = await db.scalar(text("select version_num from alembic_version"))
-    return version == latest_revision()
+def revision_includes(version: str | None, needed: str) -> bool:
+    """Whether a database at `version` has run migration `needed`."""
+    if version is None:
+        return False
+    try:
+        return any(r.revision == needed for r in _migrations().iterate_revisions(version, "base"))
+    except ResolutionError:
+        # A revision this image doesn't know (a newer image, a stray stamp): can't
+        # tell, so say no. The features behind this check guard privacy promises.
+        logging.getLogger("uvicorn.error").warning(
+            "Database is at unknown migration %s; treating %s as missing", version, needed
+        )
+        return False
+
+
+async def has_migration(db: AsyncSession, needed: str) -> bool:
+    """Migrations don't run on deploy, so a feature that relies on one checks first."""
+    version = None
+    # A database Alembic never ran on has no alembic_version table.
+    if await db.scalar(text("select to_regclass('alembic_version') is not null")):
+        version = await db.scalar(text("select version_num from alembic_version"))
+    # Reading the migration files is blocking I/O (only the first time; it's cached).
+    return await asyncio.to_thread(revision_includes, version, needed)

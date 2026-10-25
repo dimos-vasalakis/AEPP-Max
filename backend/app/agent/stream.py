@@ -12,10 +12,11 @@ Events (frontend/src/lib/api/agent.ts parses them):
 import json
 import logging
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict
 
-from agents import Runner
+import anyio
+from agents import Runner, Usage
 from agents.memory import Session
 from openai.types.responses import ResponseTextDeltaEvent
 
@@ -31,7 +32,11 @@ def sse(event: str, data: object) -> str:
 
 
 async def stream_reply(
-    conversation_id: uuid.UUID, message: str, context: AgentContext, session: Session
+    conversation_id: uuid.UUID,
+    message: str,
+    context: AgentContext,
+    session: Session,
+    on_usage: Callable[[Usage], Awaitable[None]] | None = None,
 ) -> AsyncIterator[str]:
     yield sse("conversation", {"id": str(conversation_id)})
     result = Runner.run_streamed(
@@ -62,4 +67,9 @@ async def stream_reply(
     finally:
         # Also runs when the client disconnects: stop paying for an unread answer.
         result.cancel()
+        if on_usage is not None:
+            # Count what was spent, even on a disconnect. Shielded: the cancelled
+            # request would otherwise cancel this write too.
+            with anyio.CancelScope(shield=True):
+                await on_usage(result.context_wrapper.usage)
     yield sse("done", {})

@@ -1,12 +1,16 @@
 import asyncio
+from types import SimpleNamespace
 
 import httpx
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints.account import delete_auth_user
 from app.core.config import get_settings
+from app.core.db import revision_includes
+from app.main import integrity_error
 from tests.conftest import auth_header
 
 
@@ -68,7 +72,28 @@ def test_delete_auth_user_reports_network_errors() -> None:
     assert err.value.status_code == 502
 
 
-def test_latest_revision_is_the_newest_migration() -> None:
-    from app.core.db import latest_revision
+def test_revision_includes_follows_the_migration_chain() -> None:
+    assert revision_includes("0002", "0002")
+    assert not revision_includes("0001", "0002")
+    assert not revision_includes(None, "0002")  # Alembic never ran
+    assert not revision_includes("ffff_unknown_to_this_image", "0002")  # fails closed
 
-    assert latest_revision() == "0002"
+
+def _integrity_error(constraint: str | None) -> IntegrityError:
+    orig = SimpleNamespace(diag=SimpleNamespace(constraint_name=constraint))
+    return IntegrityError("insert", {}, orig)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("constraint", "status_code"),
+    [
+        ("programs_user_id_fkey", 401),
+        ("conversations_user_id_fkey", 401),
+        ("conversations_program_id_fkey", 404),
+        ("title_length", 500),
+        (None, 500),
+    ],
+)
+def test_integrity_errors_map_to_responses(constraint: str | None, status_code: int) -> None:
+    res = asyncio.run(integrity_error(None, _integrity_error(constraint)))  # type: ignore[arg-type]
+    assert res.status_code == status_code

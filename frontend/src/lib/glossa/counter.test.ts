@@ -68,6 +68,21 @@ function typing(doc: string) {
     extensions: [glossa, glossaIndent, glossaCounter, glossaAutocase],
   });
   return {
+    /** Move the cursor without typing, as a click or an arrow key does. */
+    moveTo(pos: number, userEvent = "select.pointer") {
+      state = state.update({ selection: { anchor: pos }, userEvent }).state;
+      return state.doc.toString();
+    },
+    /** Insert a pair with the cursor between, as the editor does for «[». */
+    pair(open: string, close: string) {
+      const head = state.selection.main.head;
+      state = state.update({
+        changes: { from: head, insert: open + close },
+        selection: { anchor: head + open.length },
+        userEvent: "input.type",
+      }).state;
+      return state.doc.toString();
+    },
     type(text: string) {
       for (const ch of text) {
         const head = state.selection.main.head;
@@ -111,5 +126,39 @@ describe("typing a ΓΙΑ", () => {
   it("keeps a Greek name that is a variable of its own", () => {
     const own = "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i, ι\nΑΡΧΗ\n  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10\n    ";
     expect(typing(own).type("ι <- 1")).toBe(`${own}ι <- 1`);
+  });
+
+  const loop = "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i\nΑΡΧΗ\n  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10";
+
+  it("turns a Greek ι Latin when the cursor leaves it, with nothing typed after it", () => {
+    const t = typing(top);
+    t.type("για ι απο 1 μεχρι 10\n    γραψε ι");
+    expect(t.moveTo(0)).toBe(`${loop}\n    ΓΡΑΨΕ i`);
+  });
+
+  it("does it after the loop too, and with the arrow keys", () => {
+    const t = typing(top);
+    t.type("για ι απο 1 μεχρι 10\n  τελος_επαναληψης\n  χ <- ι");
+    expect(t.moveTo(5, "select")).toBe(`${loop}\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  χ <- i`);
+  });
+
+  it("does it inside brackets, where typing «]» only steps over the closed one", () => {
+    const t = typing(top);
+    t.type("για ι απο 1 μεχρι 10\n    Α");
+    t.pair("[", "]");
+    const text = t.type("ι");
+    expect(t.moveTo(text.length, "input.type")).toBe(`${loop}\n    Α[i]`);
+  });
+
+  it("waits while the cursor is still on the word", () => {
+    const t = typing(top);
+    const text = t.type("για ι απο 1 μεχρι 10\n    γραψε ι");
+    expect(t.moveTo(text.length - 1, "select")).toBe(`${loop}\n    ΓΡΑΨΕ ι`);
+  });
+
+  it("leaves a Greek letter alone where there is no Latin counter", () => {
+    const t = typing(top);
+    const text = t.type("γραψε ι");
+    expect(t.moveTo(0)).toBe(text);
   });
 });

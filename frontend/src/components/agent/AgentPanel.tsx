@@ -61,8 +61,6 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
   const abort = useRef<AbortController | null>(null);
   // Whether this chat has a message sent in Agent mode: only then does going back to Tutor clear it.
   const usedAgent = useRef(false);
-  // The mode of the request in flight, if any.
-  const pending = useRef<AgentMode | null>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
   // Whether the transcript is scrolled to the bottom, so it may follow the reply.
@@ -108,8 +106,14 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
     setBusy(true);
     atBottom.current = true;
     const writing = mode === "agent";
-    pending.current = mode;
-    if (writing) onWriting(true);
+    // Counts from the moment it is sent: even if stopped early, the server may
+    // already be running it. Undone below if it never got that far.
+    const usedBefore = usedAgent.current;
+    let accepted = false; // the server answered with the conversation
+    if (writing) {
+      usedAgent.current = true;
+      onWriting(true);
+    }
     setMessages((ms) => [
       ...ms,
       { role: "user", text: message },
@@ -121,9 +125,8 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
       const request = { conversation_id: conversationId, message, code, mode };
       for await (const event of streamChat(request, controller.signal)) {
         if (event.type === "conversation") {
+          accepted = true;
           setConversationId(event.id);
-          // The server took the message: from now on this chat has used Agent mode.
-          if (writing) usedAgent.current = true;
         }
         else if (event.type === "text") appendText(event.delta);
         else if (event.type === "tool")
@@ -141,22 +144,23 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
     } catch (err) {
       if (controller.signal.aborted) {
         patchParts((parts) => [...parts, { kind: "tool", name: "", detail: "Διακόπηκε" }]);
-      } else {
+      } else if (err instanceof ApiError && err.status === 404) {
+        // The conversation was deleted (e.g. with the account, from another tab).
+        // Keep the transcript to read, say the agent no longer remembers it, start a
+        // new conversation next time, and give the message back (unless the box
+        // already has something new in it).
+        usedAgent.current = usedBefore;
         appendText(
-          err instanceof ApiError && err.status === 503
-            ? "Ο βοηθός δεν είναι διαθέσιμος αυτή τη στιγμή."
-            : err instanceof ApiError && err.status === 401
-              ? "Η σύνδεσή σου δεν ισχύει πια. Αποσυνδέσου και συνδέσου ξανά."
-              : err instanceof ApiError && err.status === 404
-                ? "Αυτή η συζήτηση δεν υπάρχει πια. Το επόμενο μήνυμα ξεκινά νέα."
-                : "Δεν ήταν δυνατή η σύνδεση με τον βοηθό.",
+          "Αυτή η συζήτηση δεν υπάρχει πια, οπότε ο agent δεν θυμάται τα παραπάνω. Στείλε ξανά το μήνυμά σου για να ξεκινήσει νέα.",
         );
-        // Deleted (e.g. with the account, from another tab): start over next time.
-        if (err instanceof ApiError && err.status === 404) setConversationId(null);
+        setConversationId(null);
+        setDraft((d) => d || message);
+      } else {
+        if (!accepted) usedAgent.current = usedBefore; // never reached the agent: nothing ran
+        appendText(failureText(err));
       }
     } finally {
       abort.current = null;
-      pending.current = null;
       setBusy(false);
       if (writing) onWriting(false);
     }
@@ -165,8 +169,8 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
   function toggleMode() {
     // Back to Tutor starts a clean chat, without the history of code the agent wrote
     // (a quick look at Agent mode, with nothing sent, keeps the Tutor chat).
-    if (mode === "agent" && (usedAgent.current || pending.current === "agent")) {
-      // An Agent request still waiting (e.g. on a cold server) must not write later.
+    if (mode === "agent" && usedAgent.current) {
+      // Also stops an Agent request still running or waiting (e.g. on a cold server).
       abort.current?.abort();
       newConversation();
     }
@@ -320,6 +324,18 @@ export function AgentPanel({ code, onEdit, onWriting }: Props) {
       )}
     </aside>
   );
+}
+
+// Why a reply couldn't start, by the backend's status (endpoints/agent.py).
+const FAILURES: Record<number, string> = {
+  401: "Η σύνδεσή σου δεν ισχύει πια. Αποσυνδέσου και συνδέσου ξανά (ή κάνε Εγγραφή, αν διέγραψες τον λογαριασμό).",
+  429: "Έφτασες το όριο του agent για σήμερα. Θα είναι ξανά διαθέσιμος από τα μεσάνυχτα. Μέχρι τότε, ο editor και η εκτέλεση δουλεύουν κανονικά.",
+  503: "Ο βοηθός δεν είναι διαθέσιμος αυτή τη στιγμή.",
+};
+
+function failureText(err: unknown): string {
+  const known = err instanceof ApiError ? FAILURES[err.status] : undefined;
+  return known ?? "Δεν ήταν δυνατή η σύνδεση με τον βοηθό.";
 }
 
 /** One transcript line with its marker hanging in the left column, as in Claude Code. */

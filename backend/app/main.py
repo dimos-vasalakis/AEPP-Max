@@ -76,6 +76,8 @@ FOREIGN_KEY_ERRORS = {
 async def integrity_error(_: Request, exc: IntegrityError) -> JSONResponse:
     constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
     if constraint not in FOREIGN_KEY_ERRORS:
-        raise exc  # a real bug: let it be a 500 with its traceback
+        # A real bug. Answer here, not by re-raising, so the 500 keeps its CORS headers.
+        logger.exception("Integrity error", exc_info=exc)
+        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
     status_code, detail = FOREIGN_KEY_ERRORS[constraint]
     return JSONResponse(status_code=status_code, content={"detail": detail})

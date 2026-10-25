@@ -66,11 +66,11 @@ export function Ide() {
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       <Navbar>
-        {/* Clearing asks first: one click opens the question, the second clears. */}
+        {/* A blank page; it asks first: one click opens the question, the second clears. */}
         <NavPopover
-          label="Καθαρισμός κώδικα"
-          title="Σβήσιμο όλου του κώδικα"
-          icon={<TrashIcon />}
+          label="Κενή σελίδα"
+          title="Κενή σελίδα (σβήνει όλο τον κώδικα)"
+          icon={<BlankPageIcon />}
           disabled={!code || agentWriting}
         >
           {(close) => (
@@ -138,7 +138,8 @@ export function Ide() {
   );
 }
 
-function TrashIcon() {
+/** A sheet with a folded corner: start again on a blank page. */
+function BlankPageIcon() {
   return (
     <svg
       width="17"
@@ -151,7 +152,8 @@ function TrashIcon() {
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+      <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
+      <path d="M14 3v5h5" />
     </svg>
   );
 }
