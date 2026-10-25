@@ -157,7 +157,8 @@ export function Ide() {
             <OutputPanel run={run} onInput={readInput} onClear={() => setRun({ kind: "idle" })} />
           </div>
         </div>
-        {/* The agent's write_code goes straight into the editor (Ctrl+Z undoes it). */}
+        {/* The agent's write_code goes into the editor at once (Ctrl+Z undoes it), or in approval
+            mode once the student applies it: onProposal hands Ctrl/Cmd+Enter to it. */}
         <AgentPanel
           code={code}
           onEdit={updateCode}

@@ -32,7 +32,7 @@ AEPP Max runs the same programs as the Διερμηνευτής της ΓΛΩΣ�
 - Reserved words are capitalized automatically, blocks indent themselves, and a Greek loop counter typed on the Greek keyboard becomes the Latin letter.
 - No AI and no tokens involved, so all of it works signed out.
 
-**A tutor that doesn't guess.** The agent runs your code on the real interpreter before it says anything about its output, replies in Greek, and uses only constructs from the textbook. In **Ερώτηση** mode it gives hints before solutions. In **Αλλαγές** mode it proposes edits that you review as a diff and accept or reject, change by change. Shift+Tab switches between the two.
+**A tutor that doesn't guess.** The agent runs your code on the real interpreter before it says anything about its output, replies in Greek, and uses only constructs from the textbook. **Tutor** mode gives hints before solutions and never touches your code. **Agent** mode writes changes into the editor: either at once (**αυτόματα**, Ctrl+Z undoes them) or as a diff you approve with Ctrl/Cmd+Enter first (**με έγκριση**). Shift+Tab switches between the two inside Agent mode. Slash commands work in the chat: `/switch` (Tutor ↔ Agent), `/new` and `/help`.
 
 **Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs an account (email link, Google or Apple), since it is the part that costs money.
 
@@ -42,9 +42,9 @@ AEPP Max runs the same programs as the Διερμηνευτής της ΓΛΩΣ�
 
 ## Status
 
-Working: the full interpreter, the editor, running programs with input, the agent in both modes, themes and sign-in.
+Working: the full interpreter, the editor, running programs with input, the agent (Tutor and Agent modes, approval, slash commands, a daily limit per student), themes, an in-app guide (ⓘ) and sign-in.
 
-Not built yet: step-by-step execution and the trace table (πίνακας τιμών) in the UI, saving and opening programs in the UI, a list of past agent conversations, agent quotas, and markdown in agent replies.
+Not built yet: step-by-step execution and the trace table (πίνακας τιμών) in the UI, saving and opening programs in the UI, a list of past agent conversations, and markdown in agent replies.
 
 ## Stack
 
@@ -74,6 +74,8 @@ Everything defaults to empty, so the app boots without secrets: running programs
 cd backend && pytest && ruff check .          # backend tests and lint
 cd frontend && npm test && npm run lint       # frontend tests and lint
 ```
+
+Code reviews in Claude Code go to the `code-reviewer` subagent in [`.claude/agents/`](.claude/agents/code-reviewer.md). It checks a change against the rules in CLAUDE.md, runs the tests and lint, and reports verified findings without editing anything.
 
 ## Documentation
 

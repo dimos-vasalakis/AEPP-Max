@@ -1,13 +1,34 @@
 // A line diff (longest common subsequence), for showing an Agent proposal against
-// the editor. Programs are small; past MAX_CELLS it just shows old out, new in.
+// the editor. It runs on every keystroke while a proposal waits, so the common
+// first and last lines are set aside before the table; past MAX_CELLS it just
+// shows old out, new in.
 
 export type DiffLine = { kind: " " | "+" | "-"; text: string };
 
 const MAX_CELLS = 1_000_000;
 
 export function lineDiff(before: string, after: string): DiffLine[] {
-  const a = before ? before.split("\n") : [];
-  const b = after ? after.split("\n") : [];
+  const old = before ? before.split("\n") : [];
+  const next = after ? after.split("\n") : [];
+  let start = 0;
+  while (start < old.length && start < next.length && old[start] === next[start]) start++;
+  let end = 0;
+  while (
+    end < old.length - start &&
+    end < next.length - start &&
+    old[old.length - 1 - end] === next[next.length - 1 - end]
+  ) {
+    end++;
+  }
+  const same = (lines: string[]) => lines.map((text) => ({ kind: " " as const, text }));
+  return [
+    ...same(old.slice(0, start)),
+    ...middle(old.slice(start, old.length - end), next.slice(start, next.length - end)),
+    ...same(old.slice(old.length - end)),
+  ];
+}
+
+function middle(a: string[], b: string[]): DiffLine[] {
   if (a.length * b.length > MAX_CELLS) {
     return [
       ...a.map((text) => ({ kind: "-" as const, text })),

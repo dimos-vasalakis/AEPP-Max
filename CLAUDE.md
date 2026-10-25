@@ -57,9 +57,9 @@ Env: copy `frontend/.env.example` → `.env.local` and `backend/.env.example` �
 - **docker:** builds the API image and smoke-tests `/health` the way Render runs it.
 - **frontend:** lint, typecheck, vitest, build.
 
-The stub mirrors Supabase's default grants to `anon`/`authenticated`, so grants that only look restrictive fail in CI. Backend tests never hit the DB or OpenAI: `conftest.py` blanks `DATABASE_URL`/`OPENAI_API_KEY` and signs HS256 test tokens (`auth_header()`).
+The stub mirrors Supabase's default grants to `anon`/`authenticated`, so grants that only look restrictive fail in CI. Backend tests never hit the DB or OpenAI: `conftest.py` blanks `DATABASE_URL`/`OPENAI_API_KEY` and signs HS256 test tokens (`auth_header()`). Each ΓΛΩΣΣΑ language rule needs a pytest case (program in, expected output or error out).
 
-Each ΓΛΩΣΣΑ language rule needs a pytest case (program in, expected output or error out) once the interpreter exists.
+**Code reviews go to the `code-reviewer` subagent** (`.claude/agents/code-reviewer.md`): every review (the working tree, a commit, a PR), and after any non-trivial change before calling it done. It reads and runs checks only; you apply the fixes it reports.
 
 ## Next.js version caveat
 
@@ -111,7 +111,7 @@ Why the interpreter lives on the backend: one implementation serves the IDE, the
 
 There is one `Agent` (`tutor.py`, model from `OPENAI_MODEL`) with two modes, like Cursor's Ask/Agent. It starts in `ask`; the `/switch` command switches, and going from Agent back to Tutor clears the chat (a new conversation):
 - `ask`, shown as **Tutor** (mascot `public/mascot-tutor.png`, the red pill): hints and explanations, no edits.
-- `agent`, shown as **Agent** (`public/mascot-agent.png`, the red cloud): can also call `write_code`. The tool is gated by `is_enabled` reading `AgentContext.mode`. Shift+Tab (only in Agent mode) or the mode label toggles **αυτόματα** (edits apply at once) and **με έγκριση** (`approve` in the request: the edit shows as a diff, `lib/lineDiff.ts`, until Ctrl/Cmd+Enter or Εφαρμογή applies it; `Ide.tsx` sends Ctrl/Cmd+Enter to the proposal instead of running while one waits; the editor stays unlocked; a newer proposal replaces it).
+- `agent`, shown as **Agent** (`public/mascot-agent.png`, the red cloud): can also call `write_code`. The tool is gated by `is_enabled` reading `AgentContext.mode`. Shift+Tab (only in Agent mode) or the mode label toggles **αυτόματα** (edits apply at once) and **με έγκριση** (`approve` in the request: the edit shows as a diff, `lib/lineDiff.ts`, until Ctrl/Cmd+Enter or Εφαρμογή applies it; `Ide.tsx` sends Ctrl/Cmd+Enter to the proposal instead of running only while the editor still holds the code it was proposed against, so later typing is never overwritten; the editor stays unlocked; any newer edit replaces it, and Tutor or another account drops it).
 - Slash commands are handled in the panel and never reach the model: `/switch`, `/new`, `/help`, with a menu as you type `/`. Their answers are `note` messages.
 
 `AgentPanel.tsx` looks like Claude Code's terminal, in the mono font: `>` for the student's messages, `●` for reply text and tool calls in the order they streamed, `⎿` for a tool's result (`write_code`'s summary), a `✻ Σκέφτεται… (3s · esc για διακοπή)` line while it works (Esc aborts the fetch), the current mode's mascot in a welcome box when the chat is empty, and the mode label under the input. The mascots were cut out of their dark backgrounds the way the logo was.

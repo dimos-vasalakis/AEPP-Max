@@ -16,6 +16,10 @@ describe("lineDiff", () => {
     expect(kinds("α", "")).toBe("-α");
   });
 
+  it("keeps identical programs whole", () => {
+    expect(kinds("α\nβ", "α\nβ")).toBe(" α| β");
+  });
+
   it("marks insertions without touching the rest", () => {
     expect(kinds("α\nγ", "α\nβ\nγ")).toBe(" α|+β| γ");
   });

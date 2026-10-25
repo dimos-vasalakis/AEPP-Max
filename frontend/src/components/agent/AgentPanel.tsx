@@ -2,7 +2,15 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type FormEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { type AgentMode, streamChat } from "@/lib/api/agent";
 import { ApiError } from "@/lib/api/client";
 import { lineDiff } from "@/lib/lineDiff";
@@ -19,8 +27,16 @@ type Message =
   | { role: "assistant"; parts: Part[] }
   | { role: "note"; text: string };
 
-/** A write_code in approval mode: shown as a diff until the student applies or rejects it. */
-type Proposal = { code: string; status: "pending" | "applied" | "rejected" | "replaced" };
+/**
+ * A write_code in approval mode: shown as a diff until the student applies or rejects it.
+ * `base` is the editor when it arrived: Ctrl/Cmd+Enter applies it only while the editor
+ * still holds that, so it never overwrites typing done since.
+ */
+type Proposal = {
+  code: string;
+  base: string;
+  status: "pending" | "applied" | "rejected" | "replaced";
+};
 
 const PROPOSAL_STATUS: Record<Exclude<Proposal["status"], "pending">, string> = {
   applied: "✓ Εφαρμόστηκε",
@@ -92,11 +108,11 @@ function settle(messages: Message[], status: Proposal["status"]): Message[] {
   );
 }
 
-function pendingCode(messages: Message[]): string | null {
+function pendingProposal(messages: Message[]): Proposal | null {
   for (const m of messages) {
     if (m.role !== "assistant") continue;
     for (const p of m.parts) {
-      if (p.kind === "tool" && p.proposal?.status === "pending") return p.proposal.code;
+      if (p.kind === "tool" && p.proposal?.status === "pending") return p.proposal;
     }
   }
   return null;
@@ -106,11 +122,11 @@ const VERBS = ["Σκέφτεται", "Μελετά", "Υπολογίζει", "Ψ
 
 type Props = {
   code: string;
-  /** write_code's new program, written straight into the editor. */
+  /** write_code's new program, for the editor: at once, or once the student approves it. */
   onEdit: (code: string) => void;
   /** True while an Agent-mode reply runs: write_code would overwrite anything typed meanwhile. */
   onWriting: (writing: boolean) => void;
-  /** Applies the proposal waiting for approval, or null when none waits: Ctrl/Cmd+Enter calls it (Ide.tsx). */
+  /** Applies the proposal waiting for approval, or null when Ctrl/Cmd+Enter should run instead (Ide.tsx). */
   onProposal: (apply: (() => void) | null) => void;
 };
 
@@ -132,6 +148,19 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
   const input = useRef<HTMLTextAreaElement>(null);
   // Whether the transcript is scrolled to the bottom, so it may follow the reply.
   const atBottom = useRef(true);
+  // The editor now, for a proposal's base while a reply streams (`code` there is the request's).
+  const latestCode = useRef(code);
+  useEffect(() => {
+    latestCode.current = code;
+  }, [code]);
+
+  // Another account (or none) in this tab: its chat, and any proposal in it, isn't theirs.
+  const [chatUser, setChatUser] = useState(user?.id);
+  if (user !== undefined && user?.id !== chatUser) {
+    setChatUser(user?.id);
+    setMessages([]);
+    setConversationId(null);
+  }
 
   // Follow the reply as it streams, unless the student scrolled up to read.
   useEffect(() => {
@@ -147,16 +176,22 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
     el.style.height = `${el.scrollHeight}px`;
   }, [draft]);
 
-  // The proposal waiting for approval, offered to Ide's Ctrl/Cmd+Enter.
-  const pending = pendingCode(messages);
-  useEffect(() => {
-    if (pending === null) return;
-    onProposal(() => {
-      onEdit(pending);
+  // The proposal waiting for approval, offered to Ide's Ctrl/Cmd+Enter only while the
+  // editor is unchanged since it arrived; otherwise the shortcut runs the program.
+  const pending = pendingProposal(messages);
+  const apply = useCallback(
+    (proposal: Proposal) => {
+      onEdit(proposal.code);
       setMessages((ms) => settle(ms, "applied"));
-    });
+    },
+    [onEdit],
+  );
+  const shortcut = pending !== null && pending.base === code && Boolean(user);
+  useEffect(() => {
+    if (!shortcut || pending === null) return;
+    onProposal(() => apply(pending));
     return () => onProposal(null);
-  }, [pending, onEdit, onProposal]);
+  }, [shortcut, pending, apply, onProposal]);
 
   function patchParts(update: (parts: Part[]) => Part[]) {
     // The last reply, which a command's note may have followed while it streamed.
@@ -219,12 +254,13 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
         else if (event.type === "tool")
           patchParts((parts) => [...parts, { kind: "tool", name: event.name }]);
         else if (event.type === "edit") {
-          // A newer proposal replaces the one still waiting (each is the whole program).
+          // A newer edit, proposed or written, replaces the proposal still waiting
+          // (each is the whole program).
           const proposal: Proposal | undefined = approving
-            ? { code: event.code, status: "pending" }
+            ? { code: event.code, base: latestCode.current, status: "pending" }
             : undefined;
-          if (proposal) setMessages((ms) => settle(ms, "replaced"));
-          else onEdit(event.code);
+          setMessages((ms) => settle(ms, "replaced"));
+          if (!proposal) onEdit(event.code);
           // The summary (and proposal) go under the write_code call that made it.
           const tool: Part = { kind: "tool", name: "write_code", detail: event.summary, proposal };
           patchParts((parts) => {
@@ -287,15 +323,11 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
       abort.current?.abort();
       newConversation();
     } else if (messages.length > 0) {
+      // Tutor can't edit, so a proposal still waiting is dropped.
+      if (next === "ask") setMessages((ms) => settle(ms, "rejected"));
       note(`Τώρα μιλάς με τον ${MODES[next].label}.`);
     }
     setMode(next);
-  }
-
-  function resolve(status: "applied" | "rejected") {
-    if (pending === null) return;
-    if (status === "applied") onEdit(pending);
-    setMessages((ms) => settle(ms, status));
   }
 
   function newConversation() {
@@ -384,9 +416,9 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
                           {p.proposal.status === "pending" ? (
                             <ProposalBox
                               before={code}
-                              after={p.proposal.code}
-                              onApply={() => resolve("applied")}
-                              onReject={() => resolve("rejected")}
+                              proposal={p.proposal}
+                              onApply={() => p.proposal && apply(p.proposal)}
+                              onReject={() => setMessages((ms) => settle(ms, "rejected"))}
                             />
                           ) : (
                             <span className="text-xs text-muted">
@@ -453,18 +485,24 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
                   e.preventDefault();
                   setDraft(commands[picked].name);
                 } else if (commands.length > 0 && e.key === "Enter" && !e.shiftKey) {
+                  // Runs only a command typed out (or the only one left); otherwise Enter
+                  // just fills in the highlighted one, so `/` + Enter can't run /switch.
                   e.preventDefault();
-                  setDraft("");
-                  runCommand(commands[picked].name);
+                  const exact = commands.find((c) => c.name === draft.toLowerCase());
+                  const chosen = exact ?? (commands.length === 1 ? commands[0] : null);
+                  if (chosen) {
+                    setDraft("");
+                    runCommand(chosen.name);
+                  } else setDraft(commands[picked].name);
+                } else if (e.key === "Escape" && busy) {
+                  e.preventDefault();
+                  abort.current?.abort();
                 } else if (commands.length > 0 && e.key === "Escape") {
                   e.preventDefault();
                   setDraft("");
                 } else if (e.key === "Tab" && e.shiftKey && mode === "agent") {
                   e.preventDefault();
                   setApprove(!approve);
-                } else if (e.key === "Escape" && busy) {
-                  e.preventDefault();
-                  abort.current?.abort();
                 } else if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault();
                   e.currentTarget.form?.requestSubmit();
@@ -514,12 +552,15 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
             ) : (
               <>
                 <span className="min-w-0 truncate text-muted">/switch για Agent</span>
-                <span
-                  title={`${current.label}: ${current.hint}`}
-                  className={`ml-auto flex items-center gap-1.5 ${current.color}`}
+                {/* A tap target for phones, which have no keyboard to type /switch quickly. */}
+                <button
+                  type="button"
+                  onClick={switchMode}
+                  title={`${current.label}: ${current.hint} · /switch για Agent`}
+                  className={`ml-auto flex items-center gap-1.5 hover:opacity-80 ${current.color}`}
                 >
                   <ModeLabel mode={current} />
-                </span>
+                </button>
               </>
             )}
           </div>
@@ -599,17 +640,19 @@ function ModeLabel({ mode }: { mode: { label: string; short: string; mascot: str
 /** A proposal waiting for approval: the diff against the editor, and the two answers. */
 function ProposalBox({
   before,
-  after,
+  proposal,
   onApply,
   onReject,
 }: {
   before: string;
-  after: string;
+  proposal: Proposal;
   onApply: () => void;
   onReject: () => void;
 }) {
+  const after = proposal.code;
   const lines = useMemo(() => lineDiff(before, after), [before, after]);
   const changed = lines.some((l) => l.kind !== " ");
+  const edited = before !== proposal.base;
   return (
     <div className="space-y-2">
       {changed ? (
@@ -633,13 +676,18 @@ function ProposalBox({
       ) : (
         <p className="text-xs text-muted">Ίδιος με τον κώδικα στον editor.</p>
       )}
+      {edited && (
+        <p className="text-xs text-warn">
+          Άλλαξες τον κώδικα μετά την πρόταση· η Εφαρμογή θα αντικαταστήσει και τις αλλαγές σου.
+        </p>
+      )}
       <div className="flex gap-2 font-sans text-xs">
         <button
           type="button"
           onClick={onApply}
           className="rounded-md bg-accent px-2.5 py-1 font-medium text-on-accent hover:brightness-110"
         >
-          Εφαρμογή (Ctrl+Enter)
+          {edited ? "Εφαρμογή" : "Εφαρμογή (Ctrl+Enter)"}
         </button>
         <button
           type="button"
