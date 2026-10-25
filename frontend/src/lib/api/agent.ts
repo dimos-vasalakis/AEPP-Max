@@ -1,3 +1,4 @@
+import type { Language } from "@/lib/glossa/types";
 import { API_URL, apiHeaders, errorFrom } from "./client";
 import { createSseParser } from "./sse";
 
@@ -8,6 +9,8 @@ export type ChatRequest = {
   program_id?: string | null;
   message: string;
   code: string;
+  /** Which the editor holds: a ΓΛΩΣΣΑ program or a ψευδογλώσσα algorithm. */
+  language?: Language;
   mode: AgentMode;
   /** Agent mode: write_code proposes, and the student approves (Ctrl+Enter). */
   approve?: boolean;

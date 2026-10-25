@@ -18,3 +18,10 @@ def test_agent_says_whether_edits_wait_for_approval() -> None:
     assert "goes straight into their editor" in direct
     assert "approve it (Ctrl+Enter)" in approve
     assert "goes straight" not in approve
+
+
+def test_the_prompt_follows_the_editor_language() -> None:
+    glossa = prompt(AgentContext(code="", mode="ask"))
+    pseudocode = prompt(AgentContext(code="", mode="ask", language="pseudocode"))
+    assert "only in ΓΛΩΣΣΑ" in glossa and "ψευδογλώσσα" not in glossa
+    assert "only in ψευδογλώσσα" in pseudocode

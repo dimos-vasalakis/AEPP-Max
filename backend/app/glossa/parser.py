@@ -53,20 +53,29 @@ def describe(token: Token) -> str:
     return f"«{token.value}»"
 
 
-def _joined(first: Token, second: Token) -> str | None:
+def _joined(first: Token, second: Token, keywords: frozenset[str]) -> str | None:
     """`ΤΕΛΟΣ ΑΝ` written for `ΤΕΛΟΣ_ΑΝ`: the keyword the two words make, if any."""
     words = ("identifier", "keyword")
     if first.kind in words and second.kind in words and first.line == second.line:
         candidate = f"{normalize(first.value)}_{normalize(second.value)}"
-        if candidate in KEYWORDS:
+        if candidate in keywords:
             return candidate
     return None
 
 
 class _Parser:
+    # What a subclass for another notation (algorithm_parser.py) changes.
+    KEYWORDS = KEYWORDS
+    BLOCK_END = BLOCK_END
+    LANGUAGE = "της ΓΛΩΣΣΑΣ"  # "... είναι δεσμευμένη λέξη της ΓΛΩΣΣΑΣ"
+
     def __init__(self, tokens: list[Token]):
         self.tokens = tokens
         self.pos = 0
+
+    def spell(self, keyword: str) -> str:
+        """How messages write a keyword: ΓΛΩΣΣΑ's are in capitals, as normalized."""
+        return keyword
 
     # Token helpers
 
@@ -92,6 +101,11 @@ class _Parser:
     def accept(self, kind: str, value: str) -> Token | None:
         return self.advance() if self.at(kind, value) else None
 
+    def describe(self, token: Token) -> str:
+        if token.kind == "keyword":
+            return f"«{self.spell(token.value)}»"
+        return describe(token)
+
     def fail(self, message: str, token: Token | None = None) -> GlossaError:
         return GlossaError.at(token or self.tok, message)
 
@@ -100,14 +114,14 @@ class _Parser:
         if self.pos > 0:
             pairs.insert(0, (self.tokens[self.pos - 1], self.tok))
         for first, second in pairs:
-            if keyword := _joined(first, second):
-                return self.fail(f"Γράψε {keyword} με κάτω παύλα (_).", first)
-        return self.fail(f"Περίμενα {expected}, αλλά βρέθηκε {describe(self.tok)}.")
+            if keyword := _joined(first, second, self.KEYWORDS):
+                return self.fail(f"Γράψε {self.spell(keyword)} με κάτω παύλα (_).", first)
+        return self.fail(f"Περίμενα {expected}, αλλά βρέθηκε {self.describe(self.tok)}.")
 
     def expect(self, kind: str, value: str, expected: str | None = None) -> Token:
         if self.at(kind, value):
             return self.advance()
-        raise self.unexpected(expected or value)
+        raise self.unexpected(expected or (self.spell(value) if kind == "keyword" else value))
 
     def expect_keyword(self, word: str) -> Token:
         return self.expect("keyword", word)
@@ -120,7 +134,8 @@ class _Parser:
         )
         if reserved:
             raise self.fail(
-                f"Το {self.tok.value} είναι δεσμευμένη λέξη της ΓΛΩΣΣΑΣ και δεν γίνεται όνομα."
+                f"Το {self.spell(self.tok.value)} είναι δεσμευμένη λέξη {self.LANGUAGE} "
+                "και δεν γίνεται όνομα."
             )
         raise self.unexpected(what)
 
@@ -139,11 +154,14 @@ class _Parser:
         """Expect the keyword that closes the construct `opener` started."""
         if self.at_keyword(word):
             return self.advance()
+        what, end = self.spell(opener.value), self.spell(word)
         if self.at("eof"):
-            raise self.fail(f"Το {opener.value} δεν κλείνει: λείπει το {word}.", opener)
+            raise self.fail(f"Το {what} δεν κλείνει: λείπει το {end}.", opener)
+        if _joined(self.tok, self.peek(), self.KEYWORDS) == word:
+            raise self.fail(f"Γράψε {end} με κάτω παύλα (_).")
         raise self.fail(
-            f"Περίμενα {word} (για το {opener.value} της γραμμής {opener.line}), "
-            f"αλλά βρέθηκε {describe(self.tok)}."
+            f"Περίμενα {end} (για το {what} της γραμμής {opener.line}), "
+            f"αλλά βρέθηκε {self.describe(self.tok)}."
         )
 
     @staticmethod
@@ -154,6 +172,11 @@ class _Parser:
 
     def program(self) -> n.Program:
         self.skip_newlines()
+        if self.at("identifier") and normalize(self.tok.value) == "ΑΛΓΟΡΙΘΜΟΣ":
+            raise self.fail(
+                "Αυτός είναι αλγόριθμος σε ψευδογλώσσα. Για να τον εκτελέσεις, "
+                "γύρισε στους Αλγόριθμους από το κουμπί πάνω αριστερά."
+            )
         if not self.at_keyword("ΠΡΟΓΡΑΜΜΑ"):
             raise self.fail("Το πρόγραμμα ξεκινά με ΠΡΟΓΡΑΜΜΑ και το όνομά του.")
         opener = self.advance()
@@ -315,36 +338,43 @@ class _Parser:
 
     def block(self) -> list[n.Stmt]:
         body: list[n.Stmt] = []
-        while not (self.at("eof") or self.at_keyword(*BLOCK_END)):
+        while not (self.at("eof") or self.at_keyword(*self.BLOCK_END)):
             body.append(self.statement())
             self.end_of_line()
         return body
 
+    def statement_handlers(self) -> dict[str, Callable[[], n.Stmt]]:
+        """The keywords that start a statement."""
+        return {
+            "ΔΙΑΒΑΣΕ": self.read,
+            "ΓΡΑΨΕ": self.write,
+            "ΑΝ": self.if_,
+            "ΕΠΙΛΕΞΕ": self.select,
+            "ΟΣΟ": self.while_,
+            "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ": self.repeat,
+            "ΓΙΑ": self.for_,
+            "ΚΑΛΕΣΕ": self.call,
+        }
+
+    def call_without_keyword(self, name: Token) -> GlossaError:
+        """A line that starts `name(`: a call written without ΚΑΛΕΣΕ."""
+        return self.fail(
+            f"Οι διαδικασίες καλούνται με ΚΑΛΕΣΕ: ΚΑΛΕΣΕ {name.value}(...). "
+            "Οι συναρτήσεις χρησιμοποιούνται μέσα σε έκφραση."
+        )
+
     def statement(self) -> n.Stmt:
         token = self.tok
-        if keyword := _joined(token, self.peek()):
-            raise self.fail(f"Γράψε {keyword} με κάτω παύλα (_).")
+        if keyword := _joined(token, self.peek(), self.KEYWORDS):
+            raise self.fail(f"Γράψε {self.spell(keyword)} με κάτω παύλα (_).")
         if token.kind == "identifier":
             if self.peek().kind == "punct" and self.peek().value == "(":
-                raise self.fail(
-                    f"Οι διαδικασίες καλούνται με ΚΑΛΕΣΕ: ΚΑΛΕΣΕ {token.value}(...). "
-                    "Οι συναρτήσεις χρησιμοποιούνται μέσα σε έκφραση."
-                )
+                raise self.call_without_keyword(token)
             return self.assignment()
         if token.kind == "keyword":
-            handlers = {
-                "ΔΙΑΒΑΣΕ": self.read,
-                "ΓΡΑΨΕ": self.write,
-                "ΑΝ": self.if_,
-                "ΕΠΙΛΕΞΕ": self.select,
-                "ΟΣΟ": self.while_,
-                "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ": self.repeat,
-                "ΓΙΑ": self.for_,
-                "ΚΑΛΕΣΕ": self.call,
-            }
-            if handler := handlers.get(token.value):
+            if handler := self.statement_handlers().get(token.value):
                 return handler()
-            raise self.fail(f"Το {token.value} δεν μπορεί να ξεκινά εντολή εδώ.")
+            raise self.fail(f"Το {self.spell(token.value)} δεν μπορεί να ξεκινά εντολή εδώ.")
         raise self.unexpected("εντολή")
 
     def assignment(self) -> n.Assign:
@@ -419,7 +449,8 @@ class _Parser:
                 self.end_of_line()
                 otherwise = self.block()
                 if self.at_keyword("ΠΕΡΙΠΤΩΣΗ"):
-                    raise self.fail("Η ΠΕΡΙΠΤΩΣΗ ΑΛΛΙΩΣ είναι η τελευταία περίπτωση.")
+                    case, other = self.spell("ΠΕΡΙΠΤΩΣΗ"), self.spell("ΑΛΛΙΩΣ")
+                    raise self.fail(f"Η {case} {other} είναι η τελευταία περίπτωση.")
                 break
             conditions = [self.case_condition()]
             while self.accept("punct", ","):
@@ -524,9 +555,10 @@ class _Parser:
             op = self.advance()
             left = n.Binary(**self.pos_of(op), op=op.value, left=left, right=self.additive())
             if self.at("operator") and self.tok.value in COMPARISONS:
+                and_ = self.spell("ΚΑΙ")
                 raise self.fail(
                     "Δύο συγκρίσεις στη σειρά δεν επιτρέπονται. "
-                    "Γράψε τες με ΚΑΙ, π.χ. 0 < x ΚΑΙ x < 10."
+                    f"Γράψε τες με {and_}, π.χ. 0 < x {and_} x < 10."
                 )
         return left
 
@@ -579,5 +611,7 @@ class _Parser:
                 return n.Index(**self.pos_of(token), name=token.value, indices=indices)
             return n.Name(**self.pos_of(token), name=token.value)
         if token.kind == "keyword":
-            raise self.fail(f"Περίμενα τιμή ή έκφραση, αλλά βρέθηκε η λέξη {token.value}.")
+            raise self.fail(
+                f"Περίμενα τιμή ή έκφραση, αλλά βρέθηκε η λέξη {self.spell(token.value)}."
+            )
         raise self.unexpected("τιμή ή έκφραση")

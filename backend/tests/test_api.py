@@ -162,3 +162,16 @@ def test_agent_usage_reports_today_and_the_limit(
     assert body["tokens"] == 3_500 and body["messages"] == 2
     assert body["limit"] == 20_000
     assert body["resets_at"].startswith("2026-10-25T22:00:00")
+
+
+def test_run_and_check_take_the_language(client: TestClient) -> None:
+    algorithm = "Αλγόριθμος Α\nΔεδομένα // x //\ny ← 2 * x\nΑποτελέσματα // y //\nΤέλος Α"
+    response = client.post(
+        "/api/v1/run", json={"code": algorithm, "inputs": ["4"], "language": "pseudocode"}
+    )
+    assert response.status_code == 200
+    assert response.json()["output"] == ["8"]
+    check = client.post("/api/v1/check", json={"code": algorithm, "language": "pseudocode"})
+    assert check.json() == {"error": None}
+    as_program = client.post("/api/v1/check", json={"code": algorithm})
+    assert "Αλγόριθμους" in as_program.json()["error"]["message"]

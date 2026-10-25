@@ -13,19 +13,23 @@ import {
 } from "@codemirror/autocomplete";
 import { Prec } from "@codemirror/state";
 import { type EditorView, keymap } from "@codemirror/view";
+import { editorLanguage } from "./editorLanguage";
+import type { Language } from "./types";
 import {
   BOOLEANS,
   BUILTINS,
   DECLARATION_TYPES,
   normalizeWord,
   OPERATOR_WORDS,
-  RESERVED,
+  reservedIn,
   RETURN_TYPES,
+  spell,
 } from "./vocabulary";
 import { codeWords } from "./words";
 
-// Keyword and name completion for ΓΛΩΣΣΑ. Runs entirely in the browser: no
-// requests, no AI. Matching ignores case and accents, so «πρ» offers ΠΡΟΓΡΑΜΜΑ.
+// Keyword and name completion for ΓΛΩΣΣΑ and ψευδογλώσσα. Runs entirely in the
+// browser: no requests, no AI. Matching ignores case and accents, so «πρ» offers
+// ΠΡΟΓΡΑΜΜΑ. ψευδογλώσσα's words come as the textbook writes them («Τέλος_αν»).
 
 /** Whole structures, offered when the word starts a line. `${}` are empty Tab stops: the
  * student fills them in, nothing is pre-written (ΓΙΑ ▯ ΑΠΟ ▯ ΜΕΧΡΙ ▯). */
@@ -77,12 +81,58 @@ const BLOCKS: { label: string; detail: string; template: string }[] = [
   },
 ];
 
-/** Keywords that start a line (besides the BLOCKS above). */
-const LINE_START = [
-  "ΔΙΑΒΑΣΕ", "ΓΡΑΨΕ", "ΚΑΛΕΣΕ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΤΕΛΟΣ_ΑΝ", "ΠΕΡΙΠΤΩΣΗ",
-  "ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ", "ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ", "ΜΕΧΡΙΣ_ΟΤΟΥ", "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ",
-  "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ", "ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ", "ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ",
+/** The same for ψευδογλώσσα (Αλγόριθμοι), in the textbook's spelling. */
+const PSEUDOCODE_BLOCKS: typeof BLOCKS = [
+  {
+    label: "Αλγόριθμος",
+    detail: "σκελετός αλγορίθμου",
+    // ${1} twice: the name after Τέλος follows the one typed after Αλγόριθμος. Δεδομένα
+    // and Αποτελέσματα are blocks of their own: an empty // // would be an error.
+    template: "Αλγόριθμος ${1}\n${2}\nΤέλος ${1}",
+  },
+  { label: "Αν", detail: "… τότε … Τέλος_αν", template: "Αν ${} τότε\n\t${}\nΤέλος_αν" },
+  {
+    label: "Αν … αλλιώς",
+    detail: "… τότε … αλλιώς … Τέλος_αν",
+    template: "Αν ${} τότε\n\t${}\nαλλιώς\n\t${}\nΤέλος_αν",
+  },
+  {
+    label: "Όσο",
+    detail: "… επανάλαβε … Τέλος_επανάληψης",
+    template: "Όσο ${} επανάλαβε\n\t${}\nΤέλος_επανάληψης",
+  },
+  {
+    label: "Για",
+    detail: "… από … μέχρι … Τέλος_επανάληψης",
+    template: "Για ${} από ${} μέχρι ${}\n\t${}\nΤέλος_επανάληψης",
+  },
+  {
+    label: "Αρχή_επανάληψης",
+    detail: "… Μέχρις_ότου",
+    template: "Αρχή_επανάληψης\n\t${}\nΜέχρις_ότου ${}",
+  },
+  {
+    label: "Επίλεξε",
+    detail: "… Περίπτωση … Τέλος_επιλογών",
+    template:
+      "Επίλεξε ${}\n\tΠερίπτωση ${}\n\t\t${}\n\tΠερίπτωση αλλιώς\n\t\t${}\nΤέλος_επιλογών",
+  },
+  { label: "Δεδομένα", detail: "// … //", template: "Δεδομένα // ${} //" },
+  { label: "Αποτελέσματα", detail: "// … //", template: "Αποτελέσματα // ${} //" },
 ];
+
+/** Keywords that start a line (besides the BLOCKS above). */
+const LINE_START: Record<Language, string[]> = {
+  glossa: [
+    "ΔΙΑΒΑΣΕ", "ΓΡΑΨΕ", "ΚΑΛΕΣΕ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΤΕΛΟΣ_ΑΝ", "ΠΕΡΙΠΤΩΣΗ",
+    "ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ", "ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ", "ΜΕΧΡΙΣ_ΟΤΟΥ", "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ",
+    "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ", "ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ", "ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ",
+  ],
+  pseudocode: [
+    "ΔΙΑΒΑΣΕ", "ΕΜΦΑΝΙΣΕ", "ΕΚΤΥΠΩΣΕ", "ΚΑΛΕΣΕ", "ΑΝΤΙΜΕΤΑΘΕΣΕ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ",
+    "ΤΕΛΟΣ_ΑΝ", "ΠΕΡΙΠΤΩΣΗ", "ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ", "ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ", "ΜΕΧΡΙΣ_ΟΤΟΥ", "ΤΕΛΟΣ",
+  ].map((word) => spell(word, "pseudocode")),
+};
 /** Where the cursor's word is, which decides what fits there. */
 export type Place =
   | "line-start" // a statement or section: ΓΡΑΨΕ, ΑΝ …, a name to assign to
@@ -95,16 +145,18 @@ export type Place =
 
 /** Words after which a value comes. */
 const BEFORE_VALUE = new Set([
-  "ΑΝ", "ΑΛΛΙΩΣ_ΑΝ", "ΟΣΟ", "ΓΡΑΨΕ", "ΑΠΟ", "ΜΕΧΡΙ", "ΜΕ_ΒΗΜΑ", "ΜΕΧΡΙΣ_ΟΤΟΥ", "ΕΠΙΛΕΞΕ",
-  ...OPERATOR_WORDS,
+  "ΑΝ", "ΑΛΛΙΩΣ_ΑΝ", "ΟΣΟ", "ΓΡΑΨΕ", "ΕΜΦΑΝΙΣΕ", "ΕΚΤΥΠΩΣΕ", "ΑΠΟ", "ΜΕΧΡΙ", "ΜΕ_ΒΗΜΑ",
+  "ΜΕΧΡΙΣ_ΟΤΟΥ", "ΕΠΙΛΕΞΕ", ...OPERATOR_WORDS,
 ]);
-/** Lines that list names: `ΔΙΑΒΑΣΕ α, β`, `ΑΚΕΡΑΙΕΣ: α, β`. */
-const NAME_LISTS = new Set(["ΔΙΑΒΑΣΕ", ...DECLARATION_TYPES]);
+/** Lines that list names: `ΔΙΑΒΑΣΕ α, β`, `ΑΚΕΡΑΙΕΣ: α, β`, `Δεδομένα // α, β //`. */
+const NAME_LISTS = new Set([
+  "ΔΙΑΒΑΣΕ", "ΑΝΤΙΜΕΤΑΘΕΣΕ", "ΔΕΔΟΜΕΝΑ", "ΑΠΟΤΕΛΕΣΜΑΤΑ", ...DECLARATION_TYPES,
+]);
 const LAST_WORD = /([\p{L}_][\p{L}\p{N}_]*)$/u;
 const FIRST_WORD = /^\s*([\p{L}_][\p{L}\p{N}_]*)/u;
 
 /** The place of a word that starts after `before` (the line up to it). */
-export function placeOf(before: string): Place {
+export function placeOf(before: string, language: Language = "glossa"): Place {
   const text = before.trimEnd();
   if (text === "") return "line-start";
   const first = normalizeWord(FIRST_WORD.exec(text)?.[1] ?? "");
@@ -115,13 +167,13 @@ export function placeOf(before: string): Place {
   if (last === null) {
     // A number, a closing bracket or a string ends a value; a symbol wants one.
     afterValue = /[\d)\]'"]$/.test(text);
-  } else if (last === "ΓΙΑ" || last === "ΔΙΑΒΑΣΕ" || last === "ΚΑΛΕΣΕ") {
+  } else if (["ΓΙΑ", "ΔΙΑΒΑΣΕ", "ΚΑΛΕΣΕ", "ΑΝΤΙΜΕΤΑΘΕΣΕ"].includes(last)) {
     return "name";
   } else if (last === "ΠΕΡΙΠΤΩΣΗ") {
     return "case";
   } else if (BEFORE_VALUE.has(last)) {
     afterValue = false;
-  } else if (RESERVED.has(last) && !BOOLEANS.includes(last) && !(last in BUILTINS)) {
+  } else if (reservedIn(language).has(last) && !BOOLEANS.includes(last) && !(last in BUILTINS)) {
     return "none";
   } else {
     afterValue = true; // a name or ΑΛΗΘΗΣ
@@ -142,17 +194,26 @@ function continuations(first: string): string[] {
   return operators;
 }
 
-const blockOptions = BLOCKS.map((b) =>
-  snippetCompletion(b.template, { label: b.label, detail: b.detail, type: "keyword", boost: 1 }),
-);
-const lineStartOptions: Completion[] = [
-  ...LINE_START.map((label) => ({ label, type: "keyword" })),
-  ...DECLARATION_TYPES.map((label) => ({ label, apply: `${label}: `, type: "type" })),
-];
+const snippets = (blocks: typeof BLOCKS) =>
+  blocks.map((b) =>
+    snippetCompletion(b.template, { label: b.label, detail: b.detail, type: "keyword", boost: 1 }),
+  );
+const blockOptions: Record<Language, Completion[]> = {
+  glossa: snippets(BLOCKS),
+  pseudocode: snippets(PSEUDOCODE_BLOCKS),
+};
+const lineStartOptions: Record<Language, Completion[]> = {
+  glossa: [
+    ...LINE_START.glossa.map((label) => ({ label, type: "keyword" })),
+    ...DECLARATION_TYPES.map((label) => ({ label, apply: `${label}: `, type: "type" })),
+  ],
+  pseudocode: LINE_START.pseudocode.map((label) => ({ label, type: "keyword" })),
+};
 const functionOptions: Completion[] = Object.entries(BUILTINS).map(([name, detail]) =>
   snippetCompletion(`${name}(\${})`, { label: name, displayLabel: `${name}()`, detail, type: "function" }),
 );
-const valueWordOptions: Completion[] = [...BOOLEANS, "ΟΧΙ"].map((label) => ({ label, type: "keyword" }));
+const valueWordOptions = (language: Language): Completion[] =>
+  [...BOOLEANS, "ΟΧΙ"].map((word) => ({ label: spell(word, language), type: "keyword" }));
 const returnTypeOptions: Completion[] = RETURN_TYPES.map((label) => ({ label, type: "type" }));
 
 /** True when `lineBefore` (the line up to the cursor) ends inside a comment or string. */
@@ -175,14 +236,15 @@ export function inCommentOrString(lineBefore: string): boolean {
  * Words in comments and strings aren't names. `skipFrom` is where the word
  * being typed starts.
  */
-export function namesIn(text: string, skipFrom: number): string[] {
+export function namesIn(text: string, skipFrom: number, language: Language = "glossa"): string[] {
+  const reserved = reservedIn(language);
   const seen = new Map<string, string>();
   let offset = 0;
   for (const line of text.split("\n")) {
     for (const word of codeWords(line)) {
       if (offset + word.from === skipFrom) continue;
       const key = normalizeWord(word.text);
-      if (!RESERVED.has(key) && !seen.has(key)) seen.set(key, word.text);
+      if (!reserved.has(key) && !seen.has(key)) seen.set(key, word.text);
     }
     offset += line.length + 1;
   }
@@ -195,6 +257,7 @@ export function completionOptions(
   place: Place,
   names: string[],
   lineFirstWord = "",
+  language: Language = "glossa",
 ): Completion[] {
   const prefix = normalizeWord(typed);
   const matches = (o: Completion) => normalizeWord(o.label).startsWith(prefix);
@@ -203,19 +266,20 @@ export function completionOptions(
   const useful = (o: Completion) =>
     matches(o) && (o.type === "function" || normalizeWord(o.label) !== prefix);
   const nameOptions: Completion[] = names.map((label) => ({ label, type: "variable" }));
-  const keywords = (labels: string[]) => labels.map((label) => ({ label, type: "keyword" }));
+  const keywords = (words: string[]) =>
+    words.map((word) => ({ label: spell(word, language), type: "keyword" }));
 
   switch (place) {
     case "line-start":
       return [
-        ...blockOptions.filter(matches),
-        ...lineStartOptions.filter(useful),
+        ...blockOptions[language].filter(matches),
+        ...lineStartOptions[language].filter(useful),
         ...nameOptions.filter(useful),
       ];
     case "value":
-      return [nameOptions, functionOptions, valueWordOptions].flat().filter(useful);
+      return [nameOptions, functionOptions, valueWordOptions(language)].flat().filter(useful);
     case "case":
-      return [keywords(["ΑΛΛΙΩΣ"]), nameOptions, functionOptions, valueWordOptions]
+      return [keywords(["ΑΛΛΙΩΣ"]), nameOptions, functionOptions, valueWordOptions(language)]
         .flat()
         .filter(useful);
     case "after-value":
@@ -235,11 +299,13 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
   const line = context.state.doc.lineAt(context.pos);
   const before = line.text.slice(0, word.from - line.from);
   if (inCommentOrString(before)) return null;
+  const language = context.state.facet(editorLanguage);
   const options = completionOptions(
     word.text,
-    placeOf(before),
-    namesIn(context.state.doc.toString(), word.from),
+    placeOf(before, language),
+    namesIn(context.state.doc.toString(), word.from, language),
     FIRST_WORD.exec(before)?.[1],
+    language,
   );
   return options.length ? { from: word.from, options, filter: false } : null;
 }

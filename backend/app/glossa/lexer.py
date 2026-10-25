@@ -5,6 +5,10 @@ from typing import Literal
 
 from app.glossa.errors import GlossaError
 
+# glossa: ΓΛΩΣΣΑ programs (ΠΡΟΓΡΑΜΜΑ … ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ).
+# pseudocode: the textbook's ψευδογλώσσα algorithms (Αλγόριθμος … Τέλος).
+Language = Literal["glossa", "pseudocode"]
+
 TokenKind = Literal[
     "keyword",  # ΠΡΟΓΡΑΜΜΑ, ΑΝ, ΤΕΛΟΣ_ΑΝ, ΑΚΕΡΑΙΕΣ, ... (normalized)
     "identifier",  # as written; compare with normalize()
@@ -12,8 +16,8 @@ TokenKind = Literal[
     "real",
     "string",  # without the quotes
     "boolean",  # ΑΛΗΘΗΣ / ΨΕΥΔΗΣ
-    "operator",  # <- + - * / ^ = <> < > <= >= DIV MOD ΚΑΙ Η ΟΧΙ (← becomes <-)
-    "punct",  # ( ) [ ] , : ..
+    "operator",  # <- + - * / ^ = <> < > <= >= DIV MOD ΚΑΙ Η ΟΧΙ (← ≤ ≥ ≠ become <- <= >= <>)
+    "punct",  # ( ) [ ] , : .. and, in ψευδογλώσσα, //
     "newline",  # statements end at line ends
     "eof",
 ]
@@ -41,12 +45,25 @@ KEYWORDS = frozenset(
         "ΑΚΕΡΑΙΑ", "ΠΡΑΓΜΑΤΙΚΗ", "ΧΑΡΑΚΤΗΡΑΣ", "ΛΟΓΙΚΗ",
     }
 )  # fmt: skip
+# ψευδογλώσσα (textbook ch. 2.4): no declarations, sections or subprogram kinds.
+PSEUDOCODE_KEYWORDS = frozenset(
+    {
+        "ΑΛΓΟΡΙΘΜΟΣ", "ΤΕΛΟΣ", "ΔΕΔΟΜΕΝΑ", "ΑΠΟΤΕΛΕΣΜΑΤΑ",
+        "ΔΙΑΒΑΣΕ", "ΓΡΑΨΕ", "ΕΜΦΑΝΙΣΕ", "ΕΚΤΥΠΩΣΕ", "ΑΝΤΙΜΕΤΑΘΕΣΕ",
+        "ΑΝ", "ΤΟΤΕ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΤΕΛΟΣ_ΑΝ",
+        "ΕΠΙΛΕΞΕ", "ΠΕΡΙΠΤΩΣΗ", "ΤΕΛΟΣ_ΕΠΙΛΟΓΩΝ",
+        "ΓΙΑ", "ΑΠΟ", "ΜΕΧΡΙ", "ΜΕ_ΒΗΜΑ", "ΟΣΟ", "ΕΠΑΝΑΛΑΒΕ", "ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ", "ΜΕΧΡΙΣ_ΟΤΟΥ", "ΚΑΛΕΣΕ",
+    }
+)  # fmt: skip
 WORD_OPERATORS = frozenset({"DIV", "MOD", "ΚΑΙ", "Η", "ΟΧΙ"})
 BOOLEANS = frozenset({"ΑΛΗΘΗΣ", "ΨΕΥΔΗΣ"})
 
 # Longest first, so "<-" wins over "<".
 _SYMBOLS = ("<-", "<=", ">=", "<>", "←", "<", ">", "=", "+", "-", "*", "/", "^")
 _PUNCT = ("(", ")", "[", "]", ",", ":", "..")
+# The textbook prints these in ψευδογλώσσα; ΓΛΩΣΣΑ has only the ASCII forms.
+_MATH_SYMBOLS = {"≤": "<=", "≥": ">=", "≠": "<>"}
 
 _NUMBER = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 _WORD = re.compile(r"[^\W\d_][\ẁ-ͯ]*")
@@ -55,8 +72,30 @@ _LINE_BREAK = re.compile(r"\r\n|\r|\n")
 
 # Latin capitals that look like Greek ones: "AN" typed on an English layout.
 _LATIN_LOOKALIKES = str.maketrans("ABEZHIKMNOPTYX", "ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ")
-# Words worth a "wrong keyboard layout" hint. Not Η: a Latin H is a fine variable name.
-_HINT_WORDS = KEYWORDS | BOOLEANS | {"ΚΑΙ", "ΟΧΙ"}
+
+
+@dataclass(frozen=True)
+class _Vocabulary:
+    keywords: frozenset[str]
+    symbols: tuple[str, ...]
+    punct: tuple[str, ...]
+    # Words worth a "wrong keyboard layout" hint. Not Η: a Latin H is a fine variable name.
+    hint_words: frozenset[str]
+
+
+_VOCABULARIES: dict[Language, _Vocabulary] = {
+    "glossa": _Vocabulary(KEYWORDS, _SYMBOLS, _PUNCT, KEYWORDS | BOOLEANS | {"ΚΑΙ", "ΟΧΙ"}),
+    "pseudocode": _Vocabulary(
+        PSEUDOCODE_KEYWORDS,
+        _SYMBOLS + tuple(_MATH_SYMBOLS),
+        ("//",) + _PUNCT,  # before the operator "/"
+        PSEUDOCODE_KEYWORDS | BOOLEANS | {"ΚΑΙ", "ΟΧΙ"},
+    ),
+}
+
+
+def keywords_of(language: Language) -> frozenset[str]:
+    return _VOCABULARIES[language].keywords
 
 
 def normalize(word: str) -> str:
@@ -65,12 +104,13 @@ def normalize(word: str) -> str:
     return "".join(c for c in decomposed if not unicodedata.combining(c)).upper()
 
 
-def tokenize(source: str) -> list[Token]:
-    """Split ΓΛΩΣΣΑ source into tokens (rules in docs/glossa.md).
+def tokenize(source: str, language: Language = "glossa") -> list[Token]:
+    """Split ΓΛΩΣΣΑ (or ψευδογλώσσα) source into tokens (rules in docs/glossa.md).
 
     Keywords and word operators match regardless of case and accents and are
     emitted normalized. A line starting with `&` continues the previous one.
     """
+    vocabulary = _VOCABULARIES[language]
     tokens: list[Token] = []
     for index, text in enumerate(_LINE_BREAK.split(source)):
         line = index + 1
@@ -81,14 +121,14 @@ def tokenize(source: str) -> list[Token]:
                 tokens.pop()
             pos = len(text) - len(stripped) + 1
         while pos < len(text):
-            pos = _scan(text, pos, line, tokens)
+            pos = _scan(text, pos, line, tokens, vocabulary)
         tokens.append(Token("newline", "", line, len(text) + 1, len(text) + 1))
     last = tokens[-1]
     tokens.append(Token("eof", "", last.line, last.column, last.column))
     return tokens
 
 
-def _scan(text: str, pos: int, line: int, tokens: list[Token]) -> int:
+def _scan(text: str, pos: int, line: int, tokens: list[Token], vocabulary: _Vocabulary) -> int:
     """Append the token starting at `pos` and return the position after it."""
     ch = text[pos]
     col = pos + 1
@@ -119,7 +159,7 @@ def _scan(text: str, pos: int, line: int, tokens: list[Token]) -> int:
         word = match.group()
         key = normalize(word)
         end = match.end() + 1
-        if key in KEYWORDS:
+        if key in vocabulary.keywords:
             tokens.append(Token("keyword", key, line, col, end))
         elif key in WORD_OPERATORS:
             tokens.append(Token("operator", key, line, col, end))
@@ -127,7 +167,7 @@ def _scan(text: str, pos: int, line: int, tokens: list[Token]) -> int:
             tokens.append(Token("boolean", key, line, col, end))
         else:
             greek = key.translate(_LATIN_LOOKALIKES)
-            if greek != key and greek in _HINT_WORDS:
+            if greek != key and greek in vocabulary.hint_words:
                 raise GlossaError(
                     f"Η λέξη «{word}» έχει λατινικούς χαρακτήρες. Μήπως εννοείς {greek};",
                     line,
@@ -138,15 +178,17 @@ def _scan(text: str, pos: int, line: int, tokens: list[Token]) -> int:
             tokens.append(Token("identifier", word, line, col, end))
         return match.end()
 
-    for symbol in _SYMBOLS + _PUNCT:
+    for symbol in vocabulary.punct + vocabulary.symbols:
         if text.startswith(symbol, pos):
-            kind = "punct" if symbol in _PUNCT else "operator"
-            value = "<-" if symbol == "←" else symbol
+            kind = "punct" if symbol in vocabulary.punct else "operator"
+            value = "<-" if symbol == "←" else _MATH_SYMBOLS.get(symbol, symbol)
             tokens.append(Token(kind, value, line, col, col + len(symbol)))
             return pos + len(symbol)
 
     if ch == "&":
         message = "Το & μπαίνει μόνο στην αρχή γραμμής, για να συνεχίσει την προηγούμενη."
+    elif ch in _MATH_SYMBOLS:
+        message = f"Στη ΓΛΩΣΣΑ το «{ch}» γράφεται {_MATH_SYMBOLS[ch]}."
     else:
         message = f"Ο χαρακτήρας «{ch}» δεν επιτρέπεται εδώ."
     raise GlossaError(message, line, "syntax", col, col + 1)

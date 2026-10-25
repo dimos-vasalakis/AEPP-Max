@@ -13,6 +13,7 @@ import {
 } from "react";
 import { type AgentMode, streamChat } from "@/lib/api/agent";
 import { ApiError } from "@/lib/api/client";
+import type { Language } from "@/lib/glossa/types";
 import { lineDiff } from "@/lib/lineDiff";
 import { useUser } from "@/lib/supabase/useUser";
 
@@ -54,7 +55,16 @@ const TOOL_LABELS: Record<string, string> = {
 // the label under it) switches write_code between applying at once and asking first.
 const MODES: Record<
   AgentMode,
-  { label: string; short: string; hint: string; placeholder: string; mascot: string; color: string }
+  {
+    label: string;
+    short: string;
+    /** The Agent's two settings get their own color (αυτόματα purple, με έγκριση green). */
+    shortColor?: string;
+    hint: string;
+    placeholder: string;
+    mascot: string;
+    color: string;
+  }
 > = {
   ask: {
     label: "Tutor",
@@ -62,21 +72,23 @@ const MODES: Record<
     hint: "εξηγεί και δίνει υποδείξεις, δεν αλλάζει τον κώδικα",
     placeholder: "Ρώτα κάτι για τον κώδικά σου…",
     mascot: "/mascot-tutor.png",
-    color: "text-accent",
+    color: "text-warn",
   },
   agent: {
     label: "Agent",
     short: "αυτόματα",
+    shortColor: "text-purple",
     hint: "γράφει κατευθείαν στον κώδικά σου",
     placeholder: "Πες τι να αλλάξει στον κώδικα…",
     mascot: "/mascot-agent.png",
-    color: "text-warn",
+    color: "text-accent",
   },
 };
 
 /** Agent mode with approval on: write_code proposes, Ctrl+Enter applies. */
 const APPROVAL = {
   short: "με έγκριση",
+  shortColor: "text-ok",
   hint: "προτείνει αλλαγές· Ctrl+Enter για να μπουν στον κώδικα",
 };
 
@@ -122,6 +134,8 @@ const VERBS = ["Σκέφτεται", "Μελετά", "Υπολογίζει", "Ψ
 
 type Props = {
   code: string;
+  /** The editor's Προγράμματα or Αλγόριθμοι: the agent writes in that language. */
+  language: Language;
   /** write_code's new program, for the editor: at once, or once the student approves it. */
   onEdit: (code: string) => void;
   /** True while an Agent-mode reply runs: write_code would overwrite anything typed meanwhile. */
@@ -130,7 +144,7 @@ type Props = {
   onProposal: (apply: (() => void) | null) => void;
 };
 
-export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
+export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Props) {
   const user = useUser();
   const [mode, setMode] = useState<AgentMode>("ask");
   // Agent mode: false writes edits at once, true shows them for approval first.
@@ -160,6 +174,18 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
     setChatUser(user?.id);
     setMessages([]);
     setConversationId(null);
+  }
+
+  // The editor switched between Προγράμματα and Αλγόριθμοι: a proposal waiting was
+  // written for the other code. An edit still on its way is dropped too (below).
+  const [chatLanguage, setChatLanguage] = useState(language);
+  const languageNow = useRef(language);
+  useEffect(() => {
+    languageNow.current = language;
+  }, [language]);
+  if (language !== chatLanguage) {
+    setChatLanguage(language);
+    setMessages((ms) => settle(ms, "rejected"));
   }
 
   // Follow the reply as it streams, unless the student scrolled up to read.
@@ -244,7 +270,14 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
     const controller = new AbortController();
     abort.current = controller;
     try {
-      const request = { conversation_id: conversationId, message, code, mode, approve: approving };
+      const request = {
+        conversation_id: conversationId,
+        message,
+        code,
+        language,
+        mode,
+        approve: approving,
+      };
       for await (const event of streamChat(request, controller.signal)) {
         if (event.type === "conversation") {
           accepted = true;
@@ -254,6 +287,8 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
         else if (event.type === "tool")
           patchParts((parts) => [...parts, { kind: "tool", name: event.name }]);
         else if (event.type === "edit") {
+          // Written for the other language's code: the editor has moved on.
+          if (languageNow.current !== request.language) continue;
           // A newer edit, proposed or written, replaces the proposal still waiting
           // (each is the whole program).
           const proposal: Proposal | undefined = approving
@@ -344,7 +379,17 @@ export function AgentPanel({ code, onEdit, onWriting, onProposal }: Props) {
   const picked = Math.min(pick, commands.length - 1);
 
   return (
-    <aside className="flex h-[80dvh] min-h-0 flex-col border-t border-border bg-panel font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l">
+    // A click anywhere in the panel goes to the message box, so typing and Shift+Tab work at
+    // once; not on a button or link, and not when the click selected text to copy.
+    <aside
+      onClick={(e) => {
+        const target = e.target as HTMLElement;
+        if (target.closest("button, a, input, textarea, select, summary, [role=button]")) return;
+        if (window.getSelection()?.toString()) return;
+        input.current?.focus({ preventScroll: true });
+      }}
+      className="flex h-[80dvh] min-h-0 flex-col border-t border-border bg-panel font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l"
+    >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
         <h2 className="text-sm font-semibold">Agent</h2>
         {messages.length > 0 && (
@@ -627,12 +672,17 @@ function Welcome({ mode, approve }: { mode: AgentMode; approve: boolean }) {
   );
 }
 
-function ModeLabel({ mode }: { mode: { label: string; short: string; mascot: string } }) {
+function ModeLabel({
+  mode,
+}: {
+  mode: { label: string; short: string; shortColor?: string; mascot: string };
+}) {
   return (
     <>
       <Image src={mode.mascot} alt="" width={20} height={20} className="h-5 w-auto" />
       <span className="font-semibold">{mode.label}</span>
-      <span className="text-muted">· {mode.short}</span>
+      <span className="text-muted">·</span>
+      <span className={mode.shortColor ?? "text-muted"}>{mode.short}</span>
     </>
   );
 }

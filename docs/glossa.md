@@ -202,3 +202,32 @@ js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `Δ�
 | Strings with `+` | An error (no concatenation), as the textbook says. |
 | Limits | Call depth 200, arrays up to 1,000,000 cells, integers up to 10^100: past them, a runtime error instead of a hung worker. |
 
+
+## Αλγόριθμοι (ψευδογλώσσα)
+
+The editor's **Αλγόριθμοι** switch runs the textbook's pseudocode (ch. 2.4 "Στοιχεία ψευδογλώσσας", with the examples in ch. 2 and 3) instead of ΓΛΩΣΣΑ. The Διερμηνευτής has had a ψευδογλώσσα mode since 1.5.1 (`.psg` files), but its help doesn't describe it, so the choices below come from the textbook. Code: `algorithm_parser.py`, `algorithm_checker.py`, `algorithm_interpreter.py`; tests: `backend/tests/test_glossa_algorithms.py`. The API takes `language: "pseudocode"`.
+
+```
+Αλγόριθμος Ευκλείδης
+Δεδομένα // x, y //
+z ← y
+Όσο z ≠ 0 επανάλαβε
+  z ← x mod y
+  x ← y
+  y ← z
+Τέλος_επανάληψης
+Αποτελέσματα // x //
+Τέλος Ευκλείδης
+```
+
+- **Words** are matched like ΓΛΩΣΣΑ's (case and accents ignored), but the editor writes them as the textbook does: `Αν`, `τότε`, `Τέλος_αν`, `Όσο … επανάλαβε`, `Αρχή_επανάληψης … Μέχρις_ότου`, `Για … από … μέχρι … με_βήμα`, `Επίλεξε … Περίπτωση … Τέλος_επιλογών`, `Διάβασε`, `Εμφάνισε` / `Εκτύπωσε` / `Γράψε` (the same command), `Κάλεσε`, `Αντιμετάθεσε α, β`. ΓΛΩΣΣΑ's sections, types and subprogram words are ordinary names here.
+- **Symbols:** `←` or `<-`; `≤ ≥ ≠` as well as `<= >= <>`. Numbers use a decimal point (the textbook also mentions a comma; **Verify**).
+- **No declarations.** A variable holds whatever it was last given; using it before that is a runtime error. A name used with `[...]` is an array, with the same number of indices everywhere; arrays have no size, an element exists once it gets a value, and indices start at 1.
+- **One-line Αν:** `Αν συνθήκη τότε εντολή` needs no `Τέλος_αν`. Branches may also hold their statement on their own line (`αλλιώς_αν a = 2 τότε εκτύπωσε "Β"`), as in the textbook's example 4; once an `αλλιώς_αν` or `αλλιώς` follows, the Αν ends with `Τέλος_αν`. A one-line Αν takes the `αλλιώς`/`Τέλος_αν` below it only if that word is indented at least as far as the Αν; less indented, it belongs to an Αν further out.
+- **Δεδομένα / Αποτελέσματα:** `Δεδομένα // α, β //` on the second line, `Αποτελέσματα // γ //` just before `Τέλος`, at least one name and names only (the textbook's `// M1,M2 ακέραιοι //` is an error that says to move the description to a `!` comment).
+- **Several algorithms:** they follow one another; the first one runs. It reads its Δεδομένα from the keyboard before its first statement and shows its Αποτελέσματα at the end, on one line, as `Εμφάνισε` would (an array: its elements in order). A whole array can't be read as a Δεδομένο.
+- **Calls:** `Κάλεσε Χ(α, β, γ)` gives Χ's Δεδομένα in order, then its Αποτελέσματα that aren't also Δεδομένα; after Χ returns, every Αποτέλεσμα is copied back to the variable given in its place (a Δεδομένο that is also an Αποτέλεσμα, such as `table` in the textbook's Φυσαλίδα, returns through its own argument). Δεδομένα go in by value; arrays as copies. `Χ(α, β)` inside an expression takes only the Δεδομένα and is the value of Χ's single Αποτέλεσμα, as in the textbook's recursive Παραγοντικό, Ευκλείδης and Fibonacci. Recursion depth is capped as in ΓΛΩΣΣΑ, and so are the array cells copied into calls still running (1,000,000), since a deep recursion passing an array holds a copy per level.
+- **Διάβασε** takes the type of what is typed: an integer, a real (`2.5` or `2,5`), `Αληθής`/`Ψευδής`, otherwise text.
+- Everything else (operators, built-in functions, printing, comparisons, ΓΙΑ, limits) is as in ΓΛΩΣΣΑ above.
+
+**Verify** against the Διερμηνευτής's ψευδογλώσσα mode: whether it reads the main algorithm's Δεδομένα and shows its Αποτελέσματα; the argument order of `Κάλεσε`; whether a variable may change type; how `Διάβασε` types its input; whether `Επανάλαβε … Μέχρις_ότου` (the Β' Λυκείου book's form) is accepted (now an error suggesting `Αρχή_επανάληψης`).

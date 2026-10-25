@@ -10,12 +10,9 @@ users are 17-18 year old students preparing for those exams.
 Always answer in Modern Greek, briefly and clearly. Use the textbook's terms
 (μεταβλητή, εκχώρηση, δομή επανάληψης, πίνακας τιμών, υποπρόγραμμα, ...).
 
-Write code only in ΓΛΩΣΣΑ as the school textbook defines it: keywords in
-capitals, `<-` for assignment, every variable declared under ΜΕΤΑΒΛΗΤΕΣ with its
-type, arrays indexed from 1, no global variables, and none of the features
-ΓΛΩΣΣΑ lacks (no break, no return statement, no string functions). A solution
-that works but uses constructs the exam doesn't accept is wrong for these
-students. Keep the student's names and style when you change their code.
+{notation} A solution that works but uses constructs the exam doesn't accept is
+wrong for these students. Keep the student's names and style when you change
+their code.
 
 You can run code on the real interpreter: run_program for the output or the
 error, trace_program for the values line by line (use it for πίνακας τιμών
@@ -41,6 +38,30 @@ writing, explain in a few sentences what you changed and why, so the student
 learns from it.
 """
 
+# What the editor holds: the student picks Προγράμματα or Αλγόριθμοι in the navbar.
+NOTATION = {
+    "glossa": """\
+The editor is on Προγράμματα: write code only in ΓΛΩΣΣΑ as the school textbook
+defines it: keywords in capitals, `<-` for assignment, every variable declared
+under ΜΕΤΑΒΛΗΤΕΣ with its type, arrays indexed from 1, no global variables, and
+none of the features ΓΛΩΣΣΑ lacks (no break, no return statement, no string
+functions).""",
+    "pseudocode": """\
+The editor is on Αλγόριθμοι: write code only in ψευδογλώσσα, the textbook's
+pseudocode (chapter 2.4), not ΓΛΩΣΣΑ: `Αλγόριθμος Όνομα` … `Τέλος Όνομα`, an
+optional `Δεδομένα // α, β //` second line and `Αποτελέσματα // γ //` line before
+Τέλος (names only between the //), no declarations, `←` (or `<-`) for
+assignment, Διάβασε, Εμφάνισε or Εκτύπωσε, Αντιμετάθεσε α, β, `Αν … τότε` …
+`αλλιώς_αν` … `αλλιώς` … `Τέλος_αν` (or one line, `Αν συνθήκη τότε εντολή`),
+`Όσο … επανάλαβε` … `Τέλος_επανάληψης`, `Αρχή_επανάληψης` … `Μέχρις_ότου`,
+`Για i από α μέχρι β με_βήμα γ` … `Τέλος_επανάληψης`, `Επίλεξε` … `Περίπτωση` …
+`Τέλος_επιλογών`, mod, div, και, ή, όχι. Write the words as the textbook does
+(Αν, τότε, Τέλος_αν). The first algorithm runs: it reads its Δεδομένα and shows
+its Αποτελέσματα. Other algorithms follow it and are called with
+`Κάλεσε Όνομα(δεδομένα…, αποτελέσματα…)` or, with one Αποτέλεσμα, inside an
+expression: `x ← Όνομα(δεδομένα…)`.""",
+}
+
 # How write_code reaches the editor, by the Agent mode's setting.
 DIRECT = "it goes straight into their editor."
 APPROVAL = (
@@ -58,4 +79,5 @@ def instructions(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) -
     else:
         mode = AGENT.format(applies=APPROVAL if ctx.context.approve else DIRECT)
     code = ctx.context.code.strip() or "(κενός)"
-    return f"{BASE}\n{mode}\nThe student's editor right now:\n```\n{code}\n```\n"
+    base = BASE.format(notation=NOTATION[ctx.context.language])
+    return f"{base}\n{mode}\nThe student's editor right now:\n```\n{code}\n```\n"

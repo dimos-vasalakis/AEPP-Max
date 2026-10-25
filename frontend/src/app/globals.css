@@ -21,6 +21,7 @@
   --ok: #3fb950;
   --warn: #d9a03f;
   --danger: #ff6b6b;
+  --purple: #b392f0;
   --active-line: #ffffff08;
   --output-bg: var(--panel);
   --editor-font: var(--font-jetbrains), ui-monospace, monospace;
@@ -47,6 +48,7 @@
   --ok: #1a7f37;
   --warn: #9a6700;
   --danger: #c4161c;
+  --purple: #7c3aed;
   --active-line: #e5141b0a;
   --output-bg: var(--panel);
   --editor-font: var(--font-jetbrains), ui-monospace, monospace;
@@ -83,6 +85,7 @@
   --ok: #107c10;
   --warn: #8a5a00;
   --danger: #c50f1f;
+  --purple: #7a1fa2;
   --active-line: #ffffe1;
   --output-bg: #ffffff;
   --run: #22a81e;
@@ -210,6 +213,7 @@
   --color-ok: var(--ok);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
+  --color-purple: var(--purple);
   --font-sans: var(--font-inter);
   --font-mono: var(--font-jetbrains);
 }

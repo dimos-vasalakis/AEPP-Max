@@ -1,10 +1,13 @@
 import { EditorState, Transaction, type TransactionSpec } from "@codemirror/state";
 import { inCommentOrString } from "./completion";
-import { normalizeWord, RESERVED } from "./vocabulary";
+import { editorLanguage } from "./editorLanguage";
+import type { Language } from "./types";
+import { normalizeWord, reservedIn, spell } from "./vocabulary";
 
 // Writes ΓΛΩΣΣΑ words in capitals as soon as they're finished: typing «γραψε»
 // and then a space, Enter or punctuation leaves «ΓΡΑΨΕ». Accents go too
-// («αλλιώς_αν» → «ΑΛΛΙΩΣ_ΑΝ»). Names, strings and comments are left alone.
+// («αλλιώς_αν» → «ΑΛΛΙΩΣ_ΑΝ»). In ψευδογλώσσα the words take the textbook's
+// spelling instead («τελος_αν» → «Τέλος_αν»). Names, strings and comments are left alone.
 
 const WORD_BEFORE = /[\p{L}_][\p{L}\p{N}_]*$/u;
 const WORD_CHAR = /^[\p{L}\p{N}_]/u;
@@ -12,19 +15,21 @@ const WORD_CHAR = /^[\p{L}\p{N}_]/u;
 export type Fix = { from: number; to: number; insert: string };
 
 /**
- * The reserved word ending at `offset` in `lineText`, rewritten in capitals,
- * or null when there's nothing to fix. Offsets are within the line.
+ * The reserved word ending at `offset` in `lineText`, rewritten in capitals
+ * (ΓΛΩΣΣΑ) or as the textbook writes it (ψευδογλώσσα), or null when there's
+ * nothing to fix. Offsets are within the line.
  */
-export function keywordFix(lineText: string, offset: number): Fix | null {
+export function keywordFix(lineText: string, offset: number, language: Language = "glossa"): Fix | null {
   const match = WORD_BEFORE.exec(lineText.slice(0, offset));
   if (!match || WORD_CHAR.test(lineText.slice(offset))) return null;
   const from = offset - match[0].length;
   if (inCommentOrString(lineText.slice(0, from))) return null;
   // A ΓΙΑ's counter is a name even when it's «η» or «ε» (counter.ts makes it h, e).
   if (/^\s*ΓΙΑ\s+$/u.test(normalizeWord(lineText.slice(0, from)))) return null;
-  const canonical = normalizeWord(match[0]);
-  if (!RESERVED.has(canonical) || canonical === match[0]) return null;
-  return { from, to: offset, insert: canonical };
+  const key = normalizeWord(match[0]);
+  if (!reservedIn(language).has(key)) return null;
+  const canonical = spell(key, language);
+  return canonical === match[0] ? null : { from, to: offset, insert: canonical };
 }
 
 function capitalizeOnSeparator(tr: Transaction): Transaction | readonly TransactionSpec[] {
@@ -39,7 +44,7 @@ function capitalizeOnSeparator(tr: Transaction): Transaction | readonly Transact
     const text = inserted.toString();
     if (!text || WORD_CHAR.test(text)) return;
     const line = tr.newDoc.lineAt(fromB);
-    const lineFix = keywordFix(line.text, fromB - line.from);
+    const lineFix = keywordFix(line.text, fromB - line.from, tr.startState.facet(editorLanguage));
     if (lineFix) {
       fix = { from: line.from + lineFix.from, to: line.from + lineFix.to, insert: lineFix.insert };
     }

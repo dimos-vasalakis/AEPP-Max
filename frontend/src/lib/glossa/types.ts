@@ -1,5 +1,8 @@
 // Mirrors backend/app/glossa/result.py (the /run response). Change both together.
 
+/** What the editor holds: a ΓΛΩΣΣΑ program (Προγράμματα) or a ψευδογλώσσα algorithm (Αλγόριθμοι). */
+export type Language = "glossa" | "pseudocode";
+
 export type RunStatus = "ok" | "error" | "needs_input" | "limit";
 
 export type ErrorInfo = {

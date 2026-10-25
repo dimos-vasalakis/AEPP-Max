@@ -145,9 +145,13 @@ def execute(program: n.Program, inputs: list[str], *, limits: RunLimits, trace: 
     - Runtime errors (uninitialized variable, division by zero, index out of
       bounds, type mismatch, ...) end the run with status "error".
     """
+    return run_machine(_Machine(program, inputs, limits, trace))
+
+
+def run_machine(machine: "_Machine") -> RunResult:
+    """Run `machine` (this module's, or algorithm_interpreter's) to a RunResult."""
     # Each ΓΛΩΣΣΑ call is a dozen Python frames; the depth itself is capped by MAX_CALL_DEPTH.
     sys.setrecursionlimit(max(sys.getrecursionlimit(), 20 * MAX_CALL_DEPTH + 1000))
-    machine = _Machine(program, inputs, limits, trace)
     try:
         machine.run()
         status = "ok"
@@ -266,24 +270,12 @@ class _Machine:
     def call(
         self, sub: n.Function | n.Procedure, args: list[n.Expr], node: n.Node, caller: _Frame
     ) -> Value | None:
-        if self.depth >= MAX_CALL_DEPTH:
-            raise _error(
-                node,
-                f"Πάρα πολλές κλήσεις του {sub.name} η μία μέσα στην άλλη. "
-                "Μήπως η αναδρομή δεν σταματά ποτέ;",
-            )
+        self.check_depth(sub, node)
         frame = self.frame(sub)
         refs: list[tuple[n.Param, _Ref | None]] = []
         for param, arg in zip(sub.params, args, strict=True):
             refs.append((param, self.bind(param, arg, frame, caller)))
-
-        saved_step = self.step
-        self.depth += 1
-        try:
-            self.block(sub.body, frame)
-        finally:
-            self.depth -= 1
-            self.step = saved_step
+        self.run_body(sub, frame)
 
         if isinstance(sub, n.Function):
             if frame.result is UNSET:
@@ -294,6 +286,24 @@ class _Machine:
             if ref is not None:
                 self.copy_back(frame.values[param.key], ref, node)
         return None
+
+    def check_depth(self, sub: n.Unit, node: n.Node) -> None:
+        if self.depth >= MAX_CALL_DEPTH:
+            raise _error(
+                node,
+                f"Πάρα πολλές κλήσεις του {sub.name} η μία μέσα στην άλλη. "
+                "Μήπως η αναδρομή δεν σταματά ποτέ;",
+            )
+
+    def run_body(self, sub: n.Unit, frame: _Frame) -> None:
+        """A called subprogram's statements; the caller's trace step resumes after."""
+        saved_step = self.step
+        self.depth += 1
+        try:
+            self.block(sub.body, frame)
+        finally:
+            self.depth -= 1
+            self.step = saved_step
 
     def bind(self, param: n.Param, arg: n.Expr, frame: _Frame, caller: _Frame) -> _Ref | None:
         """Give `param` the argument's value; return where the argument lives, if a variable."""
@@ -480,16 +490,21 @@ class _Machine:
                 return self.compare(op, value, self.eval(expr, frame), condition)
         raise AssertionError(condition)
 
-    def read(self, target: n.Target, frame: _Frame) -> Value:
+    def next_text(self) -> str:
+        """The next input, as typed; out of inputs, the run stops to ask for one."""
         if self.next_input >= len(self.inputs):
             raise _NeedsInput
         text = self.inputs[self.next_input]
         self.next_input += 1
+        return text
+
+    def read(self, target: n.Target, frame: _Frame) -> Value:
+        text = self.next_text()
         type_name = self.target_type(target, frame)
         plain = text.strip()
         if type_name == "ΑΚΕΡΑΙΑ":
             if INTEGER_INPUT.fullmatch(plain):
-                return int(plain)
+                return integer_input(plain, target)
             raise _error(target, f"Δόθηκε «{text}», αλλά η {target.name} περιμένει ακέραιο αριθμό.")
         if type_name == "ΠΡΑΓΜΑΤΙΚΗ":
             decimal = plain.replace(",", ".")  # 2,5 as Greeks write it
@@ -685,6 +700,14 @@ class _Machine:
             return x**y
         except (OverflowError, ZeroDivisionError):
             raise _error(node, "Το αποτέλεσμα είναι πολύ μεγάλο.") from None
+
+
+def integer_input(text: str, node: n.Node) -> int:
+    """A typed integer; past Python's digit limit for int(), an error instead of a crash."""
+    try:
+        return int(text)
+    except ValueError:
+        raise _error(node, "Ο αριθμός που δόθηκε είναι πολύ μεγάλος.") from None
 
 
 def _sample(type_name: str) -> Value:

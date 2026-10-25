@@ -13,7 +13,7 @@ from app.core.config import get_settings
 AGENT_TRACE_STEPS = 300
 
 
-def _run(code: str, inputs: list[str], trace: bool) -> str:
+def _run(code: str, inputs: list[str], trace: bool, language: glossa.Language) -> str:
     settings = get_settings()
     limits = glossa.RunLimits(
         max_steps=settings.run_max_steps,
@@ -21,7 +21,7 @@ def _run(code: str, inputs: list[str], trace: bool) -> str:
         max_trace_steps=AGENT_TRACE_STEPS,
         timeout_seconds=settings.run_timeout_seconds,
     )
-    result = glossa.run(code, inputs, limits=limits, trace=trace)
+    result = glossa.run(code, inputs, language=language, limits=limits, trace=trace)
     return json.dumps(asdict(result), ensure_ascii=False)
 
 
@@ -29,28 +29,30 @@ def _run(code: str, inputs: list[str], trace: bool) -> str:
 async def run_program(
     ctx: RunContextWrapper[AgentContext], inputs: list[str], code: str | None = None
 ) -> str:
-    """Run a ΓΛΩΣΣΑ program on the interpreter and return its status, output and error.
+    """Run code on the interpreter and return its status, output and error. It runs
+    ΓΛΩΣΣΑ or ψευδογλώσσα, whichever the student's editor is set to.
 
     Args:
-        inputs: Values for ΔΙΑΒΑΣΕ, in the order the program reads them, one per value.
-        code: The complete program to run. Omit it to run the student's editor.
+        inputs: Values for ΔΙΑΒΑΣΕ (and an algorithm's Δεδομένα), in the order read, one per value.
+        code: The complete program or algorithm to run. Omit it to run the student's editor.
     """
     source = ctx.context.code if code is None else code
-    return await asyncio.to_thread(_run, source, inputs, False)
+    return await asyncio.to_thread(_run, source, inputs, False, ctx.context.language)
 
 
 @function_tool
 async def trace_program(
     ctx: RunContextWrapper[AgentContext], inputs: list[str], code: str | None = None
 ) -> str:
-    """Run a ΓΛΩΣΣΑ program and return every executed line with the variables it changed.
+    """Run code and return every executed line with the variables it changed. It runs
+    ΓΛΩΣΣΑ or ψευδογλώσσα, whichever the student's editor is set to.
 
     Args:
-        inputs: Values for ΔΙΑΒΑΣΕ, in the order the program reads them, one per value.
-        code: The complete program to run. Omit it to trace the student's editor.
+        inputs: Values for ΔΙΑΒΑΣΕ (and an algorithm's Δεδομένα), in the order read, one per value.
+        code: The complete program or algorithm to run. Omit it to trace the student's editor.
     """
     source = ctx.context.code if code is None else code
-    return await asyncio.to_thread(_run, source, inputs, True)
+    return await asyncio.to_thread(_run, source, inputs, True, ctx.context.language)
 
 
 def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) -> bool:
@@ -59,10 +61,10 @@ def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) ->
 
 @function_tool(is_enabled=_agent_mode)
 def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: str) -> str:
-    """Replace the student's program in the editor with a new version.
+    """Replace the student's code in the editor with a new version.
 
     Args:
-        code: The complete new program, not a fragment.
+        code: The complete new program (or algorithm), not a fragment.
         summary: One sentence in Greek on what changes.
     """
     ctx.context.edits.append(CodeEdit(code=code, summary=summary))

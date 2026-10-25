@@ -2,6 +2,7 @@ import { type Diagnostic, linter, setDiagnosticsEffect } from "@codemirror/lint"
 import { RangeSet, type Text, StateField } from "@codemirror/state";
 import { GutterMarker, lineNumberMarkers } from "@codemirror/view";
 import { apiFetch } from "@/lib/api/client";
+import { editorLanguage } from "./editorLanguage";
 import type { ErrorInfo } from "./types";
 
 /**
@@ -59,7 +60,10 @@ export const glossaLinter = [
       try {
         const { error } = await apiFetch<{ error: ErrorInfo | null }>("/check", {
           method: "POST",
-          body: JSON.stringify({ code: doc.toString() }),
+          body: JSON.stringify({
+            code: doc.toString(),
+            language: view.state.facet(editorLanguage),
+          }),
         });
         const diagnostic = error && toDiagnostic(doc, error);
         return diagnostic ? [diagnostic] : [];

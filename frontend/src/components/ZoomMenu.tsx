@@ -4,7 +4,7 @@ import { NavPopover } from "@/components/NavPopover";
 import { DEFAULT_FONT_SIZE } from "@/lib/fontSize";
 import { FONT_SIZES, setFontSize, useFontSize } from "@/lib/useSettings";
 
-/** The magnifying lens: font size, for everyone. The account menu's Ρυθμίσεις shows the same control. */
+/** The magnifying lens: font size, for everyone (the only place it's set). */
 export function ZoomMenu() {
   return (
     <NavPopover label="Μέγεθος γραμμάτων" icon={<LensIcon />}>
@@ -15,7 +15,7 @@ export function ZoomMenu() {
 }
 
 /** Preferences kept in this browser. Colors live in Επεκτάσεις. */
-export function FontSizeSettings() {
+function FontSizeSettings() {
   const chosen = useFontSize();
   const size = chosen ?? DEFAULT_FONT_SIZE;
   return (

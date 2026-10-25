@@ -14,6 +14,8 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
+import { editorLanguage } from "./editorLanguage";
+import type { Language } from "./types";
 import { normalizeWord } from "./vocabulary";
 
 // Indentation like a desktop IDE: Enter after «ΓΙΑ … ΜΕΧΡΙ 10» or «ΑΝ … ΤΟΤΕ»
@@ -23,17 +25,23 @@ import { normalizeWord } from "./vocabulary";
 
 const FIRST_WORD = /^\s*([\p{L}_][\p{L}\p{N}_]*)/u;
 
-/** Lines whose following lines go one level in. */
-const OPENERS = new Set([
-  "ΑΝ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΓΙΑ", "ΟΣΟ", "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ", "ΕΠΙΛΕΞΕ", "ΠΕΡΙΠΤΩΣΗ",
-  "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ",
-]);
+const STRUCTURES = ["ΑΝ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΓΙΑ", "ΟΣΟ", "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ", "ΕΠΙΛΕΞΕ", "ΠΕΡΙΠΤΩΣΗ"];
 
-/** Always at the left edge: the program's and subprograms' sections. */
-const TOP_LEVEL = new Set([
-  "ΠΡΟΓΡΑΜΜΑ", "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ", "ΣΥΝΑΡΤΗΣΗ", "ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ", "ΔΙΑΔΙΚΑΣΙΑ",
-  "ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ", "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ",
-]);
+/** Lines whose following lines go one level in. In ψευδογλώσσα, as in the
+ * textbook, an algorithm's statements start at the left edge. */
+const OPENERS: Record<Language, Set<string>> = {
+  glossa: new Set([...STRUCTURES, "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ"]),
+  pseudocode: new Set(STRUCTURES),
+};
+
+/** Always at the left edge: the program's and subprograms' sections, or the algorithm's. */
+const TOP_LEVEL: Record<Language, Set<string>> = {
+  glossa: new Set([
+    "ΠΡΟΓΡΑΜΜΑ", "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ", "ΣΥΝΑΡΤΗΣΗ", "ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ", "ΔΙΑΔΙΚΑΣΙΑ",
+    "ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ", "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ",
+  ]),
+  pseudocode: new Set(["ΑΛΓΟΡΙΘΜΟΣ", "ΤΕΛΟΣ", "ΔΕΔΟΜΕΝΑ", "ΑΠΟΤΕΛΕΣΜΑΤΑ"]),
+};
 
 type Block = { opens: string[]; end: string };
 const IF: Block = { opens: ["ΑΝ"], end: "ΤΕΛΟΣ_ΑΝ" };
@@ -73,20 +81,34 @@ function firstWord(line: string): string | null {
   return match ? normalizeWord(match[1]) : null;
 }
 
+/**
+ * Whether the lines after `line` (starting with `word`) go one level in. In
+ * ψευδογλώσσα a branch may hold its one statement on its own line
+ * («Αν x > 0 τότε y ← 1», «αλλιώς y ← 2»): that one opens nothing.
+ */
+function opens(line: string, word: string, language: Language): boolean {
+  if (!OPENERS[language].has(word)) return false;
+  if (language === "glossa") return true;
+  const words = code(line).trim().split(/\s+/);
+  if (word === "ΑΝ" || word === "ΑΛΛΙΩΣ_ΑΝ") return normalizeWord(words[words.length - 1]) === "ΤΟΤΕ";
+  if (word === "ΑΛΛΙΩΣ") return words.length === 1;
+  return true;
+}
+
 /** Whether a finished first word makes its line move (ΤΕΛΟΣ_ΑΝ, ΑΡΧΗ, …). */
-function placesItself(word: string | null): boolean {
-  return word !== null && (word in ALIGNED || TOP_LEVEL.has(word));
+function placesItself(word: string | null, language: Language): boolean {
+  return word !== null && (word in ALIGNED || TOP_LEVEL[language].has(word));
 }
 
 /** The nearest line above that opens `block` and isn't already closed. */
-function openerOf(block: Block, above: string[]): string | null {
+function openerOf(block: Block, above: string[], language: Language): string | null {
   let depth = 0;
   for (const line of above) {
     const word = firstWord(line);
     if (word === null) continue;
-    if (TOP_LEVEL.has(word)) return null; // don't look past the start of the section
+    if (TOP_LEVEL[language].has(word)) return null; // don't look past the start of the section
     if (word === block.end) depth += 1;
-    else if (block.opens.includes(word)) {
+    else if (block.opens.includes(word) && opens(line, word, language)) {
       if (depth === 0) return line;
       depth -= 1;
     }
@@ -98,14 +120,20 @@ function openerOf(block: Block, above: string[]): string | null {
  * The column a line starting with `text` belongs at, given the lines above it
  * (nearest first). `unit` is the width of one level.
  */
-export function indentFor(text: string, above: string[], unit: number, tabSize: number): number {
+export function indentFor(
+  text: string,
+  above: string[],
+  unit: number,
+  tabSize: number,
+  language: Language = "glossa",
+): number {
   const columnOf = (line: string) => countColumn(/^\s*/.exec(line)![0], tabSize);
   const word = firstWord(text);
-  if (word !== null && TOP_LEVEL.has(word)) return 0;
+  if (word !== null && TOP_LEVEL[language].has(word)) return 0;
 
   const aligned = word === null ? undefined : ALIGNED[word];
   if (aligned) {
-    const opener = openerOf(aligned[0], above);
+    const opener = openerOf(aligned[0], above, language);
     if (opener !== null) return columnOf(opener) + aligned[1] * unit;
   }
 
@@ -113,7 +141,7 @@ export function indentFor(text: string, above: string[], unit: number, tabSize: 
   if (previous === undefined) return 0;
   let column = columnOf(previous);
   const previousWord = firstWord(previous);
-  if (previousWord !== null && OPENERS.has(previousWord)) column += unit;
+  if (previousWord !== null && opens(previous, previousWord, language)) column += unit;
   if (aligned) column -= unit; // its block's start is missing: one level out
   return Math.max(0, column);
 }
@@ -129,13 +157,19 @@ function linesAbove(cx: IndentContext, pos: number): string[] {
 }
 
 const service = indentService.of((cx, pos) =>
-  indentFor(cx.textAfterPos(pos), linesAbove(cx, pos), cx.unit, cx.state.tabSize),
+  indentFor(
+    cx.textAfterPos(pos),
+    linesAbove(cx, pos),
+    cx.unit,
+    cx.state.tabSize,
+    cx.state.facet(editorLanguage),
+  ),
 );
 
 /** Moves the line at `pos` to its column if its first word places itself; null if it's already there. */
 function reindent(state: EditorState, pos: number): ChangeSpec | null {
   const line = state.doc.lineAt(pos);
-  if (!placesItself(firstWord(line.text))) return null;
+  if (!placesItself(firstWord(line.text), state.facet(editorLanguage))) return null;
   const column = getIndentation(state, line.from);
   if (column === null) return null;
   const current = /^\s*/.exec(line.text)![0];

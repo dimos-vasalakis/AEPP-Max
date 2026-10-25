@@ -3,7 +3,6 @@
 import type { User } from "@supabase/supabase-js";
 import Link from "next/link";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
-import { FontSizeSettings } from "@/components/ZoomMenu";
 import type { AgentUsage } from "@/lib/api/agent";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { createClient } from "@/lib/supabase/client";
@@ -59,11 +58,6 @@ export function SettingsDialog({ user, onClose }: { user: User; onClose: () => v
 
         <Section title="Λογαριασμός">
           <Details user={user} />
-        </Section>
-
-        <Section title="Μέγεθος γραμμάτων">
-          <FontSizeSettings />
-          <p className="mt-1 text-xs text-muted">Τα χρώματα αλλάζουν από τις Επεκτάσεις.</p>
         </Section>
 
         <DeleteAccount deletion={deletion} setDeletion={setDeletion} />

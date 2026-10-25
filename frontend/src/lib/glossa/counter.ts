@@ -12,7 +12,7 @@ import { codeWords } from "./words";
 // Students write ΓΙΑ with the Greek keyboard on, so the counter they mean as
 // «i» comes out «ι». When a ΓΙΑ's counter is a single Greek letter it becomes
 // the Latin letter on the same key (ι → i, ξ → j, κ → k), everywhere in that
-// program or subprogram: the declaration at the top too. Longer names stay.
+// program or subprogram (or algorithm): the declaration at the top too. Longer names stay.
 // After that, a «ι» typed anywhere else in that program becomes «i» as well,
 // once it's finished: by typing what comes after it, or by moving the cursor
 // away (a click, an arrow key, typing over an auto-closed «]» in «Α[ι]»).
@@ -21,7 +21,7 @@ const GREEK_KEYS = "ςερτυθιοπασδφγηξκλζχψωβνμ";
 const LATIN_KEYS = "wertyuiopasdfghjklzxcvbnm";
 
 const FOR_COUNTER = /^(\s*)([\p{L}_][\p{L}\p{N}_]*)(\s+)([\p{L}_][\p{L}\p{N}_]*)/u;
-const UNIT_HEADERS = new Set(["ΠΡΟΓΡΑΜΜΑ", "ΣΥΝΑΡΤΗΣΗ", "ΔΙΑΔΙΚΑΣΙΑ"]);
+const UNIT_HEADERS = new Set(["ΠΡΟΓΡΑΜΜΑ", "ΣΥΝΑΡΤΗΣΗ", "ΔΙΑΔΙΚΑΣΙΑ", "ΑΛΓΟΡΙΘΜΟΣ"]);
 
 /** The Latin letter on the same key as a one-letter Greek name, or null. */
 export function latinCounter(name: string): string | null {

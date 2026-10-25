@@ -70,7 +70,9 @@ async def chat(
         conversation.updated_at = func.now()
     await db.commit()
 
-    context = AgentContext(code=body.code, mode=body.mode, approve=body.approve)
+    context = AgentContext(
+        code=body.code, mode=body.mode, approve=body.approve, language=body.language
+    )
     return StreamingResponse(
         stream_reply(
             conversation.id,

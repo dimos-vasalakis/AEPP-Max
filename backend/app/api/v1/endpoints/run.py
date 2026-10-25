@@ -20,11 +20,16 @@ async def run_program(body: RunRequest) -> glossa.RunResult:
         timeout_seconds=settings.run_timeout_seconds,
     )
     return await asyncio.to_thread(
-        glossa.run, body.code, body.inputs, limits=limits, trace=body.trace
+        glossa.run,
+        body.code,
+        body.inputs,
+        language=body.language,
+        limits=limits,
+        trace=body.trace,
     )
 
 
 @router.post("/check", response_model=CheckResult)
 async def check_program(body: CheckRequest) -> CheckResult:
     """The first syntax/static error, for the editor's live error marking (no AI)."""
-    return CheckResult(error=await asyncio.to_thread(glossa.check, body.code))
+    return CheckResult(error=await asyncio.to_thread(glossa.check, body.code, body.language))

@@ -392,3 +392,8 @@ class TestTrace:
         assert result.status == "ok"
         assert result.trace is not None and len(result.trace) == 10
         assert result.trace_truncated
+
+
+def test_a_huge_typed_integer_is_an_error() -> None:
+    message, _ = error("  ΔΙΑΒΑΣΕ x", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", ["9" * 5000])
+    assert message == "Ο αριθμός που δόθηκε είναι πολύ μεγάλος."

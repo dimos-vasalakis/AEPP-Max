@@ -5,7 +5,7 @@ import { AgentPanel } from "@/components/agent/AgentPanel";
 import { NavPopover } from "@/components/NavPopover";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
-import type { RunResult } from "@/lib/glossa/types";
+import type { Language, RunResult } from "@/lib/glossa/types";
 import { useOutputHeight } from "@/lib/useOutputHeight";
 import { useThemeInfo } from "@/lib/useTheme";
 import { CodeEditor } from "./CodeEditor";
@@ -13,9 +13,14 @@ import { OutputPanel, type RunState } from "./OutputPanel";
 import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
 
 export function Ide() {
-  const [code, setCode] = useState("");
-  // The ref gives execute() the editor's latest text, also from the key handler.
+  // Προγράμματα (ΓΛΩΣΣΑ) or Αλγόριθμοι (ψευδογλώσσα); every visit starts on Προγράμματα.
+  const [language, setLanguage] = useState<Language>("glossa");
+  // Each has its own code: switching shows the other one's, as it was left.
+  const [codes, setCodes] = useState<Record<Language, string>>({ glossa: "", pseudocode: "" });
+  const code = codes[language];
+  // The refs give execute() and updateCode the latest values, also from the key handler.
   const codeRef = useRef(code);
+  const languageRef = useRef(language);
   const [run, setRun] = useState<RunState>({ kind: "idle" });
   // Locked while an Agent-mode reply runs, so its write_code can't overwrite new typing.
   const [agentWriting, setAgentWriting] = useState(false);
@@ -33,15 +38,23 @@ export function Ide() {
   // Stable identity: CodeEditor must not get a new onChange on every render.
   const updateCode = useCallback((value: string) => {
     codeRef.current = value;
-    setCode(value);
+    setCodes((all) => ({ ...all, [languageRef.current]: value }));
   }, []);
+
+  function switchLanguage() {
+    const next = language === "glossa" ? "pseudocode" : "glossa";
+    languageRef.current = next;
+    codeRef.current = codes[next];
+    setLanguage(next);
+    setRun({ kind: "idle" }); // the output was the other code's
+  }
 
   async function execute(inputs: string[], marks: number[]) {
     setRun({ kind: "running" });
     try {
       const result = await apiFetch<RunResult>("/run", {
         method: "POST",
-        body: JSON.stringify({ code: codeRef.current, inputs }),
+        body: JSON.stringify({ code: codeRef.current, inputs, language: languageRef.current }),
       });
       setRun({ kind: "done", inputs, marks, result });
     } catch (err) {
@@ -80,6 +93,12 @@ export function Ide() {
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
       <Navbar>
+        {/* Not while a run or the agent's edit is on its way: each belongs to the code it was sent. */}
+        <LanguageSwitch
+          language={language}
+          onSwitch={switchLanguage}
+          disabled={agentWriting || run.kind === "running"}
+        />
         {/* A blank page; it asks first: one click opens the question, the second clears. */}
         <NavPopover
           label="Κενή σελίδα"
@@ -89,8 +108,17 @@ export function Ide() {
         >
           {(close) => (
             <>
-              <p className="font-medium">Να σβηστεί όλος ο κώδικας;</p>
-              <p className="mt-1 text-xs text-muted">Αν το μετανιώσεις, Ctrl/Cmd+Z στον editor.</p>
+              <div className="flex items-start gap-2.5 rounded-md border border-danger/30 bg-danger/10 p-2.5">
+                <span className="mt-0.5 shrink-0 text-danger">
+                  <TrashIcon />
+                </span>
+                <div>
+                  <p className="font-medium text-danger">Να σβηστεί όλος ο κώδικας;</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Αν το μετανιώσεις, <span className="text-accent">Ctrl/Cmd+Z</span> στον editor.
+                  </p>
+                </div>
+              </div>
               <div className="mt-3 flex gap-2">
                 <button
                   type="button"
@@ -98,7 +126,7 @@ export function Ide() {
                     updateCode("");
                     close();
                   }}
-                  className="rounded-md bg-danger/15 px-2.5 py-1 font-medium text-danger hover:bg-danger/25"
+                  className="rounded-md border border-danger/40 bg-danger/20 px-2.5 py-1 font-semibold text-danger hover:bg-danger/30"
                 >
                   Σβήσιμο
                 </button>
@@ -144,9 +172,12 @@ export function Ide() {
               </div>
             )}
             <div className="min-h-0 flex-1">
+              {/* A fresh editor per language: its own undo history, highlighting and checks. */}
               <CodeEditor
+                key={language}
                 value={code}
                 onChange={updateCode}
+                language={language}
                 readOnly={agentWriting}
                 dark={darkTheme}
               />
@@ -161,12 +192,46 @@ export function Ide() {
             mode once the student applies it: onProposal hands Ctrl/Cmd+Enter to it. */}
         <AgentPanel
           code={code}
+          language={language}
           onEdit={updateCode}
           onWriting={setAgentWriting}
           onProposal={setProposal}
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Προγράμματα ⇄ Αλγόριθμοι: one button, both names, the current one highlighted.
+ * On a phone only the current one shows, to fit the bar.
+ */
+function LanguageSwitch({
+  language,
+  onSwitch,
+  disabled,
+}: {
+  language: Language;
+  onSwitch: () => void;
+  disabled: boolean;
+}) {
+  const segment = (on: boolean) =>
+    `rounded px-2 py-0.5 ${on ? "bg-accent text-on-accent" : "hidden text-muted sm:inline"}`;
+  const algorithms = language === "pseudocode";
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={algorithms}
+      aria-label="Αλγόριθμοι (ψευδογλώσσα) αντί για Προγράμματα (ΓΛΩΣΣΑ)"
+      title={algorithms ? "Αλλαγή σε Προγράμματα (ΓΛΩΣΣΑ)" : "Αλλαγή σε Αλγόριθμους (ψευδογλώσσα)"}
+      onClick={onSwitch}
+      disabled={disabled}
+      className="flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-panel-2 p-0.5 text-xs font-medium hover:border-accent/60 disabled:opacity-50"
+    >
+      <span className={segment(!algorithms)}>Προγράμματα</span>
+      <span className={segment(algorithms)}>Αλγόριθμοι</span>
+    </button>
   );
 }
 
@@ -186,6 +251,25 @@ function BlankPageIcon() {
     >
       <path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8z" />
       <path d="M14 3v5h5" />
+    </svg>
+  );
+}
+
+/** A bin, for the «σβήσιμο» question. */
+function TrashIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
     </svg>
   );
 }

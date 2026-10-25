@@ -2,7 +2,7 @@
 and trace steps can point at it. Names keep the student's spelling; compare
 them with `.key` (normalized like keywords)."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.glossa.lexer import normalize
 
@@ -168,8 +168,18 @@ class For(Stmt):
 
 @dataclass(kw_only=True)
 class CallProcedure(Stmt, Named):
+    """ΚΑΛΕΣΕ: a procedure, or in ψευδογλώσσα another algorithm."""
+
     name: str
     args: list[Expr]
+
+
+@dataclass(kw_only=True)
+class Swap(Stmt):
+    """Αντιμετάθεσε a, b (ψευδογλώσσα only): the two exchange values."""
+
+    first: Target
+    second: Target
 
 
 # Declarations and program units
@@ -219,3 +229,31 @@ class Program(Unit):
     """ΠΡΟΓΡΑΜΜΑ name ... ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ, plus the subprograms after it."""
 
     subprograms: list[Function | Procedure]
+
+
+@dataclass(kw_only=True)
+class Algorithm(Unit):
+    """Αλγόριθμος name ... Τέλος name, in ψευδογλώσσα. Nothing is declared
+    (`constants` and `variables` stay empty): a variable holds whatever value it
+    was last given, and a name used with [...] is an array.
+
+    The first algorithm in the editor is the one that runs: it reads its
+    Δεδομένα as input and shows its Αποτελέσματα at the end. The algorithms after
+    it are its `subprograms`, called with Κάλεσε or inside an expression.
+    """
+
+    data: list[Name]  # Δεδομένα // ... //
+    results: list[Name]  # Αποτελέσματα // ... //
+    subprograms: list["Algorithm"] = field(default_factory=list)
+    # Filled by algorithm_checker: array name (key) → number of indices.
+    arrays: dict[str, int] = field(default_factory=dict)
+
+    @property
+    def params(self) -> list[Name]:
+        """What a caller passes, in order: the Δεδομένα, then the Αποτελέσματα
+        that aren't also Δεδομένα (those return through their own argument)."""
+        keys = {name.key for name in self.data}
+        return self.data + [name for name in self.results if name.key not in keys]
+
+    def is_result(self, key: str) -> bool:
+        return any(name.key == key for name in self.results)
