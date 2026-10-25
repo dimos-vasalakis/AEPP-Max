@@ -19,4 +19,6 @@ class AgentContext:
 
     code: str
     mode: AgentMode
+    # Agent mode only: the student approves each edit (Ctrl+Enter) before it reaches the editor.
+    approve: bool = False
     edits: list[CodeEdit] = field(default_factory=list)

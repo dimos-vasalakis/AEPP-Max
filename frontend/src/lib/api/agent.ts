@@ -9,6 +9,8 @@ export type ChatRequest = {
   message: string;
   code: string;
   mode: AgentMode;
+  /** Agent mode: write_code proposes, and the student approves (Ctrl+Enter). */
+  approve?: boolean;
 };
 
 /** The SSE events of POST /agent/chat (backend/app/agent/stream.py). */

@@ -24,6 +24,12 @@ export function Ide() {
   const column = useRef<HTMLDivElement>(null);
   const outputHeight = useOutputHeight();
 
+  // An Agent proposal waiting for approval: Ctrl/Cmd+Enter applies it instead of running.
+  const applyProposal = useRef<(() => void) | null>(null);
+  const setProposal = useCallback((apply: (() => void) | null) => {
+    applyProposal.current = apply;
+  }, []);
+
   // Stable identity: CodeEditor must not get a new onChange on every render.
   const updateCode = useCallback((value: string) => {
     codeRef.current = value;
@@ -48,16 +54,19 @@ export function Ide() {
   }
 
   // F9 and Ctrl/Cmd+Enter run the program, like the button. (On a Mac, F9 only reaches
-  // the page with fn held, hence the second shortcut.) Capture phase, so the editor
-  // doesn't swallow the key first. Re-attached each render to see the latest run state.
+  // the page with fn held, hence the second shortcut.) While an Agent proposal waits,
+  // Ctrl/Cmd+Enter applies it instead. Capture phase, so the editor doesn't swallow
+  // the key first. Re-attached each render to see the latest run state.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const isRun =
-        e.key === "F9" || e.code === "F9" || ((e.ctrlKey || e.metaKey) && e.key === "Enter");
+      const modEnter = (e.ctrlKey || e.metaKey) && e.key === "Enter";
+      const isRun = e.key === "F9" || e.code === "F9" || modEnter;
       if (!isRun) return;
       e.preventDefault();
       e.stopPropagation();
-      if (!e.repeat && run.kind !== "running") void execute([], []);
+      if (e.repeat) return;
+      if (modEnter && applyProposal.current) applyProposal.current();
+      else if (run.kind !== "running") void execute([], []);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -149,7 +158,12 @@ export function Ide() {
           </div>
         </div>
         {/* The agent's write_code goes straight into the editor (Ctrl+Z undoes it). */}
-        <AgentPanel code={code} onEdit={updateCode} onWriting={setAgentWriting} />
+        <AgentPanel
+          code={code}
+          onEdit={updateCode}
+          onWriting={setAgentWriting}
+          onProposal={setProposal}
+        />
       </div>
     </div>
   );

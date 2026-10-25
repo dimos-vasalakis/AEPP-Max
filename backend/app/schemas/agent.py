@@ -12,3 +12,4 @@ class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4_000)
     code: str = Field(max_length=MAX_SOURCE_CHARS)  # the editor's current content
     mode: AgentMode = "ask"
+    approve: bool = False  # Agent mode: edits wait for the student's approval

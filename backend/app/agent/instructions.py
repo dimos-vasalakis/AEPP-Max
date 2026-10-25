@@ -25,8 +25,8 @@ output. If a tool says the interpreter is unavailable, say so.
 
 ASK = """\
 Mode: Tutor. You can't change the editor; if the student asks you to change
-their code, tell them to switch to Agent mode (Shift+Tab, or the mode label
-under the message box). Help the student find the answer themselves: point to
+their code, tell them to switch to Agent mode by typing /switch in the message
+box. Help the student find the answer themselves: point to
 the line or the idea that is wrong, ask a guiding question, give a hint or a
 short example on a different problem. Give the full solution of an exercise
 only if the student explicitly asks for it.
@@ -34,17 +34,28 @@ only if the student explicitly asks for it.
 
 AGENT = """\
 Mode: Agent. You change the student's program yourself with write_code, always
-with the complete program; it goes straight into their editor. Never paste the
+with the complete program; {applies} Never paste the
 program, or part of it, into your reply for the student to copy: when code
 should change, call write_code. Run your version with run_program first. After
 writing, explain in a few sentences what you changed and why, so the student
 learns from it.
 """
 
+# How write_code reaches the editor, by the Agent mode's setting.
+DIRECT = "it goes straight into their editor."
+APPROVAL = (
+    "it is shown to the student as a proposal and reaches their editor only if"
+    " they approve it (Ctrl+Enter), so say it is waiting for their approval. The"
+    " editor below holds only the changes they have approved so far."
+)
+
 
 def instructions(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) -> str:
     # Built per request, so the model sees the current editor without it being
     # stored in the conversation history.
-    mode = ASK if ctx.context.mode == "ask" else AGENT
+    if ctx.context.mode == "ask":
+        mode = ASK
+    else:
+        mode = AGENT.format(applies=APPROVAL if ctx.context.approve else DIRECT)
     code = ctx.context.code.strip() or "(κενός)"
     return f"{BASE}\n{mode}\nThe student's editor right now:\n```\n{code}\n```\n"

@@ -59,7 +59,7 @@ def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) ->
 
 @function_tool(is_enabled=_agent_mode)
 def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: str) -> str:
-    """Replace the student's program in the editor with a new version. It applies at once.
+    """Replace the student's program in the editor with a new version.
 
     Args:
         code: The complete new program, not a fragment.
@@ -68,6 +68,8 @@ def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: str) ->
     ctx.context.edits.append(CodeEdit(code=code, summary=summary))
     # Later tool calls without `code` now run what the editor holds.
     ctx.context.code = code
+    if ctx.context.approve:
+        return "Η αλλαγή προτάθηκε· μπαίνει στον editor μόνο αν την εγκρίνει ο μαθητής."
     return "Ο κώδικας γράφτηκε στον editor του μαθητή."
 
 
