@@ -1,6 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
+from app.schemas.program import ProgramCreate
 from tests.conftest import auth_header
 
 
@@ -11,7 +13,26 @@ def test_health(client: TestClient) -> None:
 
 
 def test_programs_require_auth(client: TestClient) -> None:
+    some = "/api/v1/programs/00000000-0000-0000-0000-000000000000"
     assert client.get("/api/v1/programs").status_code == 401
+    assert client.post("/api/v1/programs", json={"title": "Άσκηση"}).status_code == 401
+    assert client.get(some).status_code == 401
+    assert client.patch(some, json={"code": ""}).status_code == 401
+    assert client.delete(some).status_code == 401
+
+
+def test_programs_without_a_database_are_503(client: TestClient) -> None:
+    res = client.get("/api/v1/programs", headers=auth_header())
+    assert res.status_code == 503
+
+
+def test_a_saved_program_is_glossa_or_pseudocode() -> None:
+    assert ProgramCreate(title="Άσκηση").language == "glossa"
+    assert ProgramCreate(title="Άσκηση", language="pseudocode").language == "pseudocode"
+    with pytest.raises(ValidationError):
+        ProgramCreate(title="Άσκηση", language="python")  # type: ignore[arg-type]
+    with pytest.raises(ValidationError):
+        ProgramCreate(title="")
 
 
 def test_agent_requires_auth(client: TestClient) -> None:

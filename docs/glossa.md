@@ -201,6 +201,7 @@ js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `Δ�
 | Input | An integer variable takes only an integer; a real one also accepts a decimal comma (`2,5`); a ΛΟΓΙΚΗ one accepts ΑΛΗΘΗΣ/ΨΕΥΔΗΣ in any case or accents; ΧΑΡΑΚΤΗΡΕΣ take the text as typed. A wrong value ends the run with an error. |
 | Strings with `+` | An error (no concatenation), as the textbook says. |
 | Limits | Call depth 200, arrays up to 1,000,000 cells, integers up to 10^100: past them, a runtime error instead of a hung worker. |
+| Πίνακας τιμών (trace) | Our choice; the textbook writes the table by hand. One row per executed statement, with the values it set and a condition's value. A call adds a row on the subprogram's first line with its scalar parameters; after the subprogram's rows, a row back on the calling line holds what the call changed there: a function's value assigned, a condition, and only those arguments whose values the procedure actually changed. Tests: `TestTrace`. |
 
 
 ## Αλγόριθμος (ψευδογλώσσα)

@@ -36,15 +36,19 @@ AEPP Max runs the same programs as the Διερμηνευτής της ΓΛΩΣ�
 
 **Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs an account (email link, Google or Apple), since it is the part that costs money.
 
+**The πίνακας τιμών, step by step.** The exam asks students to trace a program by hand. One button builds the trace table: a row per executed line, a column per variable, each condition's value and what ΓΡΑΨΕ printed. Rows appear one at a time, so students predict each before they see it, while the editor highlights the line. Students can then check their paper table against it.
+
+**Your programs, everywhere.** With an account, Ctrl/Cmd+S saves the code, then it saves itself as you type. «Τα προγράμματά μου» opens, renames, copies and deletes them from any device.
+
 **Made for the screen you have.** Three built-in themes, including **Κλασικό**, with the colors students know from the school lab. Make your own theme from 11 colors in the Επεκτάσεις panel.
 
 **One interpreter everywhere.** It lives on the backend, so the editor, the agent's tools and, later, exercise checking all give the same answer and can't be tampered with from the client.
 
 ## Status
 
-Working: the full interpreter, the editor, running programs with input, the agent (Tutor and Agent modes, approval, slash commands, a daily limit per student), themes, an in-app guide (ⓘ) and sign-in.
+Working: the full interpreter, the editor, running programs with input, the step-by-step πίνακας τιμών, saving and opening programs (with autosave), the agent (Tutor and Agent modes, approval, slash commands, a daily limit per student), themes, an in-app guide (ⓘ) and sign-in.
 
-Not built yet: step-by-step execution and the trace table (πίνακας τιμών) in the UI, saving and opening programs in the UI, a list of past agent conversations, and markdown in agent replies.
+Not built yet: a list of past agent conversations, and markdown in agent replies.
 
 ## Stack
 

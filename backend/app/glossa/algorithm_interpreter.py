@@ -25,6 +25,7 @@ from app.glossa.interpreter import (
     _Machine,
     integer_input,
     run_machine,
+    same_value,
     type_of,
 )
 from app.glossa.lexer import normalize
@@ -215,6 +216,9 @@ class _AlgorithmMachine(_Machine):
         if value is UNSET:
             return  # it never got a value: the caller's variable keeps its own
         if target.at is not None:
+            grid = caller.values.get(arg.key)
+            if isinstance(grid, _Grid) and same_value(grid.cells.get(target.at), value):
+                return  # unchanged: nothing for the trace
             self.put(caller, arg, target.at, value)  # type: ignore[arg-type]
         elif isinstance(value, _Grid):
             old = caller.values.get(arg.key)
@@ -223,7 +227,7 @@ class _AlgorithmMachine(_Machine):
             for at, cell in grid.cells.items():
                 if not (isinstance(old, _Grid) and old.cells.get(at) == cell):
                     self.note(grid.label(at), cell)
-        else:
+        elif not same_value(caller.values.get(arg.key), value):  # type: ignore[arg-type]
             self.store(arg, value, caller)  # type: ignore[arg-type]
 
     # Variables

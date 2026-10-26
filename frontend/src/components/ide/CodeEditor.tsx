@@ -1,7 +1,9 @@
 "use client";
 
-import type { Extension } from "@codemirror/state";
-import CodeMirror from "@uiw/react-codemirror";
+import type { Extension, StateEffect } from "@codemirror/state";
+import { EditorView } from "@codemirror/view";
+import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
+import { useEffect, useRef } from "react";
 import { glossaAutocase } from "@/lib/glossa/autocase";
 import { glossaAutocomplete } from "@/lib/glossa/completion";
 import { glossaCounter } from "@/lib/glossa/counter";
@@ -10,11 +12,19 @@ import { glossaIndent } from "@/lib/glossa/indent";
 import { glossa, pseudocode } from "@/lib/glossa/language";
 import { glossaLinter } from "@/lib/glossa/lint";
 import { darkEditorTheme, lightEditorTheme } from "@/lib/glossa/theme";
+import { setTraceMark, type TraceMark, traceLine } from "@/lib/glossa/traceLine";
 import type { Language } from "@/lib/glossa/types";
 
 // Transaction filters run last to first: glossaAutocase must see the keystroke
 // before glossaIndent and glossaCounter add their own changes to it.
-const COMMON = [glossaIndent, glossaCounter, glossaAutocomplete, glossaAutocase, glossaLinter];
+const COMMON = [
+  glossaIndent,
+  glossaCounter,
+  glossaAutocomplete,
+  glossaAutocase,
+  glossaLinter,
+  traceLine,
+];
 // One per language: the highlighter, and the facet the other extensions read.
 const BASE: Record<Language, Extension[]> = {
   glossa: [editorLanguage.of("glossa"), glossa, ...COMMON],
@@ -47,11 +57,31 @@ type Props = {
   readOnly?: boolean;
   /** Whether the active color theme is dark (lib/theme.ts). */
   dark: boolean;
+  /** The πίνακας τιμών's current step: its line is marked and scrolled into view. */
+  trace?: TraceMark;
 };
 
-export function CodeEditor({ value, onChange, language, readOnly, dark }: Props) {
+export function CodeEditor({ value, onChange, language, readOnly, dark, trace = null }: Props) {
+  const editor = useRef<ReactCodeMirrorRef>(null);
+  const line = trace?.line;
+  const note = trace?.note;
+
+  // An effect, not an extension prop: changing extensions would reconfigure the editor.
+  useEffect(() => {
+    const view = editor.current?.view;
+    if (!view) return;
+    const mark = line === undefined ? null : { line, note: note ?? "" };
+    const effects: StateEffect<unknown>[] = [setTraceMark.of(mark)];
+    if (mark && mark.line <= view.state.doc.lines) {
+      const at = view.state.doc.line(mark.line).from;
+      effects.push(EditorView.scrollIntoView(at, { y: "nearest" }));
+    }
+    view.dispatch({ effects });
+  }, [line, note]);
+
   return (
     <CodeMirror
+      ref={editor}
       value={value}
       onChange={onChange}
       extensions={BASE[language]}

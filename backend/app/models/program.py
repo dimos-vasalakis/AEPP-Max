@@ -9,11 +9,12 @@ from app.models.base import Base
 
 
 class Program(Base):
-    """A saved ΓΛΩΣΣΑ source file."""
+    """A saved ΓΛΩΣΣΑ program or ψευδογλώσσα algorithm."""
 
     __tablename__ = "programs"
     __table_args__ = (
         CheckConstraint("char_length(title) between 1 and 120", name="title_length"),
+        CheckConstraint("language in ('glossa', 'pseudocode')", name="language"),
         Index("programs_user_id_updated_at_idx", "user_id", "updated_at"),
     )
 
@@ -25,5 +26,6 @@ class Program(Base):
     )
     title: Mapped[str] = mapped_column(Text)
     code: Mapped[str] = mapped_column(Text, server_default="")
+    language: Mapped[str] = mapped_column(Text, server_default="glossa")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

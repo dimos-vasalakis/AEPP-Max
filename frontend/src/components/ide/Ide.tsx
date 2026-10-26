@@ -1,17 +1,37 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
 import { ConfirmDialog } from "@/components/Confirm";
 import { NavPopover } from "@/components/NavPopover";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
+import { getProgram, type Program, programError, updateProgram } from "@/lib/api/programs";
+import { stepSummary } from "@/lib/glossa/trace";
+import type { TraceMark } from "@/lib/glossa/traceLine";
 import type { Language, RunResult } from "@/lib/glossa/types";
+import { stashForSignIn, takePendingSave } from "@/lib/pendingSave";
+import { titleFromCode } from "@/lib/programs";
+import { useUser } from "@/lib/supabase/useUser";
 import { useOutputHeight } from "@/lib/useOutputHeight";
+import { useProgramFiles } from "@/lib/useProgramFiles";
 import { useThemeInfo } from "@/lib/useTheme";
 import { CodeEditor } from "./CodeEditor";
-import { OutputPanel, type RunState } from "./OutputPanel";
+import { FileBar } from "./FileBar";
+import { type OutputTab, OutputPanel, type RunState } from "./OutputPanel";
 import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
+import { ProgramsDialog } from "./ProgramsDialog";
+import { SaveDialog } from "./SaveDialog";
+
+/** A question before an editor's unsaved code is replaced; `message` says what would be lost. */
+type Ask = { kind: "open"; program: Program; message: string } | { kind: "new"; message: string };
+
+const UNSAVED_HERE = "Ο κώδικας που γράφεις τώρα δεν έχει αποθηκευτεί και θα χαθεί.";
+
+/** The question when a saved program's last changes couldn't be saved. */
+function lostChanges(title: string, why: string): string {
+  return `Οι τελευταίες αλλαγές στο «${title}» δεν αποθηκεύτηκαν (${why.replace(/\.$/, "")}) και θα χαθούν.`;
+}
 
 export function Ide() {
   // Πρόγραμμα (ΓΛΩΣΣΑ) or Αλγόριθμος (ψευδογλώσσα); every visit starts on Πρόγραμμα.
@@ -25,12 +45,28 @@ export function Ide() {
   const codeRef = useRef(code);
   const languageRef = useRef(language);
   const [run, setRun] = useState<RunState>({ kind: "idle" });
+  // Bumped by every run and whenever the code is replaced: a reply to an older run is dropped.
+  const runSeq = useRef(0);
+  // A ΔΙΑΒΑΣΕ re-run keeps the last result on screen (`pending`); either way it's busy.
+  const busy = run.kind === "running" || (run.kind === "done" && run.pending === true);
+  // Bumped when a program is opened: a fresh editor, so Ctrl+Z can't bring back the last one's code.
+  const [editorKey, setEditorKey] = useState(0);
   // Locked while an Agent-mode reply runs, so its write_code can't overwrite new typing.
   const [agentWriting, setAgentWriting] = useState(false);
   const darkTheme = useThemeInfo().dark;
   // The editor-plus-output column; the output's top edge drags to resize it.
   const column = useRef<HTMLDivElement>(null);
   const outputHeight = useOutputHeight();
+  // The πίνακας τιμών: which tab the output shows, and the step it is on.
+  const [outputTab, setOutputTab] = useState<OutputTab>("screen");
+  const [traceStep, setTraceStep] = useState(0);
+
+  // Saved programs: which one each editor holds, and the dialogs around them.
+  const user = useUser();
+  const signedIn = user === undefined ? undefined : user !== null;
+  const files = useProgramFiles(codes, language, user === undefined ? undefined : (user?.id ?? null));
+  const [dialog, setDialog] = useState<"programs" | "save" | null>(null);
+  const [ask, setAsk] = useState<Ask | null>(null);
 
   // An Agent proposal waiting for approval: Ctrl/Cmd+Enter applies it instead of running.
   const applyProposal = useRef<(() => void) | null>(null);
@@ -44,23 +80,50 @@ export function Ide() {
     setCodes((all) => ({ ...all, [languageRef.current]: value }));
   }, []);
 
-  function switchLanguage() {
-    const next = language === "glossa" ? "pseudocode" : "glossa";
-    languageRef.current = next;
-    codeRef.current = codes[next];
-    setLanguage(next);
-    setRun({ kind: "idle" }); // the output was the other code's
+  /** Clears the output; a run still on its way is dropped. */
+  function resetRun() {
+    runSeq.current++;
+    setRun({ kind: "idle" });
   }
 
-  async function execute(inputs: string[], marks: number[]) {
-    setRun({ kind: "running" });
+  /** Shows `next`'s editor, with `code` in it if given. */
+  function showLanguage(next: Language, code = codes[next]) {
+    languageRef.current = next;
+    codeRef.current = code;
+    if (next !== language) {
+      setLanguage(next);
+      resetRun(); // the output was the other code's
+    }
+  }
+
+  function switchLanguage() {
+    showLanguage(language === "glossa" ? "pseudocode" : "glossa");
+  }
+
+  /**
+   * Runs the editor's code; `traced` also builds the πίνακας τιμών. A re-run for
+   * ΔΙΑΒΑΣΕ keeps the last result on screen until the new one arrives, and the
+   * table stays on its step.
+   */
+  async function execute(inputs: string[], marks: number[], traced = false) {
+    const code = codeRef.current;
+    const seq = ++runSeq.current;
+    if (inputs.length === 0) {
+      setRun({ kind: "running", traced });
+      setOutputTab(traced ? "trace" : "screen");
+      setTraceStep(0);
+    } else {
+      setRun((last) => (last.kind === "done" ? { ...last, pending: true } : last));
+    }
     try {
       const result = await apiFetch<RunResult>("/run", {
         method: "POST",
-        body: JSON.stringify({ code: codeRef.current, inputs, language: languageRef.current }),
+        body: JSON.stringify({ code, inputs, language: languageRef.current, trace: traced }),
       });
-      setRun({ kind: "done", inputs, marks, result });
+      if (seq !== runSeq.current) return;
+      setRun({ kind: "done", inputs, marks, result, code, traced });
     } catch (err) {
+      if (seq !== runSeq.current) return;
       setRun({
         kind: "failed",
         message:
@@ -71,27 +134,161 @@ export function Ide() {
 
   // F9 and Ctrl/Cmd+Enter run the program, like the button. (On a Mac, F9 only reaches
   // the page with fn held, hence the second shortcut.) While an Agent proposal waits,
-  // Ctrl/Cmd+Enter applies it instead. Capture phase, so the editor doesn't swallow
-  // the key first. Re-attached each render to see the latest run state.
+  // Ctrl/Cmd+Enter applies it instead. F10 and Ctrl/Cmd+Shift+Enter build the πίνακας
+  // τιμών; Ctrl/Cmd+S saves. Capture phase, so the editor doesn't swallow the key
+  // first. Re-attached each render to see the latest state.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const modEnter = (e.ctrlKey || e.metaKey) && e.key === "Enter";
-      const isRun = e.key === "F9" || e.code === "F9" || modEnter;
-      if (!isRun) return;
+      const mod = e.ctrlKey || e.metaKey;
+      const modEnter = mod && e.key === "Enter";
+      // e.code too: with the Greek layout on, the key is «σ».
+      const isSave =
+        mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === "s" || e.code === "KeyS");
+      const isTrace = e.key === "F10" || e.code === "F10" || (modEnter && e.shiftKey);
+      const isRun = e.key === "F9" || e.code === "F9" || (modEnter && !e.shiftKey);
+      if (!isRun && !isTrace && !isSave) return;
       e.preventDefault();
       e.stopPropagation();
       if (e.repeat) return;
-      if (modEnter && applyProposal.current) applyProposal.current();
-      else if (run.kind !== "running") void execute([], []);
+      if (isSave) {
+        if (dialog === null && ask === null && !askSwitch && !agentWriting) save();
+      } else if (isRun && modEnter && applyProposal.current) applyProposal.current();
+      else if (!busy) void execute([], [], isTrace);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
   });
 
   function readInput(value: string) {
-    if (run.kind !== "done") return;
-    execute([...run.inputs, value], [...run.marks, run.result.output.length]);
+    if (run.kind !== "done" || run.pending) return;
+    execute([...run.inputs, value], [...run.marks, run.result.output.length], run.traced);
   }
+
+  // The table's step, marked in the editor while the table shows and still matches the code.
+  const traceLength = run.kind === "done" ? (run.result.trace?.length ?? 0) : 0;
+  const step = Math.min(traceStep, Math.max(0, traceLength - 1));
+  const stale = run.kind === "done" && run.code !== code;
+  const traceMark = useMemo((): TraceMark => {
+    if (run.kind !== "done" || !run.traced || stale || outputTab !== "trace") return null;
+    const current = run.result.trace?.[step];
+    return current ? { line: current.line, note: stepSummary(current) } : null;
+  }, [run, stale, outputTab, step]);
+
+  // Saving
+
+  function save() {
+    if (files.file) files.flush();
+    else if (code.trim()) setDialog("save");
+  }
+
+  /** Puts `program` in its editor, as a file that saves itself. */
+  function load(program: Program) {
+    codeRef.current = program.code;
+    setCodes((all) => ({ ...all, [program.language]: program.code }));
+    files.link(program);
+    showLanguage(program.language, program.code);
+    setEditorKey((k) => k + 1);
+    resetRun();
+  }
+
+  async function openProgram(id: string): Promise<string | null> {
+    let program: Program;
+    try {
+      program = await getProgram(id);
+    } catch (err) {
+      return programError(err);
+    }
+    const lang = program.language;
+    const target = files.fileOf(lang);
+    // The editor it opens in: this one, or the other side of the switch.
+    const where =
+      lang === language ? "" : lang === "pseudocode" ? " στον Αλγόριθμο" : " στο Πρόγραμμα";
+    if (target?.id === program.id) {
+      // Already open: the editor may hold newer code than the server.
+      showLanguage(lang);
+    } else if (target) {
+      const before = lang === languageRef.current ? codeRef.current : null;
+      const failed = await files.settle(lang);
+      // Typed into (or another program opened in) that editor meanwhile: leave it be.
+      if (before !== null && codeRef.current !== before) return null;
+      if (failed) {
+        setAsk({ kind: "open", program, message: lostChanges(target.title, failed) });
+      } else load(program);
+    } else if (codes[lang].trim()) {
+      const message = where
+        ? `Ο κώδικας${where} δεν έχει αποθηκευτεί και θα χαθεί αν ανοίξεις το «${program.title}».`
+        : `${UNSAVED_HERE} Για να τον κρατήσεις, πάτα Άκυρο και Αποθήκευση πρώτα.`;
+      setAsk({ kind: "open", program, message });
+    } else {
+      load(program);
+    }
+    return null;
+  }
+
+  /** Empties the editor and unlinks it: its program, if any, stays as it was saved. */
+  function clearPage() {
+    files.unlink();
+    updateCode("");
+    resetRun();
+  }
+
+  /**
+   * A blank editor. A saved program's last changes are saved first; code saved
+   * nowhere (unless `confirmed`, as the Κενή σελίδα popover is) or changes that
+   * couldn't be saved are asked about.
+   */
+  async function newPage(confirmed = false) {
+    const file = files.file;
+    if (file) {
+      const lang = language;
+      const before = codeRef.current;
+      const failed = await files.settle();
+      // Switched, typed or opened another program meanwhile: clearing now would lose that.
+      if (languageRef.current !== lang || codeRef.current !== before) return;
+      if (failed) setAsk({ kind: "new", message: lostChanges(file.title, failed) });
+      else clearPage();
+    } else if (code.trim() && !confirmed) {
+      setAsk({ kind: "new", message: UNSAVED_HERE });
+    } else {
+      clearPage();
+    }
+  }
+
+  async function rename(title: string): Promise<string | null> {
+    const file = files.file;
+    if (!file) return null;
+    try {
+      const saved = await updateProgram(file.id, { title });
+      files.renamed(file.id, saved.title);
+      return null;
+    } catch (err) {
+      return programError(err);
+    }
+  }
+
+  // Code stashed before signing in to save it (lib/pendingSave.ts) comes back once
+  // the session is known, and a signed-in student is asked its name straight away.
+  const restored = useRef(false);
+  useEffect(() => {
+    if (user === undefined || restored.current) return;
+    // A timeout, so the state changes happen outside the effect's own pass.
+    const timer = setTimeout(() => {
+      restored.current = true;
+      // Never over code typed while the session loaded (the page starts on Πρόγραμμα);
+      // it then stays stashed for the next visit.
+      const pending = takePendingSave(
+        Date.now(),
+        (p) => languageRef.current !== p.language || !codeRef.current.trim(),
+      );
+      if (!pending) return;
+      setCodes((all) => ({ ...all, [pending.language]: pending.code }));
+      languageRef.current = pending.language;
+      codeRef.current = pending.code;
+      setLanguage(pending.language);
+      if (user) setDialog("save");
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [user]);
 
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
@@ -100,7 +297,7 @@ export function Ide() {
         <LanguageSwitch
           language={language}
           onSwitch={() => setAskSwitch(true)}
-          disabled={agentWriting || run.kind === "running"}
+          disabled={agentWriting || busy}
         />
         {askSwitch && (
           <ConfirmDialog
@@ -134,7 +331,16 @@ export function Ide() {
                 <div>
                   <p className="font-medium text-danger">Να σβηστεί όλος ο κώδικας;</p>
                   <p className="mt-1 text-xs text-muted">
-                    Αν το μετανιώσεις, <span className="text-accent">Ctrl/Cmd+Z</span> στον editor.
+                    {files.file ? (
+                      <>
+                        Το «{files.file.title}» μένει στα προγράμματά σου· εδώ ξεκινάς νέο.
+                      </>
+                    ) : (
+                      <>
+                        Αν το μετανιώσεις, <span className="text-accent">Ctrl/Cmd+Z</span> στον
+                        editor.
+                      </>
+                    )}
                   </p>
                 </div>
               </div>
@@ -142,7 +348,7 @@ export function Ide() {
                 <button
                   type="button"
                   onClick={() => {
-                    updateCode("");
+                    void newPage(true);
                     close();
                   }}
                   className="rounded-md border border-danger/40 bg-danger/20 px-2.5 py-1 font-semibold text-danger hover:bg-danger/30"
@@ -163,14 +369,61 @@ export function Ide() {
         <button
           type="button"
           onClick={() => execute([], [])}
-          disabled={run.kind === "running"}
+          disabled={busy}
           aria-label="Εκτέλεση"
           title="Εκτέλεση (F9 ή Ctrl+Enter)"
-          className="flex h-8 w-8 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
         >
           <RunIcon />
         </button>
+        <button
+          type="button"
+          onClick={() => execute([], [], true)}
+          disabled={busy}
+          aria-label="Πίνακας τιμών (βήμα-βήμα)"
+          title="Πίνακας τιμών, βήμα-βήμα (F10 ή Ctrl+Shift+Enter)"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
+        >
+          <TraceIcon />
+        </button>
       </Navbar>
+
+      {dialog === "programs" && (
+        <ProgramsDialog
+          signedIn={signedIn}
+          currentId={files.file?.id ?? null}
+          onOpen={openProgram}
+          onNew={() => void newPage()}
+          onRenamed={files.renamed}
+          onDeleted={files.deleted}
+          onSignIn={() => stashForSignIn({ language, code })}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {dialog === "save" && (
+        <SaveDialog
+          signedIn={signedIn}
+          language={language}
+          suggested={titleFromCode(code, language)}
+          onSave={files.saveAs}
+          onSignIn={() => stashForSignIn({ language, code })}
+          onClose={() => setDialog(null)}
+        />
+      )}
+      {ask && (
+        <ConfirmDialog
+          title={ask.kind === "open" ? `Άνοιγμα του «${ask.program.title}»;` : "Νέο πρόγραμμα;"}
+          confirmLabel={ask.kind === "open" ? "Άνοιγμα" : "Νέο"}
+          onConfirm={() => {
+            setAsk(null);
+            if (ask.kind === "open") load(ask.program);
+            else clearPage();
+          }}
+          onCancel={() => setAsk(null)}
+        >
+          {ask.message}
+        </ConfirmDialog>
+      )}
 
       {/* minmax(0,1fr), not 1fr: long code lines scroll inside the editor instead of widening the page. */}
       <div className="grid flex-1 grid-cols-[minmax(0,1fr)] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_380px]">
@@ -185,6 +438,15 @@ export function Ide() {
           className="grid h-dvh min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[60dvh_40dvh] lg:h-auto lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_minmax(140px,35%)]"
         >
           <main className="flex min-h-0 flex-col">
+            <FileBar
+              file={files.file}
+              dirty={files.file !== null && code !== files.file.saved}
+              empty={!code.trim()}
+              onPrograms={() => setDialog("programs")}
+              onSave={save}
+              onRename={rename}
+              disabled={agentWriting || busy}
+            />
             {agentWriting && (
               <div className="shrink-0 border-b border-border bg-panel-2 px-3 py-1.5 font-mono text-xs text-warn">
                 Ο Agent δουλεύει στον κώδικα· ο editor ξεκλειδώνει μόλις τελειώσει.
@@ -193,18 +455,28 @@ export function Ide() {
             <div className="min-h-0 flex-1">
               {/* A fresh editor per language: its own undo history, highlighting and checks. */}
               <CodeEditor
-                key={language}
+                key={`${language}:${editorKey}`}
                 value={code}
                 onChange={updateCode}
                 language={language}
                 readOnly={agentWriting}
                 dark={darkTheme}
+                trace={traceMark}
               />
             </div>
           </main>
-          <div className="relative grid min-h-0 grid-rows-[minmax(0,1fr)]">
+          <div className="relative grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
             <OutputResizer column={column} />
-            <OutputPanel run={run} onInput={readInput} onClear={() => setRun({ kind: "idle" })} />
+            <OutputPanel
+              run={run}
+              onInput={readInput}
+              onClear={resetRun}
+              tab={outputTab}
+              onTab={setOutputTab}
+              step={step}
+              onStep={setTraceStep}
+              stale={stale}
+            />
           </div>
         </div>
         {/* The agent's write_code goes into the editor at once (Ctrl+Z undoes it), or in approval
@@ -275,6 +547,26 @@ function BlankPageIcon() {
       />
       <path d="M14 3v5h5" style={{ fill: "var(--accent)", fillOpacity: 0.55 }} />
       <path d="M9 13h6M9 17h4" style={{ stroke: "var(--accent)" }} />
+    </svg>
+  );
+}
+
+/** A small table with its header row in the accent: the πίνακας τιμών. */
+function TraceIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M3 9h18" style={{ stroke: "var(--run, var(--accent))", strokeWidth: 2.4 }} />
+      <path d="M9 9v11M15 9v11M3 14.5h18" style={{ opacity: 0.6 }} />
     </svg>
   );
 }

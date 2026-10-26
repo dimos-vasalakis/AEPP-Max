@@ -2,19 +2,44 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { RunResult } from "@/lib/glossa/types";
+import { TracePanel } from "./TracePanel";
 
 /**
  * `marks[i]` is how many output lines existed when `inputs[i]` was typed, so the
  * typed values can be shown where they were read. (Each input re-runs the
  * program from the start with one more value; the output is the same up to there.)
+ * `traced` runs (the «Πίνακας τιμών» button) carry the trace; `code` is what ran.
+ * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way.
  */
 export type RunState =
   | { kind: "idle" }
-  | { kind: "running" }
-  | { kind: "done"; inputs: string[]; marks: number[]; result: RunResult }
+  | { kind: "running"; traced: boolean }
+  | {
+      kind: "done";
+      inputs: string[];
+      marks: number[];
+      result: RunResult;
+      code: string;
+      traced: boolean;
+      pending?: boolean;
+    }
   | { kind: "failed"; message: string };
 
-type Props = { run: RunState; onInput: (value: string) => void; onClear: () => void };
+export type OutputTab = "screen" | "trace";
+
+type Props = {
+  run: RunState;
+  onInput: (value: string) => void;
+  onClear: () => void;
+  /** Which tab shows; there are tabs only for a traced run. */
+  tab: OutputTab;
+  onTab: (tab: OutputTab) => void;
+  /** The πίνακας τιμών's current step (see TracePanel). */
+  step: number;
+  onStep: (step: number) => void;
+  /** The editor's code is no longer what ran. */
+  stale: boolean;
+};
 
 /** The badge in the header: where the last run ended up. */
 function statusBadge(run: RunState): { label: string; tone: string } | null {
@@ -33,16 +58,18 @@ function statusBadge(run: RunState): { label: string; tone: string } | null {
   }
 }
 
-export function OutputPanel({ run, onInput, onClear }: Props) {
+export function OutputPanel({ run, onInput, onClear, tab, onTab, step, onStep, stale }: Props) {
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const badge = statusBadge(run);
   const hasContent = run.kind === "done" || run.kind === "failed";
+  const traced = (run.kind === "running" || run.kind === "done") && run.traced;
+  const showTrace = traced && tab === "trace";
 
   // New output scrolls into view, so a long run ends on its last line.
   useEffect(() => {
     body.current?.scrollTo({ top: body.current.scrollHeight });
-  }, [run]);
+  }, [run, showTrace]);
 
   async function copy() {
     if (run.kind !== "done") return;
@@ -58,9 +85,20 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
   return (
     <section className="flex min-h-0 flex-col border-t border-border bg-output">
       <div className="output-header flex h-9 shrink-0 items-center gap-2 border-b border-border px-3 text-xs">
-        <span className="output-title font-semibold uppercase tracking-wide text-muted">
-          Οθόνη εκτέλεσης
-        </span>
+        {traced ? (
+          <div role="tablist" aria-label="Αποτελέσματα" className="flex h-full items-stretch gap-1">
+            <OutputTabButton active={!showTrace} onClick={() => onTab("screen")}>
+              Οθόνη<span className="hidden sm:inline"> εκτέλεσης</span>
+            </OutputTabButton>
+            <OutputTabButton active={showTrace} onClick={() => onTab("trace")}>
+              Πίνακας τιμών
+            </OutputTabButton>
+          </div>
+        ) : (
+          <span className="output-title font-semibold uppercase tracking-wide text-muted">
+            Οθόνη εκτέλεσης
+          </span>
+        )}
         {badge && (
           <span className={`flex items-center gap-1.5 font-medium ${badge.tone}`}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
@@ -68,8 +106,9 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
           </span>
         )}
         <span className="ml-auto flex items-center gap-3 text-muted">
-          {run.kind === "done" && <span>{run.result.steps} βήματα</span>}
-          {run.kind === "done" && run.result.output.length > 0 && (
+          {/* The table counts its own rows (a call adds some), so only the screen shows this. */}
+          {run.kind === "done" && !showTrace && <span>{run.result.steps} βήματα</span>}
+          {run.kind === "done" && !showTrace && run.result.output.length > 0 && (
             <button type="button" onClick={copy} className="hover:text-text">
               {copied ? "✓ Αντιγράφηκε" : "Αντιγραφή"}
             </button>
@@ -81,34 +120,63 @@ export function OutputPanel({ run, onInput, onClear }: Props) {
           )}
         </span>
       </div>
-      <div
-        ref={body}
-        className="output-body min-h-0 flex-1 overflow-auto p-3 leading-6"
-        style={{ fontSize: "var(--editor-font-size, 14px)" }}
-        aria-live="polite"
-      >
-        {run.kind === "idle" && (
-          <p className="flex items-center gap-2 text-muted">
-            <span className="text-accent" aria-hidden>
-              ▶
-            </span>
-            Πάτησε «Εκτέλεση» για να τρέξει το πρόγραμμα.
-          </p>
-        )}
-        {run.kind === "running" && <p className="text-muted">Εκτέλεση…</p>}
-        {run.kind === "failed" && <p className="text-danger">{run.message}</p>}
-        {run.kind === "done" && <RunOutput {...run} onInput={onInput} />}
-      </div>
+      {showTrace && run.kind === "done" ? (
+        <TracePanel run={run} step={step} onStep={onStep} stale={stale} onInput={onInput} />
+      ) : (
+        <div
+          ref={body}
+          className="output-body min-h-0 flex-1 overflow-auto p-3 leading-6"
+          style={{ fontSize: "var(--editor-font-size, 14px)" }}
+          aria-live="polite"
+        >
+          {run.kind === "idle" && (
+            <p className="flex items-center gap-2 text-muted">
+              <span className="text-accent" aria-hidden>
+                ▶
+              </span>
+              Πάτησε «Εκτέλεση» για να τρέξει το πρόγραμμα, ή «Πίνακας τιμών» για να το δεις
+              βήμα-βήμα.
+            </p>
+          )}
+          {run.kind === "running" && <p className="text-muted">Εκτέλεση…</p>}
+          {run.kind === "failed" && <p className="text-danger">{run.message}</p>}
+          {run.kind === "done" && <RunOutput run={run} onInput={onInput} />}
+        </div>
+      )}
     </section>
   );
 }
 
-function RunOutput({
-  inputs,
-  marks,
-  result,
-  onInput,
-}: Extract<RunState, { kind: "done" }> & { onInput: (value: string) => void }) {
+function OutputTabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={active}
+      onClick={onClick}
+      className={`output-tab -mb-px border-b-2 px-1.5 whitespace-nowrap font-semibold uppercase tracking-wide ${
+        active
+          ? "output-title border-accent text-text"
+          : "border-transparent text-muted hover:text-text"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+type Done = Extract<RunState, { kind: "done" }>;
+
+function RunOutput({ run, onInput }: { run: Done; onInput: (value: string) => void }) {
+  const { inputs, marks, result } = run;
   const lines: { text: string; input: boolean }[] = [];
   let next = 0;
   const flushInputs = (upTo: number) => {
@@ -140,8 +208,32 @@ function RunOutput({
           {line.text}
         </div>
       ))}
+      <RunEnd run={run} onInput={onInput} number={lines.length + 1} />
+    </>
+  );
+}
+
+/** How a run ended: the ΔΙΑΒΑΣΕ box, the error, the limit, or the end. Shared with TracePanel. */
+export function RunEnd({
+  run,
+  onInput,
+  number,
+}: {
+  run: Done;
+  onInput: (value: string) => void;
+  /** The input line's number in the Κλασικό theme's strip. */
+  number?: number;
+}) {
+  const { inputs, result } = run;
+  return (
+    <>
       {result.status === "needs_input" && (
-        <InputLine key={inputs.length} number={lines.length + 1} onSubmit={onInput} />
+        <InputLine
+          key={inputs.length}
+          number={number}
+          onSubmit={onInput}
+          waiting={run.pending === true}
+        />
       )}
       {result.status === "error" && result.error && (
         <p className="mt-2 rounded-md border-l-2 border-danger bg-danger/10 px-3 py-2 text-danger">
@@ -160,7 +252,16 @@ function RunOutput({
   );
 }
 
-function InputLine({ number, onSubmit }: { number: number; onSubmit: (value: string) => void }) {
+function InputLine({
+  number,
+  onSubmit,
+  waiting,
+}: {
+  number?: number;
+  onSubmit: (value: string) => void;
+  /** The value was sent; the re-run hasn't come back yet. */
+  waiting: boolean;
+}) {
   const [value, setValue] = useState("");
   return (
     <form
@@ -183,10 +284,12 @@ function InputLine({ number, onSubmit }: { number: number; onSubmit: (value: str
         id="read-input"
         autoFocus
         autoComplete="off"
+        readOnly={waiting}
+        aria-busy={waiting}
         value={value}
         onChange={(e) => setValue(e.target.value)}
         placeholder="γράψε μια τιμή και πάτα Enter"
-        className="min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-muted"
+        className={`min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-muted ${waiting ? "opacity-60" : ""}`}
       />
     </form>
   );

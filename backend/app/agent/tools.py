@@ -45,7 +45,10 @@ async def trace_program(
     ctx: RunContextWrapper[AgentContext], inputs: list[str], code: str | None = None
 ) -> str:
     """Run code and return every executed line with the variables it changed. It runs
-    ΓΛΩΣΣΑ or ψευδογλώσσα, whichever the student's editor is set to.
+    ΓΛΩΣΣΑ or ψευδογλώσσα, whichever the student's editor is set to. Two kinds of row
+    are not statements running again: a call adds one on the subprogram's first line with
+    what its parameters were given, and one back on the calling line, after the
+    subprogram's rows, with what the call changed there (values returned, a condition).
 
     Args:
         inputs: Values for ΔΙΑΒΑΣΕ (and an algorithm's Δεδομένα), in the order read, one per value.

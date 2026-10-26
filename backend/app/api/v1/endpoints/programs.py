@@ -3,15 +3,25 @@ import uuid
 from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import func, select
 
-from app.core.db import DbSession
+from app.core.db import DbSession, has_migration
 from app.core.security import CurrentUser, CurrentUserDep
 from app.models import Program
 from app.schemas.program import ProgramCreate, ProgramOut, ProgramSummary, ProgramUpdate
 
 router = APIRouter(prefix="/programs", tags=["programs"])
 
+# Far more than a school year's exercises; keeps one account from filling the database.
+MAX_PROGRAMS = 500
+
+
+async def require_programs(db: DbSession) -> None:
+    """The language column (migration 0004); migrations don't run on deploy."""
+    if not await has_migration(db, "0004"):
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Programs need migration 0004")
+
 
 async def owned_program(db: DbSession, user: CurrentUser, program_id: uuid.UUID) -> Program:
+    await require_programs(db)
     # The app connects as postgres (RLS bypassed): always filter by user_id.
     program = await db.scalar(
         select(Program).where(Program.id == program_id, Program.user_id == user.id)
@@ -22,16 +32,26 @@ async def owned_program(db: DbSession, user: CurrentUser, program_id: uuid.UUID)
 
 
 @router.get("", response_model=list[ProgramSummary])
-async def list_programs(user: CurrentUserDep, db: DbSession) -> list[Program]:
-    rows = await db.scalars(
-        select(Program).where(Program.user_id == user.id).order_by(Program.updated_at.desc())
+async def list_programs(user: CurrentUserDep, db: DbSession) -> list[ProgramSummary]:
+    await require_programs(db)
+    # The summary's columns only: not every program's code.
+    rows = await db.execute(
+        select(Program.id, Program.title, Program.language, Program.updated_at)
+        .where(Program.user_id == user.id)
+        .order_by(Program.updated_at.desc())
     )
-    return list(rows)
+    return [ProgramSummary.model_validate(row) for row in rows]
 
 
 @router.post("", response_model=ProgramOut, status_code=status.HTTP_201_CREATED)
 async def create_program(body: ProgramCreate, user: CurrentUserDep, db: DbSession) -> Program:
-    program = Program(user_id=user.id, title=body.title, code=body.code)
+    await require_programs(db)
+    count = await db.scalar(
+        select(func.count()).select_from(Program).where(Program.user_id == user.id)
+    )
+    if count is not None and count >= MAX_PROGRAMS:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Program limit reached")
+    program = Program(user_id=user.id, title=body.title, code=body.code, language=body.language)
     db.add(program)
     await db.commit()
     await db.refresh(program)

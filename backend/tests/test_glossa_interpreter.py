@@ -370,17 +370,94 @@ class TestTrace:
         ]
 
     def test_scope_names_the_subprogram(self) -> None:
+        source = program(
+            "  x <- 1\n  y <- 2\n  ΚΑΛΕΣΕ Αντιμετάθεση(x, y)",
+            "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x, y",
+            SUBPROGRAMS,
+        )
+        result = run(source, trace=True)
+        assert result.trace is not None
+        assert {s.scope for s in result.trace} == {"Δοκιμή", "Αντιμετάθεση"}
+        call = result.trace[2]
+        assert (call.scope, call.changes) == ("Δοκιμή", {})
+        # Entering it: a row on its first line with what its parameters were given.
+        entry = result.trace[3]
+        header = source.split("\n").index("ΔΙΑΔΙΚΑΣΙΑ Αντιμετάθεση(α, β)") + 1
+        assert (entry.line, entry.scope) == (header, "Αντιμετάθεση")
+        assert entry.changes == {"α": "1", "β": "2"}
+        # The values come back to x and y after the procedure's own steps, on the call's line.
+        back = result.trace[-1]
+        assert (back.line, back.scope, back.changes) == (call.line, "Δοκιμή", {"x": "2", "y": "1"})
+
+    def test_the_entry_row_uses_the_declared_spelling(self) -> None:
+        subprogram = """
+ΔΙΑΔΙΚΑΣΙΑ Δείξε(Α)
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: α
+ΑΡΧΗ
+  α <- α + 1
+ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ
+"""
+        source = program("  x <- 5\n  ΚΑΛΕΣΕ Δείξε(x)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", subprogram)
+        result = run(source, trace=True)
+        assert result.trace is not None
+        names = {name for s in result.trace if s.scope == "Δείξε" for name in s.changes}
+        assert names == {"α"}
+
+    def test_an_unchanged_argument_is_not_a_change(self) -> None:
+        subprogram = """
+ΔΙΑΔΙΚΑΣΙΑ Τύπωσε(α)
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: α
+ΑΡΧΗ
+  ΓΡΑΨΕ α
+ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ
+"""
+        source = program("  x <- 5\n  ΚΑΛΕΣΕ Τύπωσε(x)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", subprogram)
+        result = run(source, trace=True)
+        assert result.trace is not None
+        assert result.trace[-1].scope == "Τύπωσε"  # no row coming back: x didn't change
+        assert result.output == ["5"]
+
+    def test_a_function_value_is_assigned_after_its_steps(self) -> None:
         result = run(
             program(
-                "  x <- 1\n  y <- 2\n  ΚΑΛΕΣΕ Αντιμετάθεση(x, y)",
+                "  x <- Παραγοντικό(2) + Παραγοντικό(1)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", SUBPROGRAMS
+            ),
+            trace=True,
+        )
+        assert result.trace is not None
+        rows = [(s.line, s.scope, s.changes) for s in result.trace]
+        assert rows[0] == (5, "Δοκιμή", {})
+        assert all(scope == "Παραγοντικό" for _, scope, _ in rows[1:-1])
+        assert rows[-1] == (5, "Δοκιμή", {"x": "3"})
+
+    def test_a_condition_with_a_call_comes_after_the_call(self) -> None:
+        result = run(
+            program(
+                "  ΑΝ Παραγοντικό(3) = 6 ΤΟΤΕ\n    ΓΡΑΨΕ 'ναι'\n  ΤΕΛΟΣ_ΑΝ",
+                subprograms=SUBPROGRAMS,
+            ),
+            trace=True,
+        )
+        assert result.trace is not None
+        resumed = result.trace[-2]
+        assert (resumed.line, resumed.scope, resumed.condition) == (4, "Δοκιμή", True)
+        assert result.trace[0].condition is None
+        assert result.trace[-1].output == ["ναι"]
+
+    def test_a_call_without_changes_adds_no_row(self) -> None:
+        result = run(
+            program(
+                "  x <- 1\n  y <- 2\n  ΚΑΛΕΣΕ Αντιμετάθεση(5, 6)\n  ΓΡΑΨΕ x",
                 "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x, y",
                 SUBPROGRAMS,
             ),
             trace=True,
         )
         assert result.trace is not None
-        assert {s.scope for s in result.trace} == {"Δοκιμή", "Αντιμετάθεση"}
-        assert result.trace[2].changes == {"x": "2", "y": "1"}
+        assert [s.scope for s in result.trace].count("Δοκιμή") == 4
+        assert result.trace[-1].output == ["1"]
 
     def test_truncates(self) -> None:
         body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 100\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"

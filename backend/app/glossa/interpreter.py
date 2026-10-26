@@ -121,6 +121,11 @@ def _fit(type_name: str, value: Value) -> Value | None:
     return value if type_of(value) == type_name else None
 
 
+def same_value(old: object, new: Value) -> bool:
+    """Whether a variable that held `old` still holds `new` (ΑΛΗΘΗΣ is not 1)."""
+    return type(old) is type(new) and old == new
+
+
 def format_value(value: Value) -> str:
     """How ΓΡΑΨΕ (and the trace) shows a value."""
     if isinstance(value, bool):
@@ -190,6 +195,8 @@ class _Machine:
         self.trace: list[TraceStep] | None = [] if trace else None
         self.trace_truncated = False
         self.step: TraceStep | None = None
+        # The caller's step after a call, added to the trace once something happens in it.
+        self.resume: TraceStep | None = None
         self.main_constants: dict[str, Value] = {}
 
     def run(self) -> None:
@@ -206,25 +213,36 @@ class _Machine:
             raise _Limit
         if self.steps % CLOCK_EVERY == 0 and time.monotonic() > self.deadline:
             raise _Limit
-        if self.trace is None:
-            return
+        self.resume = None
+        if self.trace is not None:
+            self.step = self.record(TraceStep(line=node.line, scope=frame.unit.name))
+
+    def record(self, step: TraceStep) -> TraceStep | None:
+        """Add `step` to the trace, unless the trace is full."""
+        assert self.trace is not None
         if len(self.trace) >= self.limits.max_trace_steps:
             self.trace_truncated = True
-            self.step = None
-            return
-        self.step = TraceStep(line=node.line, scope=frame.unit.name)
-        self.trace.append(self.step)
+            return None
+        self.trace.append(step)
+        return step
+
+    def current(self) -> TraceStep | None:
+        """The trace step that changes, conditions and output go to."""
+        if self.resume is not None:
+            resumed, self.resume = self.resume, None
+            self.step = self.record(resumed)
+        return self.step
 
     def note(self, name: str, value: Value) -> None:
-        if self.step is not None:
-            self.step.changes[name] = format_value(value)
+        if row := self.current():
+            row.changes[name] = format_value(value)
 
     def condition(self, expr: n.Expr, frame: _Frame) -> bool:
         value = self.eval(expr, frame)
         if not isinstance(value, bool):
             raise _error(expr, "Η συνθήκη πρέπει να έχει λογική τιμή (ΑΛΗΘΗΣ ή ΨΕΥΔΗΣ).")
-        if self.step is not None:
-            self.step.condition = value
+        if row := self.current():
+            row.condition = value
         return value
 
     # Program units
@@ -297,13 +315,30 @@ class _Machine:
 
     def run_body(self, sub: n.Unit, frame: _Frame) -> None:
         """A called subprogram's statements; the caller's trace step resumes after."""
-        saved_step = self.step
+        caller = self.resume or self.step
+        self.resume = None
+        if self.trace is not None:
+            # A row on the subprogram's first line with what its parameters were given,
+            # as the πίνακας τιμών writes on entering it (arrays left out: too many cells).
+            self.step = self.record(TraceStep(line=sub.line, scope=sub.name))
+            for param in sub.params:  # type: ignore[attr-defined]
+                value = frame.values.get(param.key)
+                if self.step is not None and isinstance(value, int | float | str):
+                    # The declared spelling, as store() writes it: one column per variable.
+                    name = frame.names.get(param.key, param.name)
+                    self.step.changes[name] = format_value(value)
         self.depth += 1
         try:
             self.block(sub.body, frame)
         finally:
             self.depth -= 1
-            self.step = saved_step
+            self.step = caller
+            if caller is not None and self.trace and self.trace[-1] is not caller:
+                # What the caller does next (a procedure's values coming back, the
+                # function's value being assigned) goes after the call's own steps,
+                # in the order a student writes the πίνακας τιμών by hand.
+                self.step = None
+                self.resume = TraceStep(line=caller.line, scope=caller.scope)
 
     def bind(self, param: n.Param, arg: n.Expr, frame: _Frame, caller: _Frame) -> _Ref | None:
         """Give `param` the argument's value; return where the argument lives, if a variable."""
@@ -364,17 +399,20 @@ class _Machine:
             return
         if value is UNSET:
             return
+        # Only a value that changed goes in the trace: nothing visible wrote the others.
         if isinstance(target, _Frame):
             assert isinstance(where, str)
             name = target.names[where]
             stored = self.fit_or_fail(target.types[where], value, node, name)
+            if not same_value(target.values[where], stored):
+                self.note(name, stored)
             target.values[where] = stored
-            self.note(name, stored)
         else:
             assert isinstance(where, int)
             stored = self.fit_or_fail(target.type, value, node, target.label(where))
+            if not same_value(target.cells[where], stored):
+                self.note(target.label(where), stored)
             target.cells[where] = stored
-            self.note(target.label(where), stored)
 
     # Statements
 
@@ -427,8 +465,8 @@ class _Machine:
                 for case in cases:
                     self.tick(case, frame)
                     matched = any(self.case_matches(c, value, frame) for c in case.conditions)
-                    if self.step is not None:
-                        self.step.condition = matched
+                    if row := self.current():
+                        row.condition = matched
                     if matched:
                         self.block(case.body, frame)
                         return
@@ -472,8 +510,8 @@ class _Machine:
             current = self.eval(loop.counter, frame)
             assert _is_number(current)
             going = _compare("<=" if step > 0 else ">=", current, end)  # type: ignore[arg-type]
-            if self.step is not None:
-                self.step.condition = going
+            if row := self.current():
+                row.condition = going
             if not going:
                 return
             self.block(loop.body, frame)
@@ -538,8 +576,8 @@ class _Machine:
                 raise _Limit
             self.output.append(text)
         self.line_open = stays
-        if self.step is not None:
-            self.step.output.append(text)
+        if row := self.current():
+            row.output.append(text)
 
     # Variables
 

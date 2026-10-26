@@ -194,6 +194,62 @@
   display: none;
 }
 
+/* The Κλασικό theme's output tabs (a traced run): the open one is the tab-like title above. */
+[data-theme="classic"] .output-tab:not(.output-title) {
+  align-self: flex-end;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  font-weight: normal;
+  font-size: 12px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/*
+ * The πίνακας τιμών (components/ide/TracePanel.tsx): thin row lines, the current
+ * step tinted in the accent with a bar on its left, and its new values in the accent.
+ */
+.trace-th,
+.trace-td {
+  padding: 0.2rem 0.65rem;
+  border-color: var(--border);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  white-space: nowrap;
+}
+.trace-th {
+  padding-block: 0.35rem;
+  border-bottom-color: var(--border);
+  font-weight: 600;
+}
+.trace-row:hover > td {
+  background: color-mix(in srgb, var(--panel-2) 70%, transparent);
+}
+.trace-current > td,
+.trace-current:hover > td {
+  background: color-mix(in srgb, var(--accent) 13%, var(--output-bg));
+}
+.trace-current > td:first-child {
+  box-shadow: inset 3px 0 var(--accent);
+}
+.trace-changed {
+  color: var(--accent);
+}
+
+/* The same step in the editor: its line, and what it did after the code (lib/glossa/traceLine.ts). */
+.cm-editor .cm-line.cm-traceLine {
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  box-shadow: inset 3px 0 var(--accent);
+}
+.cm-editor .cm-traceNote {
+  margin-left: 1.5em;
+  padding: 0 0.45em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: 0.85em;
+  font-style: italic;
+}
+
 /* The line number of a line with an error turns red (errorLineNumbers in lib/glossa/lint.ts). */
 .cm-editor .cm-gutterElement.cm-errorLineNumber {
   color: var(--danger);

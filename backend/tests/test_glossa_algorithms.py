@@ -209,6 +209,15 @@ class TestCalls:
     def test_call_returns_results_to_the_variables_after_the_data(self) -> None:
         assert output(self.MAIN, ["3", "8"]) == ["8", "16"]
 
+    def test_trace_enters_the_called_algorithm_with_its_data(self) -> None:
+        result = go(self.MAIN, ["3", "8"], trace=True)
+        assert result.trace is not None
+        rows = [(s.line, s.scope, s.changes) for s in result.trace]
+        assert rows[1] == (3, "Κύριος", {})
+        assert rows[2] == (8, "Μέγιστος", {"x": "3", "y": "8"})
+        # μ gets the result back on the Κάλεσε line, after Μέγιστος's own rows.
+        assert (3, "Κύριος", {"μ": "8"}) in rows[3:]
+
     def test_data_go_in_by_value(self) -> None:
         source = """Αλγόριθμος Κύριος
 a ← 1
