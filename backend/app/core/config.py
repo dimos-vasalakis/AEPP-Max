@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # a conversation grows, and at least 1k (agent/usage.py).
     agent_daily_tokens: NonNegativeInt = 20_000
 
+    # Sentry error reports and request traces. Empty = off.
+    sentry_dsn: str = ""
+
     # ΓΛΩΣΣΑ interpreter limits, per run. Hitting one ends the run with status "limit".
     run_max_steps: int = 200_000
     run_max_output_lines: int = 2_000

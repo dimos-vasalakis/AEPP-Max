@@ -1,7 +1,9 @@
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from agents import set_default_openai_key, set_tracing_disabled
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,6 +16,27 @@ from app.core.db import get_engine
 
 settings = get_settings()
 logger = logging.getLogger("uvicorn.error")
+
+if settings.sentry_dsn:
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        environment=settings.environment,
+        release=os.environ.get("RENDER_GIT_COMMIT"),  # None = the SDK guesses
+        # Stack traces and timings only. Request bodies, headers, local variables and the
+        # agent's prompts and tool calls would carry students' code, chats and IPs.
+        # Every key is listed: one left out falls back to the SDK's collect-everything default.
+        data_collection={
+            "user_info": False,
+            "cookies": {"mode": "off"},
+            "http_headers": {"request": {"mode": "off"}},
+            "http_bodies": [],
+            "url_query_params": {"mode": "off"},
+            "gen_ai": {"inputs": False, "outputs": False},
+            "database_query_data": False,
+            "stack_frame_variables": False,
+        },
+        traces_sample_rate=1.0 if settings.environment == "development" else 0.1,
+    )
 
 
 @asynccontextmanager

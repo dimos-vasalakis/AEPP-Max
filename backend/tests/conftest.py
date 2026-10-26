@@ -14,6 +14,7 @@ os.environ["SUPABASE_JWT_SECRET"] = TEST_JWT_SECRET
 os.environ["DATABASE_URL"] = ""
 os.environ["OPENAI_API_KEY"] = ""
 os.environ["SUPABASE_SECRET_KEY"] = ""
+os.environ["SENTRY_DSN"] = ""
 
 from app.main import app  # noqa: E402
 

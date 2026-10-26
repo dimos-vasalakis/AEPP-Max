@@ -24,6 +24,8 @@ def get_engine() -> AsyncEngine:
     return create_async_engine(
         sqlalchemy_url(get_settings().database_url),
         pool_pre_ping=True,
+        # Error messages would otherwise list the bound parameters: students' chats and code.
+        hide_parameters=True,
         # Supavisor's transaction pooler doesn't support prepared statements.
         connect_args={"prepare_threshold": None},
     )
