@@ -5,6 +5,7 @@
 export const COLOR_FIELDS = [
   { key: "bg", label: "Φόντο editor" },
   { key: "panel", label: "Φόντο πάνελ" },
+  { key: "agent", label: "Φόντο Agent" },
   { key: "text", label: "Κείμενο" },
   { key: "accent", label: "Έμφαση (κουμπιά)" },
   { key: "keyword", label: "Λέξεις-κλειδιά" },
@@ -30,6 +31,7 @@ export const BASE_COLORS: Record<"dark" | "light", ThemeColors> = {
   dark: {
     bg: "#0c0c0e",
     panel: "#131316",
+    agent: "#131316",
     text: "#ececf1",
     accent: "#e5141b",
     keyword: "#ff6464",
@@ -43,6 +45,7 @@ export const BASE_COLORS: Record<"dark" | "light", ThemeColors> = {
   light: {
     bg: "#ffffff",
     panel: "#fbf6f6",
+    agent: "#fbf6f6",
     text: "#1c1416",
     accent: "#e5141b",
     keyword: "#d0101a",
@@ -91,6 +94,7 @@ export function themeVars(colors: ThemeColors): Record<string, string> {
     "color-scheme": dark ? "dark" : "light",
     "--bg": colors.bg,
     "--panel": colors.panel,
+    "--agent-bg": colors.agent,
     "--text": colors.text,
     "--accent": colors.accent,
     "--on-accent": luminance(colors.accent) > 0.4 ? "#000000" : "#ffffff",
@@ -134,7 +138,8 @@ export function parseCustomThemes(raw: unknown): CustomTheme[] {
     if (typeof item !== "object" || item === null) continue;
     const { id, name, colors } = item as Record<string, unknown>;
     if (!isCustomId(id) || typeof name !== "string" || typeof colors !== "object" || !colors) continue;
-    const given = colors as Record<string, unknown>;
+    // Themes made before the agent had its own color: it was the panel's.
+    const given = { agent: (colors as Record<string, unknown>).panel, ...colors } as Record<string, unknown>;
     const valid = COLOR_FIELDS.every(({ key }) => typeof given[key] === "string" && HEX.test(given[key]));
     if (!valid) continue;
     themes.push({

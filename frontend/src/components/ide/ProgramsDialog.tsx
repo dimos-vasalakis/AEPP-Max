@@ -242,8 +242,8 @@ export function ProgramsDialog({
 
             {list.kind === "done" && programs.length > 0 && (
               <p className="border-t border-border px-5 py-2.5 text-xs text-muted">
-                {programs.length} {programs.length === 1 ? "πρόγραμμα" : "προγράμματα"} · Ό,τι
-                ανοίγεις από εδώ αποθηκεύεται μόνο του όσο γράφεις.
+                {programs.length} {programs.length === 1 ? "πρόγραμμα" : "προγράμματα"} · Τις
+                αλλαγές σε ό,τι ανοίγεις από εδώ τις αποθηκεύεις με Ctrl/Cmd+S.
               </p>
             )}
           </>

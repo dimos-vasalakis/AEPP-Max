@@ -70,8 +70,8 @@ export default function PrivacyPage() {
           <p>Όταν κάνεις εγγραφή και χρησιμοποιείς τον agent, κρατάμε:</p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
-              το <b>email</b> σου και, αν το δώσεις, το <b>όνομά</b> σου. Αν μπεις με Google ή
-              Apple, παίρνουμε από εκεί το όνομα και το email σου (και την εικόνα προφίλ, αν τη
+              το <b>email</b> σου και, αν το δώσεις, το <b>όνομά</b> σου. Αν μπεις με Google,
+              παίρνουμε από εκεί το όνομα και το email σου (και την εικόνα προφίλ, αν τη
               δίνει ο πάροχος).
             </li>
             <li>
@@ -130,7 +130,7 @@ export default function PrivacyPage() {
               του GDPR).
             </li>
             <li>
-              <b>Google</b> ή <b>Apple</b>, μόνο αν μπεις μέσω αυτών.
+              <b>Google</b>, μόνο αν μπεις μέσω αυτού.
             </li>
           </ul>
           <p>

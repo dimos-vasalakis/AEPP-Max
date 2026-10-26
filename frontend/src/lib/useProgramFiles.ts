@@ -14,22 +14,19 @@ export type ProgramFile = {
   title: string;
   saved: string;
   status: "saved" | "saving" | "error";
-  /** Why the last save failed, and the code it tried: no retry until the code changes. */
+  /** Why the last save failed. */
   error?: string;
-  failed?: string;
 };
 
 type Files = Record<Language, ProgramFile | null>;
 
-// After the last keystroke, as Google Docs does: often enough that nothing is lost.
-const AUTOSAVE_MS = 1500;
 const NONE: Files = { glossa: null, pseudocode: null };
-const LANGUAGES: Language[] = ["glossa", "pseudocode"];
 
 /**
  * Which saved program each editor (Πρόγραμμα, Αλγόριθμος) holds, if any, and its
- * saving. A linked editor saves itself shortly after each change. Signing out or
- * into another account unlinks both: their programs aren't this user's.
+ * saving. Changes are saved only when the student saves (Ctrl/Cmd+S, Αποθήκευση),
+ * as students asked. Signing out or into another account unlinks both: their
+ * programs aren't this user's.
  */
 export function useProgramFiles(
   codes: Record<Language, string>,
@@ -56,47 +53,44 @@ export function useProgramFiles(
     [],
   );
 
-  // The save in flight per program, so settle() can wait for it: two requests racing
-  // could store the older code last.
-  const inflight = useRef(new Map<string, Promise<string | null>>());
+  // The save in flight per program and the code it sends, so unsaved() can wait for it,
+  // and newer code saved meanwhile, sent once it's done: two requests racing could
+  // store the older code last.
+  const inflight = useRef(new Map<string, { code: string; request: Promise<string | null> }>());
+  const queued = useRef(new Map<string, string>());
+  // The code each program's last successful save stored, for unsaved() after waiting.
+  const stored = useRef(new Map<string, string>());
 
   /** Saves `code` into program `id`; resolves to an error message, or null. */
   const save = useCallback(
-    (lang: Language, id: string, code: string): Promise<string | null> => {
+    function send(lang: Language, id: string, code: string): Promise<string | null> {
       const request = (async () => {
         patch(lang, id, { status: "saving" });
         try {
           await updateProgram(id, { code });
-          patch(lang, id, { saved: code, status: "saved", error: undefined, failed: undefined });
+          stored.current.set(id, code);
+          patch(lang, id, { saved: code, status: "saved", error: undefined });
           return null;
         } catch (err) {
           const message = programError(err);
           // Deleted elsewhere: the code stays in the editor, now unsaved.
-          if (err instanceof ApiError && err.status === 404) patch(lang, id, null);
-          else patch(lang, id, { status: "error", error: message, failed: code });
+          if (err instanceof ApiError && err.status === 404) {
+            patch(lang, id, null);
+            queued.current.delete(id);
+          } else patch(lang, id, { status: "error", error: message });
           return message;
         } finally {
           inflight.current.delete(id);
+          const next = queued.current.get(id);
+          queued.current.delete(id);
+          if (next !== undefined) void send(lang, id, next);
         }
       })();
-      inflight.current.set(id, request);
+      inflight.current.set(id, { code, request });
       return request;
     },
     [patch],
   );
-
-  // Autosave, both editors, one request at a time each; a failed save waits for the
-  // next change (or «Ξαναδοκίμασε»).
-  useEffect(() => {
-    const timers = LANGUAGES.flatMap((lang) => {
-      const file = files[lang];
-      const code = codes[lang];
-      if (!file || file.status === "saving" || code === file.saved) return [];
-      if (file.status === "error" && code === file.failed) return [];
-      return [setTimeout(() => void save(lang, file.id, code), AUTOSAVE_MS)];
-    });
-    return () => timers.forEach(clearTimeout);
-  }, [files, codes, save]);
 
   const file = files[language];
 
@@ -115,27 +109,34 @@ export function useProgramFiles(
     /** The current editor's file; null while its code isn't a saved program. */
     file,
     fileOf: (lang: Language) => files[lang],
-    /** Saves `lang`'s changes now (Ctrl/Cmd+S, «Ξαναδοκίμασε»). */
+    /** Saves `lang`'s changes (Ctrl/Cmd+S, Αποθήκευση, «Ξαναδοκίμασε»); one request at a time. */
     flush(lang: Language = language) {
       const target = files[lang];
-      if (target && target.status !== "saving" && codes[lang] !== target.saved) {
-        void save(lang, target.id, codes[lang]);
-      }
-    },
-    /**
-     * Before `lang`'s code is replaced: waits for a save in flight, then saves what the
-     * editor holds now if the server doesn't have it. Resolves to an error message if
-     * the changes couldn't be saved (the caller asks before dropping them), or null.
-     */
-    async settle(lang: Language = language): Promise<string | null> {
-      const target = files[lang];
-      if (!target) return null;
+      if (!target) return;
       const code = codes[lang];
       const pending = inflight.current.get(target.id);
-      // After a save in flight, save again: it may have carried older code, or failed.
-      if (pending) await pending;
-      else if (code === target.saved && target.status === "saved") return null;
-      return save(lang, target.id, code);
+      if (pending) {
+        // Back to what is being sent: a queued newer version is no longer wanted.
+        if (code !== pending.code) queued.current.set(target.id, code);
+        else queued.current.delete(target.id);
+      } else if (code !== target.saved) void save(lang, target.id, code);
+    },
+    /**
+     * Before `lang`'s code is replaced: whether it holds changes the server doesn't
+     * have (the caller asks before dropping them), once a save in flight is done.
+     */
+    async unsaved(lang: Language = language): Promise<boolean> {
+      const target = files[lang];
+      if (!target) return false;
+      const code = codes[lang];
+      if (!inflight.current.has(target.id)) return code !== target.saved;
+      // A queued save starts as the one in flight ends: wait for the whole chain.
+      let failed = false;
+      for (let p = inflight.current.get(target.id); p; p = inflight.current.get(target.id)) {
+        failed = (await p.request) !== null;
+        await Promise.resolve();
+      }
+      return failed || stored.current.get(target.id) !== code;
     },
     /** Saves the current editor as a new program and links it. Resolves to an error message, or null. */
     async saveAs(title: string): Promise<string | null> {

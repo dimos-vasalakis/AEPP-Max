@@ -12,7 +12,7 @@ type Props = {
   /** The editor is empty: nothing to save. */
   empty: boolean;
   onPrograms: () => void;
-  /** Ctrl/Cmd+S: saves a linked file now, or asks a new one's title. */
+  /** Ctrl/Cmd+S: saves a linked file's changes, or asks a new one's title. */
   onSave: () => void;
   /** Resolves to an error message, or null once renamed. */
   onRename: (title: string) => Promise<string | null>;
@@ -92,7 +92,7 @@ export function FileBar({ file, dirty, empty, onPrograms, onSave, onRename, disa
         disabled={disabled || (empty && !file)}
         title="Αποθήκευση (Ctrl/Cmd+S)"
         className={`ml-auto flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 font-medium disabled:opacity-40 ${
-          !file && !empty
+          (!file && !empty) || dirty
             ? "bg-accent text-on-accent hover:brightness-110"
             : "text-muted hover:bg-panel-2 hover:text-text"
         }`}
@@ -141,7 +141,7 @@ function Status({
       </span>
     );
   }
-  if (dirty) return shown("text-muted", "● Αλλαγές", "Αποθηκεύεται μόλις σταματήσεις να γράφεις");
+  if (dirty) return shown("text-warn", "● Μη αποθηκευμένες αλλαγές", "Αποθήκευση με Ctrl/Cmd+S");
   return shown("text-ok", "✓ Αποθηκεύτηκε");
 }
 

@@ -8,6 +8,7 @@ import { glossaAutocase } from "@/lib/glossa/autocase";
 import { glossaAutocomplete } from "@/lib/glossa/completion";
 import { glossaCounter } from "@/lib/glossa/counter";
 import { editorLanguage } from "@/lib/glossa/editorLanguage";
+import { glossaEndName } from "@/lib/glossa/endName";
 import { glossaIndent } from "@/lib/glossa/indent";
 import { glossa, pseudocode } from "@/lib/glossa/language";
 import { glossaLinter } from "@/lib/glossa/lint";
@@ -16,8 +17,10 @@ import { setTraceMark, type TraceMark, traceLine } from "@/lib/glossa/traceLine"
 import type { Language } from "@/lib/glossa/types";
 
 // Transaction filters run last to first: glossaAutocase must see the keystroke
-// before glossaIndent and glossaCounter add their own changes to it.
+// before glossaIndent and glossaCounter add their own changes to it, and
+// glossaEndName sees them all.
 const COMMON = [
+  glossaEndName,
   glossaIndent,
   glossaCounter,
   glossaAutocomplete,

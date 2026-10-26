@@ -15,6 +15,14 @@ describe("custom themes", () => {
     expect(parseCustomThemes("nope")).toEqual([]);
   });
 
+  it("gives a theme saved before the agent color the panel's", () => {
+    const older: Record<string, string> = { ...BASE_COLORS.dark };
+    delete older.agent;
+    const [theme] = parseCustomThemes([{ id: "custom-old", name: "Παλιό", colors: { ...older, panel: "#123456" } }]);
+    expect(theme.colors.agent).toBe("#123456");
+    expect(customThemesCss([theme])).toContain("--agent-bg:#123456");
+  });
+
   it("emits one rule per theme, keyed on its id", () => {
     const css = customThemesCss([{ id: "custom-abc123", name: "Δοκιμή", colors: BASE_COLORS.light }]);
     expect(css).toContain('[data-theme="custom-abc123"]{');

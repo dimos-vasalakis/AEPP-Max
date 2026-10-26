@@ -34,7 +34,7 @@ AEPP Max runs the same programs as the Διερμηνευτής της ΓΛΩΣ�
 
 **A tutor that doesn't guess.** The agent runs your code on the real interpreter before it says anything about its output, replies in Greek, and uses only constructs from the textbook. **Tutor** mode gives hints before solutions and never touches your code. **Agent** mode writes changes into the editor: either at once (**αυτόματα**, Ctrl+Z undoes them) or as a diff you approve with Ctrl/Cmd+Enter first (**με έγκριση**). Shift+Tab switches between the two inside Agent mode. Slash commands work in the chat: `/switch` (Tutor ↔ Agent), `/new` and `/help`.
 
-**Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs an account (email link, Google or Apple), since it is the part that costs money.
+**Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs an account (email link or Google), since it is the part that costs money.
 
 **The πίνακας τιμών, step by step.** The exam asks students to trace a program by hand. One button builds the trace table: a row per executed line, a column per variable, each condition's value and what ΓΡΑΨΕ printed. Rows appear one at a time, so students predict each before they see it, while the editor highlights the line. Students can then check their paper table against it.
 

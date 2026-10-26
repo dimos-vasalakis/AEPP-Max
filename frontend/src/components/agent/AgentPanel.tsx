@@ -391,7 +391,7 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
         if (window.getSelection()?.toString()) return;
         input.current?.focus({ preventScroll: true });
       }}
-      className="relative flex h-[80dvh] min-h-0 flex-col border-t border-border bg-panel font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l"
+      className="relative flex h-[80dvh] min-h-0 flex-col border-t border-border bg-agent font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l"
     >
       {askNew && (
         <PanelConfirm
@@ -504,7 +504,7 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
             <ul
               role="listbox"
               aria-label="Εντολές"
-              className="absolute inset-x-3 bottom-full z-10 mb-1 overflow-hidden rounded-md border border-border bg-panel py-1 shadow-lg"
+              className="absolute inset-x-3 bottom-full z-10 mb-1 overflow-hidden rounded-md border border-border bg-agent py-1 shadow-lg"
             >
               {commands.map((c, i) => (
                 <li

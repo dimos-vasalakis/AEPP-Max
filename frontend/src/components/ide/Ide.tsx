@@ -28,9 +28,9 @@ type Ask = { kind: "open"; program: Program; message: string } | { kind: "new"; 
 
 const UNSAVED_HERE = "Ο κώδικας που γράφεις τώρα δεν έχει αποθηκευτεί και θα χαθεί.";
 
-/** The question when a saved program's last changes couldn't be saved. */
-function lostChanges(title: string, why: string): string {
-  return `Οι τελευταίες αλλαγές στο «${title}» δεν αποθηκεύτηκαν (${why.replace(/\.$/, "")}) και θα χαθούν.`;
+/** The question when a saved program has changes that weren't saved. */
+function lostChanges(title: string): string {
+  return `Οι αλλαγές στο «${title}» δεν έχουν αποθηκευτεί και θα χαθούν. Για να τις κρατήσεις, πάτα Άκυρο και Αποθήκευση (Ctrl/Cmd+S).`;
 }
 
 export function Ide() {
@@ -49,6 +49,11 @@ export function Ide() {
   const runSeq = useRef(0);
   // A ΔΙΑΒΑΣΕ re-run keeps the last result on screen (`pending`); either way it's busy.
   const busy = run.kind === "running" || (run.kind === "done" && run.pending === true);
+  // Still running as far as the student can tell, waiting for a value included: ▶ becomes ■.
+  const stoppable =
+    busy || (run.kind === "done" && run.result.status === "needs_input" && !run.stopped);
+  // The request of the run on screen, aborted when it is stopped or replaced.
+  const request = useRef<AbortController | null>(null);
   // Bumped when a program is opened: a fresh editor, so Ctrl+Z can't bring back the last one's code.
   const [editorKey, setEditorKey] = useState(0);
   // Locked while an Agent-mode reply runs, so its write_code can't overwrite new typing.
@@ -83,7 +88,21 @@ export function Ide() {
   /** Clears the output; a run still on its way is dropped. */
   function resetRun() {
     runSeq.current++;
+    request.current?.abort();
     setRun({ kind: "idle" });
+  }
+
+  /**
+   * ■: the run stops where it is. The interpreter runs on the server, so this drops
+   * the reply (the server's own limits end a run nobody waits for); its output so
+   * far stays on screen.
+   */
+  function stop() {
+    runSeq.current++;
+    request.current?.abort();
+    setRun((last) =>
+      last.kind === "done" ? { ...last, pending: false, stopped: true } : { kind: "stopped" },
+    );
   }
 
   /** Shows `next`'s editor, with `code` in it if given. */
@@ -108,6 +127,9 @@ export function Ide() {
   async function execute(inputs: string[], marks: number[], traced = false) {
     const code = codeRef.current;
     const seq = ++runSeq.current;
+    request.current?.abort();
+    const controller = new AbortController();
+    request.current = controller;
     if (inputs.length === 0) {
       setRun({ kind: "running", traced });
       setOutputTab(traced ? "trace" : "screen");
@@ -119,6 +141,7 @@ export function Ide() {
       const result = await apiFetch<RunResult>("/run", {
         method: "POST",
         body: JSON.stringify({ code, inputs, language: languageRef.current, trace: traced }),
+        signal: controller.signal,
       });
       if (seq !== runSeq.current) return;
       setRun({ kind: "done", inputs, marks, result, code, traced });
@@ -160,7 +183,7 @@ export function Ide() {
   });
 
   function readInput(value: string) {
-    if (run.kind !== "done" || run.pending) return;
+    if (run.kind !== "done" || run.pending || run.stopped) return;
     execute([...run.inputs, value], [...run.marks, run.result.output.length], run.traced);
   }
 
@@ -181,7 +204,7 @@ export function Ide() {
     else if (code.trim()) setDialog("save");
   }
 
-  /** Puts `program` in its editor, as a file that saves itself. */
+  /** Puts `program` in its editor, as the file Ctrl/Cmd+S saves to. */
   function load(program: Program) {
     codeRef.current = program.code;
     setCodes((all) => ({ ...all, [program.language]: program.code }));
@@ -208,12 +231,11 @@ export function Ide() {
       showLanguage(lang);
     } else if (target) {
       const before = lang === languageRef.current ? codeRef.current : null;
-      const failed = await files.settle(lang);
+      const unsaved = await files.unsaved(lang);
       // Typed into (or another program opened in) that editor meanwhile: leave it be.
       if (before !== null && codeRef.current !== before) return null;
-      if (failed) {
-        setAsk({ kind: "open", program, message: lostChanges(target.title, failed) });
-      } else load(program);
+      if (unsaved) setAsk({ kind: "open", program, message: lostChanges(target.title) });
+      else load(program);
     } else if (codes[lang].trim()) {
       const message = where
         ? `Ο κώδικας${where} δεν έχει αποθηκευτεί και θα χαθεί αν ανοίξεις το «${program.title}».`
@@ -233,19 +255,18 @@ export function Ide() {
   }
 
   /**
-   * A blank editor. A saved program's last changes are saved first; code saved
-   * nowhere (unless `confirmed`, as the Κενή σελίδα popover is) or changes that
-   * couldn't be saved are asked about.
+   * A blank editor. Code saved nowhere, or a saved program's unsaved changes, are
+   * asked about first, unless `confirmed` (as the Κενή σελίδα popover is).
    */
   async function newPage(confirmed = false) {
     const file = files.file;
     if (file) {
       const lang = language;
       const before = codeRef.current;
-      const failed = await files.settle();
+      const unsaved = await files.unsaved();
       // Switched, typed or opened another program meanwhile: clearing now would lose that.
       if (languageRef.current !== lang || codeRef.current !== before) return;
-      if (failed) setAsk({ kind: "new", message: lostChanges(file.title, failed) });
+      if (unsaved && !confirmed) setAsk({ kind: "new", message: lostChanges(file.title) });
       else clearPage();
     } else if (code.trim() && !confirmed) {
       setAsk({ kind: "new", message: UNSAVED_HERE });
@@ -333,7 +354,11 @@ export function Ide() {
                   <p className="mt-1 text-xs text-muted">
                     {files.file ? (
                       <>
-                        Το «{files.file.title}» μένει στα προγράμματά σου· εδώ ξεκινάς νέο.
+                        Το «{files.file.title}» μένει στα προγράμματά σου
+                        {code !== files.file.saved && (
+                          <> όπως το αποθήκευσες τελευταία· όσες αλλαγές δεν αποθήκευσες χάνονται</>
+                        )}
+                        . Εδώ ξεκινάς νέο.
                       </>
                     ) : (
                       <>
@@ -366,15 +391,15 @@ export function Ide() {
             </>
           )}
         </NavPopover>
+        {/* ▶ while nothing runs; ■ stops a run, also one waiting for a ΔΙΑΒΑΣΕ value. */}
         <button
           type="button"
-          onClick={() => execute([], [])}
-          disabled={busy}
-          aria-label="Εκτέλεση"
-          title="Εκτέλεση (F9 ή Ctrl+Enter)"
+          onClick={stoppable ? stop : () => execute([], [])}
+          aria-label={stoppable ? "Διακοπή" : "Εκτέλεση"}
+          title={stoppable ? "Διακοπή της εκτέλεσης" : "Εκτέλεση (F9 ή Ctrl+Enter)"}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
         >
-          <RunIcon />
+          {stoppable ? <StopIcon /> : <RunIcon />}
         </button>
         <button
           type="button"
@@ -586,6 +611,22 @@ function TrashIcon() {
       aria-hidden
     >
       <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
+    </svg>
+  );
+}
+
+/** The stop square, in the danger color: in the Κλασικό theme a green one would read as «run». */
+function StopIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+      <rect
+        x="3.5"
+        y="3.5"
+        width="11"
+        height="11"
+        rx="1.5"
+        style={{ fill: "var(--danger)" }}
+      />
     </svg>
   );
 }

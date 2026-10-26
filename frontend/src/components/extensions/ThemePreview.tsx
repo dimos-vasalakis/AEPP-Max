@@ -1,7 +1,10 @@
 import type { CSSProperties } from "react";
 import type { ThemeId } from "@/lib/theme";
 
-/** A few lines of ΓΛΩΣΣΑ in the theme's own colors (its tokens apply via data-theme). */
+/**
+ * A few lines of ΓΛΩΣΣΑ and the agent panel's edge, in the theme's own colors
+ * (its tokens apply via data-theme).
+ */
 export function ThemePreview({ id, vars }: { id?: ThemeId; vars?: CSSProperties }) {
   const kw = { color: "var(--syn-keyword)", fontWeight: "var(--syn-keyword-weight, 600)" };
   return (
@@ -15,18 +18,25 @@ export function ThemePreview({ id, vars }: { id?: ThemeId; vars?: CSSProperties 
         <span className="h-1.5 w-1.5 rounded-full bg-accent" />
         <span className="h-1 w-8 rounded bg-border" />
       </div>
-      <div className="whitespace-pre bg-bg px-1.5 py-1 text-text" style={{ fontFamily: "var(--editor-font)" }}>
-        <div>
-          <span style={kw}>ΑΝ</span> x <span style={{ color: "var(--syn-operator)" }}>&gt;</span>{" "}
-          <span style={{ color: "var(--syn-number)" }}>0</span> <span style={kw}>ΤΟΤΕ</span>
+      <div className="flex">
+        <div className="min-w-0 flex-1 whitespace-pre bg-bg px-1.5 py-1 text-text" style={{ fontFamily: "var(--editor-font)" }}>
+          <div>
+            <span style={kw}>ΑΝ</span> x <span style={{ color: "var(--syn-operator)" }}>&gt;</span>{" "}
+            <span style={{ color: "var(--syn-number)" }}>0</span> <span style={kw}>ΤΟΤΕ</span>
+          </div>
+          <div>
+            {"  "}
+            <span style={kw}>ΓΡΑΨΕ</span> <span style={{ color: "var(--syn-string)", fontStyle: "var(--syn-string-style, normal)" }}>&apos;ναι&apos;</span>
+          </div>
+          <div>
+            <span style={kw}>ΤΕΛΟΣ_ΑΝ</span>{" "}
+            <span style={{ color: "var(--syn-comment)", fontStyle: "italic" }}>! τέλος</span>
+          </div>
         </div>
-        <div>
-          {"  "}
-          <span style={kw}>ΓΡΑΨΕ</span> <span style={{ color: "var(--syn-string)", fontStyle: "var(--syn-string-style, normal)" }}>&apos;ναι&apos;</span>
-        </div>
-        <div>
-          <span style={kw}>ΤΕΛΟΣ_ΑΝ</span>{" "}
-          <span style={{ color: "var(--syn-comment)", fontStyle: "italic" }}>! τέλος</span>
+        {/* The agent panel's strip, with a reply's ● in the accent. */}
+        <div className="w-5 shrink-0 border-l border-border bg-agent px-1 py-1">
+          <span className="block h-1.5 w-1.5 rounded-full bg-accent" />
+          <span className="mt-1 block h-1 w-2.5 rounded bg-border" />
         </div>
       </div>
     </div>

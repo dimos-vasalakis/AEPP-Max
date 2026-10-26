@@ -104,8 +104,8 @@ export function SaveDialog({ signedIn, language, suggested, onSave, onSignIn, on
             className="mt-1 h-9 w-full rounded-md border border-border bg-bg px-2.5 outline-none focus:border-accent"
           />
           <p className="mt-2 text-xs text-muted">
-            Θα ανοίγει ως <b className="text-text">{LANGUAGE_NAME[language]}</b> και θα αποθηκεύεται
-            μόνο του όσο γράφεις.
+            Θα ανοίγει ως <b className="text-text">{LANGUAGE_NAME[language]}</b>. Τις αλλαγές
+            σου τις αποθηκεύεις με Ctrl/Cmd+S.
           </p>
           {error && (
             <p className="mt-3 rounded-md border-l-2 border-danger bg-danger/10 px-3 py-2 text-xs text-danger">

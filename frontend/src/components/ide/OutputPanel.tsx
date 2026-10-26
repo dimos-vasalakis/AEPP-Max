@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ConfirmDialog } from "@/components/Confirm";
 import type { RunResult } from "@/lib/glossa/types";
 import { TracePanel } from "./TracePanel";
 
@@ -9,7 +10,9 @@ import { TracePanel } from "./TracePanel";
  * typed values can be shown where they were read. (Each input re-runs the
  * program from the start with one more value; the output is the same up to there.)
  * `traced` runs (the «Πίνακας τιμών» button) carry the trace; `code` is what ran.
- * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way.
+ * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way. `stopped`: the
+ * student stopped it (■) while it waited for a value or re-ran; `kind: "stopped"`
+ * when it was stopped before anything came back.
  */
 export type RunState =
   | { kind: "idle" }
@@ -22,7 +25,9 @@ export type RunState =
       code: string;
       traced: boolean;
       pending?: boolean;
+      stopped?: boolean;
     }
+  | { kind: "stopped" }
   | { kind: "failed"; message: string };
 
 export type OutputTab = "screen" | "trace";
@@ -45,6 +50,9 @@ type Props = {
 function statusBadge(run: RunState): { label: string; tone: string } | null {
   if (run.kind === "running") return { label: "Εκτελείται…", tone: "text-muted" };
   if (run.kind === "failed") return { label: "Αποτυχία σύνδεσης", tone: "text-danger" };
+  if (run.kind === "stopped" || (run.kind === "done" && run.stopped)) {
+    return { label: "Διακόπηκε", tone: "text-warn" };
+  }
   if (run.kind !== "done") return null;
   switch (run.result.status) {
     case "ok":
@@ -61,8 +69,9 @@ function statusBadge(run: RunState): { label: string; tone: string } | null {
 export function OutputPanel({ run, onInput, onClear, tab, onTab, step, onStep, stale }: Props) {
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
+  const [askClear, setAskClear] = useState(false);
   const badge = statusBadge(run);
-  const hasContent = run.kind === "done" || run.kind === "failed";
+  const hasContent = run.kind === "done" || run.kind === "failed" || run.kind === "stopped";
   const traced = (run.kind === "running" || run.kind === "done") && run.traced;
   const showTrace = traced && tab === "trace";
 
@@ -114,12 +123,33 @@ export function OutputPanel({ run, onInput, onClear, tab, onTab, step, onStep, s
             </button>
           )}
           {hasContent && (
-            <button type="button" onClick={onClear} className="hover:text-text">
+            <button
+              type="button"
+              onClick={() => setAskClear(true)}
+              className="flex items-center gap-1 rounded-md border border-danger/40 bg-danger/15 px-2 py-0.5 font-medium text-danger hover:bg-danger/25"
+            >
+              <BroomIcon />
               Καθαρισμός
             </button>
           )}
         </span>
       </div>
+      {askClear && (
+        <ConfirmDialog
+          title="Καθαρισμός της οθόνης;"
+          confirmLabel="Καθαρισμός"
+          onConfirm={() => {
+            setAskClear(false);
+            onClear();
+          }}
+          onCancel={() => setAskClear(false)}
+        >
+          {traced
+            ? "Θα σβηστούν τα αποτελέσματα και ο πίνακας τιμών αυτής της εκτέλεσης."
+            : "Θα σβηστούν τα αποτελέσματα αυτής της εκτέλεσης."}{" "}
+          Ο κώδικας δεν αλλάζει.
+        </ConfirmDialog>
+      )}
       {showTrace && run.kind === "done" ? (
         <TracePanel run={run} step={step} onStep={onStep} stale={stale} onInput={onInput} />
       ) : (
@@ -139,6 +169,7 @@ export function OutputPanel({ run, onInput, onClear, tab, onTab, step, onStep, s
             </p>
           )}
           {run.kind === "running" && <p className="text-muted">Εκτέλεση…</p>}
+          {run.kind === "stopped" && <p className="text-warn">— Η εκτέλεση διακόπηκε —</p>}
           {run.kind === "failed" && <p className="text-danger">{run.message}</p>}
           {run.kind === "done" && <RunOutput run={run} onInput={onInput} />}
         </div>
@@ -225,6 +256,7 @@ export function RunEnd({
   number?: number;
 }) {
   const { inputs, result } = run;
+  if (run.stopped) return <p className="mt-2 text-xs text-warn">— Η εκτέλεση διακόπηκε —</p>;
   return (
     <>
       {result.status === "needs_input" && (
@@ -292,5 +324,24 @@ function InputLine({
         className={`min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-muted ${waiting ? "opacity-60" : ""}`}
       />
     </form>
+  );
+}
+
+/** A broom, for «Καθαρισμός». */
+function BroomIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M19 3l-7.5 7.5M8.5 9.5l6 6M4 20c1-4 2.5-7 4.5-10.5l6 6C11 17.5 8 19 4 20z" />
+    </svg>
   );
 }

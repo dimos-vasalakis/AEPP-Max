@@ -179,7 +179,7 @@ function until(ms: number): string {
   return m === 0 ? `σε ${hours}` : `σε ${hours} και ${mins}`;
 }
 
-/** The name given at Εγγραφή (full_name), or by Google/Apple (name); null if none. */
+/** The name given at Εγγραφή (full_name), or by Google (name); null if none. */
 export function displayName(user: { user_metadata?: Record<string, unknown> }): string | null {
   const meta = user.user_metadata ?? {};
   const name = [meta.full_name, meta.name].find((v) => typeof v === "string" && v.trim());
@@ -188,7 +188,7 @@ export function displayName(user: { user_metadata?: Record<string, unknown> }): 
 
 const PROVIDERS: Record<string, string> = { email: "Email", google: "Google", apple: "Apple" };
 
-/** What Supabase knows about the account; the name comes from Εγγραφή or Google/Apple. */
+/** What Supabase knows about the account; the name comes from Εγγραφή or Google. */
 function Details({ user }: { user: User }) {
   const date = new Intl.DateTimeFormat("el-GR", { dateStyle: "long" });
   const providers: string[] = user.app_metadata.providers ?? [user.app_metadata.provider ?? "email"];
