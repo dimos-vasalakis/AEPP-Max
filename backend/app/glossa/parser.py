@@ -5,11 +5,13 @@ Where a common student mistake is recognizable (= instead of <-, ΤΕΛΟΣ ΑΝ
 without the underscore, 0 < x < 10, ...), the message says how to fix it.
 """
 
+import math
 from collections.abc import Callable
 
 from app.glossa import nodes as n
 from app.glossa.checker import check_program
 from app.glossa.errors import GlossaError
+from app.glossa.interpreter import MAX_INTEGER
 from app.glossa.lexer import KEYWORDS, WORD_OPERATORS, Token, normalize
 
 DECLARATION_TYPES = {
@@ -587,9 +589,15 @@ class _Parser:
             self.advance()
             value: int | float | str | bool
             if token.kind == "integer":
+                # Checked before int(), which refuses past 4300 digits.
+                digits = token.value.lstrip("0")
+                if len(digits) > len(str(MAX_INTEGER)) or int(token.value) > MAX_INTEGER:
+                    raise GlossaError.at(token, "Ο αριθμός είναι πολύ μεγάλος.")
                 value = int(token.value)
             elif token.kind == "real":
                 value = float(token.value)
+                if not math.isfinite(value):
+                    raise GlossaError.at(token, "Ο αριθμός είναι πολύ μεγάλος.")
             elif token.kind == "boolean":
                 value = token.value == "ΑΛΗΘΗΣ"
             else:

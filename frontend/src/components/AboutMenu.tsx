@@ -7,6 +7,7 @@ export function AboutMenu() {
   return (
     <NavPopover
       label="Πνευματικά δικαιώματα"
+      title="Σχετικά με το AEPP Max"
       icon={<Image src="/logo-cloud.png" alt="" width={26} height={26} priority />}
     >
       <div className="mb-3 flex items-center gap-2">

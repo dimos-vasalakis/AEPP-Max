@@ -88,6 +88,7 @@ def _integrity_error(constraint: str | None) -> IntegrityError:
     ("constraint", "status_code"),
     [
         ("programs_user_id_fkey", 401),
+        ("agent_usage_user_id_fkey", 401),
         ("conversations_user_id_fkey", 401),
         ("conversations_program_id_fkey", 404),
         ("title_length", 500),

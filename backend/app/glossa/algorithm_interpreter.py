@@ -24,6 +24,7 @@ from app.glossa.interpreter import (
     _Frame,
     _Machine,
     integer_input,
+    real_input,
     run_machine,
     same_value,
     type_of,
@@ -125,13 +126,13 @@ class _AlgorithmMachine(_Machine):
 
     def read(self, target: n.Target, frame: _Frame) -> Value:
         """No declared type: the value is what the typed text looks like."""
-        text = self.next_text()
+        text = self.next_text(target)
         plain = text.strip()
         if INTEGER_INPUT.fullmatch(plain):
             return integer_input(plain, target)
         decimal = plain.replace(",", ".")  # 2,5 as Greeks write it
         if REAL_INPUT.fullmatch(decimal):
-            return float(decimal)
+            return real_input(decimal, target)
         word = normalize(plain)
         if word in ("ΑΛΗΘΗΣ", "ΨΕΥΔΗΣ"):
             return word == "ΑΛΗΘΗΣ"
@@ -192,6 +193,7 @@ class _AlgorithmMachine(_Machine):
                         "τελειώσει. Μήπως η αναδρομή πηγαίνει πολύ βαθιά;",
                     )
                 self.copied_cells += size
+                self.charge(len(slot.cells))
                 frame.values[param.key] = _Grid(param.name, dict(slot.cells))
                 return size
             if slot is UNSET:

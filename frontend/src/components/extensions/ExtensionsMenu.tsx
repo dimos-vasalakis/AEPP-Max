@@ -44,7 +44,9 @@ export function ExtensionsMenu() {
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
         aria-controls={panelId}
-        title="Επεκτάσεις: θέματα εμφάνισης"
+        aria-label="Επεκτάσεις"
+        data-tip="Θέματα εμφάνισης"
+        data-tip-align="right"
         className={`group flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors ${
           open
             ? "border-accent bg-accent/10 text-text"

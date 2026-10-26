@@ -10,8 +10,8 @@ from app.schemas.program import ProgramCreate, ProgramOut, ProgramSummary, Progr
 
 router = APIRouter(prefix="/programs", tags=["programs"])
 
-# Far more than a school year's exercises; keeps one account from filling the database.
-MAX_PROGRAMS = 500
+# Programs and algorithms together; frontend/src/lib/programs.ts MAX_PROGRAMS matches.
+MAX_PROGRAMS = 5
 
 
 async def require_programs(db: DbSession) -> None:
@@ -46,6 +46,9 @@ async def list_programs(user: CurrentUserDep, db: DbSession) -> list[ProgramSumm
 @router.post("", response_model=ProgramOut, status_code=status.HTTP_201_CREATED)
 async def create_program(body: ProgramCreate, user: CurrentUserDep, db: DbSession) -> Program:
     await require_programs(db)
+    # One create per user at a time (two tabs, a save and a copy), so the count
+    # below can't let both through at MAX_PROGRAMS - 1. Released at commit.
+    await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(str(user.id)))))
     count = await db.scalar(
         select(func.count()).select_from(Program).where(Program.user_id == user.id)
     )

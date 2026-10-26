@@ -7,7 +7,7 @@ import { FONT_SIZES, setFontSize, useFontSize } from "@/lib/useSettings";
 /** The magnifying lens: font size, for everyone (the only place it's set). */
 export function ZoomMenu() {
   return (
-    <NavPopover label="Μέγεθος γραμμάτων" icon={<LensIcon />}>
+    <NavPopover label="Μέγεθος γραμμάτων" title="Μέγεθος γραμμάτων (μεγέθυνση)" icon={<LensIcon />}>
       <h2 className="mb-3 font-semibold">Μέγεθος γραμμάτων</h2>
       <FontSizeSettings />
     </NavPopover>

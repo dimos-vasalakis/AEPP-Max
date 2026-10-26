@@ -11,7 +11,14 @@ import {
   type ProgramSummary,
   updateProgram,
 } from "@/lib/api/programs";
-import { copyTitle, LANGUAGE_NAME, MAX_TITLE, matchesSearch, timeAgo } from "@/lib/programs";
+import {
+  copyTitle,
+  LANGUAGE_NAME,
+  MAX_PROGRAMS,
+  MAX_TITLE,
+  matchesSearch,
+  timeAgo,
+} from "@/lib/programs";
 import { FolderIcon } from "./FileBar";
 
 type Props = {
@@ -242,7 +249,7 @@ export function ProgramsDialog({
 
             {list.kind === "done" && programs.length > 0 && (
               <p className="border-t border-border px-5 py-2.5 text-xs text-muted">
-                {programs.length} {programs.length === 1 ? "πρόγραμμα" : "προγράμματα"} · Τις
+                {programs.length} από {MAX_PROGRAMS} · Τις
                 αλλαγές σε ό,τι ανοίγεις από εδώ τις αποθηκεύεις με Ctrl/Cmd+S.
               </p>
             )}

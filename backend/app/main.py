@@ -92,6 +92,8 @@ FOREIGN_KEY_ERRORS = {
     "programs_user_id_fkey": (401, "Account no longer exists"),
     "conversations_user_id_fkey": (401, "Account no longer exists"),
     "conversations_program_id_fkey": (404, "Program not found"),
+    # Postgres's default name: migration 0003 doesn't name it.
+    "agent_usage_user_id_fkey": (401, "Account no longer exists"),
 }
 
 

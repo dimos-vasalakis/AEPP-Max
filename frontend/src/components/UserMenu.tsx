@@ -31,7 +31,7 @@ export function UserMenu() {
   }
   return (
     <>
-      <NavPopover label="Λογαριασμός" icon={<PersonIcon />} align="right">
+      <NavPopover label="Λογαριασμός" title="Λογαριασμός και ρυθμίσεις" icon={<PersonIcon />} align="right">
         {(close) => (
           <>
             <h2 className="truncate font-semibold">{displayName(user) ?? "Λογαριασμός"}</h2>

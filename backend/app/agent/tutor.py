@@ -20,5 +20,13 @@ def get_agent() -> Agent[AgentContext]:
         # Don't keep replies on OpenAI's side (the Responses API stores them by
         # default); our session sends the history each turn. Reasoning then has to
         # travel encrypted in that history, or the next turn can't refer to it.
-        model_settings=ModelSettings(store=False, response_include=["reasoning.encrypted_content"]),
+        # One tool call at a time: two write_code calls in one turn would otherwise
+        # race, and the editor could end up with the older version. max_tokens caps
+        # a runaway reply (reasoning included).
+        model_settings=ModelSettings(
+            store=False,
+            response_include=["reasoning.encrypted_content"],
+            parallel_tool_calls=False,
+            max_tokens=16_000,
+        ),
     )

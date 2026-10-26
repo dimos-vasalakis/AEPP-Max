@@ -128,6 +128,9 @@ i ← 1
 Αποτελέσματα // Ρ //
 Τέλος Πολλαπλασιασμός_αλά_ρωσικά"""
         assert output(source, ["45", "19"]) == ["855"]
+        # Out of values: the Δεδομένα line is the one waiting.
+        waiting = go(source, ["45"])
+        assert (waiting.status, waiting.input_line) == ("needs_input", 2)
 
     def test_recursion_as_an_expression(self) -> None:
         source = """Αλγόριθμος Παραγοντικό

@@ -26,6 +26,11 @@ COMPARE_DECIMALS = 8  # so 10 / 3 * 3 = 10 is ΑΛΗΘΗΣ, as in the Διερμ
 MAX_CALL_DEPTH = 200
 MAX_ARRAY_CELLS = 1_000_000
 MAX_INTEGER = 10**100  # far beyond any exercise; stops 9^9^9 from eating the CPU
+# All arrays alive at once (the program's, and each running call's), so many big
+# arrays, or one in a recursive procedure, can't fill the server's memory.
+MAX_LIVE_CELLS = 2_000_000
+# Allocating and copying arrays costs time too: this many cells count as one step.
+CELLS_PER_STEP = 1_000
 CLOCK_EVERY = 256  # steps between clock checks
 
 ADJECTIVE = {
@@ -80,6 +85,7 @@ class _Frame:
     values: dict[str, Value | _Unset | _Array] = field(default_factory=dict)
     constants: dict[str, Value] = field(default_factory=dict)
     result: Value | _Unset = UNSET  # a function's return value
+    cells: int = 0  # its arrays' cells, freed when the call returns (MAX_LIVE_CELLS)
 
 
 # Where an argument came from, so a procedure can copy its parameter back.
@@ -87,7 +93,9 @@ _Ref = tuple[_Frame, str] | tuple[_Array, int]
 
 
 class _NeedsInput(Exception):
-    pass
+    def __init__(self, line: int):
+        super().__init__(line)
+        self.line = line  # the ΔΙΑΒΑΣΕ waiting for the value
 
 
 class _Limit(Exception):
@@ -146,30 +154,40 @@ def execute(program: n.Program, inputs: list[str], *, limits: RunLimits, trace: 
       limits.max_steps or limits.timeout_seconds stop with status "limit" (this
       runs in a worker thread that can't be killed, so the loop must stop itself).
     - With trace=True, record a TraceStep per executed statement, up to
-      limits.max_trace_steps (then set trace_truncated and keep running).
+      limits.max_trace_steps and limits.max_trace_chars (then set trace_truncated
+      and keep running). Output past max_output_lines or max_output_chars stops
+      with status "limit".
     - Runtime errors (uninitialized variable, division by zero, index out of
       bounds, type mismatch, ...) end the run with status "error".
     """
     return run_machine(_Machine(program, inputs, limits, trace))
 
 
+# Each ΓΛΩΣΣΑ call is a dozen Python frames; the depth itself is capped by MAX_CALL_DEPTH.
+# Set on import, before anything compiles, so the parser always gets the same depth.
+sys.setrecursionlimit(max(sys.getrecursionlimit(), 20 * MAX_CALL_DEPTH + 1000))
+
+
 def run_machine(machine: "_Machine") -> RunResult:
     """Run `machine` (this module's, or algorithm_interpreter's) to a RunResult."""
-    # Each ΓΛΩΣΣΑ call is a dozen Python frames; the depth itself is capped by MAX_CALL_DEPTH.
-    sys.setrecursionlimit(max(sys.getrecursionlimit(), 20 * MAX_CALL_DEPTH + 1000))
+    input_line = None
     try:
         machine.run()
         status = "ok"
         error = None
     except GlossaError as exc:
         status, error = "error", exc.info()
-    except _NeedsInput:
+    except _NeedsInput as exc:
         status, error = "needs_input", None
+        input_line = exc.line
     except _Limit:
         status, error = "limit", None
     except RecursionError:
         status = "error"
-        error = GlossaError("Πάρα πολλές κλήσεις υποπρογραμμάτων η μία μέσα στην άλλη.").info()
+        error = GlossaError(
+            "Πάρα πολλά επίπεδα το ένα μέσα στο άλλο: κλήσεις υποπρογραμμάτων ή μια πολύ "
+            "μεγάλη έκφραση."
+        ).info()
     return RunResult(
         status=status,
         output=machine.output,
@@ -177,6 +195,7 @@ def run_machine(machine: "_Machine") -> RunResult:
         trace=machine.trace,
         trace_truncated=machine.trace_truncated,
         steps=machine.steps,
+        input_line=input_line,
     )
 
 
@@ -194,6 +213,9 @@ class _Machine:
         self.line_open = False  # the last ΓΡΑΨΕ ended with a space: keep writing on its line
         self.trace: list[TraceStep] | None = [] if trace else None
         self.trace_truncated = False
+        self.output_chars = 0
+        self.live_cells = 0  # MAX_LIVE_CELLS
+        self.trace_chars = 0  # what the trace's changes and output hold (limits.max_trace_chars)
         self.step: TraceStep | None = None
         # The caller's step after a call, added to the trace once something happens in it.
         self.resume: TraceStep | None = None
@@ -217,10 +239,28 @@ class _Machine:
         if self.trace is not None:
             self.step = self.record(TraceStep(line=node.line, scope=frame.unit.name))
 
+    def charge(self, cells: int) -> None:
+        """Count allocating or copying `cells` array cells as steps, and check the clock:
+        one call can copy a million cells, far more than its steps say."""
+        self.steps += cells // CELLS_PER_STEP
+        if self.steps > self.limits.max_steps or time.monotonic() > self.deadline:
+            raise _Limit
+
+    def allocate(self, cells: int, node: n.Node) -> None:
+        if self.live_cells + cells > MAX_LIVE_CELLS:
+            raise _error(
+                node,
+                "Οι πίνακες δεν χωράνε στη μνήμη: είναι πολλοί ή πολύ μεγάλοι μαζί (ή "
+                "δημιουργούνται ξανά σε κάθε κλήση μιας αναδρομής). Μίκρυνέ τους.",
+            )
+        self.live_cells += cells
+        self.charge(cells)
+
     def record(self, step: TraceStep) -> TraceStep | None:
         """Add `step` to the trace, unless the trace is full."""
         assert self.trace is not None
-        if len(self.trace) >= self.limits.max_trace_steps:
+        full = self.trace_chars >= self.limits.max_trace_chars
+        if full or len(self.trace) >= self.limits.max_trace_steps:
             self.trace_truncated = True
             return None
         self.trace.append(step)
@@ -235,7 +275,8 @@ class _Machine:
 
     def note(self, name: str, value: Value) -> None:
         if row := self.current():
-            row.changes[name] = format_value(value)
+            row.changes[name] = text = format_value(value)
+            self.trace_chars += len(name) + len(text)
 
     def condition(self, expr: n.Expr, frame: _Frame) -> bool:
         value = self.eval(expr, frame)
@@ -256,9 +297,12 @@ class _Machine:
             frame.names[variable.key] = variable.name
             if variable.dimensions:
                 dims = tuple(self.dimension(d, frame) for d in variable.dimensions)
-                if math.prod(dims) > MAX_ARRAY_CELLS:
+                size = math.prod(dims)
+                if size > MAX_ARRAY_CELLS:
                     raise _error(variable, f"Ο πίνακας {variable.name} είναι πολύ μεγάλος.")
-                cells: list[Value | _Unset] = [UNSET] * math.prod(dims)
+                self.allocate(size, variable)
+                frame.cells += size
+                cells: list[Value | _Unset] = [UNSET] * size
                 frame.values[variable.key] = _Array(variable.name, variable.type, dims, cells)
             else:
                 frame.values[variable.key] = UNSET
@@ -290,20 +334,23 @@ class _Machine:
     ) -> Value | None:
         self.check_depth(sub, node)
         frame = self.frame(sub)
-        refs: list[tuple[n.Param, _Ref | None]] = []
-        for param, arg in zip(sub.params, args, strict=True):
-            refs.append((param, self.bind(param, arg, frame, caller)))
-        self.run_body(sub, frame)
+        try:
+            refs: list[tuple[n.Param, _Ref | None]] = []
+            for param, arg in zip(sub.params, args, strict=True):
+                refs.append((param, self.bind(param, arg, frame, caller)))
+            self.run_body(sub, frame)
 
-        if isinstance(sub, n.Function):
-            if frame.result is UNSET:
-                raise _error(node, f"Η συνάρτηση {sub.name} τελείωσε χωρίς να πάρει τιμή.")
-            return frame.result  # type: ignore[return-value]
-        # A procedure's parameters go back to the variables they came from.
-        for param, ref in refs:
-            if ref is not None:
-                self.copy_back(frame.values[param.key], ref, node)
-        return None
+            if isinstance(sub, n.Function):
+                if frame.result is UNSET:
+                    raise _error(node, f"Η συνάρτηση {sub.name} τελείωσε χωρίς να πάρει τιμή.")
+                return frame.result  # type: ignore[return-value]
+            # A procedure's parameters go back to the variables they came from.
+            for param, ref in refs:
+                if ref is not None:
+                    self.copy_back(frame.values[param.key], ref, node)
+            return None
+        finally:
+            self.live_cells -= frame.cells
 
     def check_depth(self, sub: n.Unit, node: n.Node) -> None:
         if self.depth >= MAX_CALL_DEPTH:
@@ -326,7 +373,8 @@ class _Machine:
                 if self.step is not None and isinstance(value, int | float | str):
                     # The declared spelling, as store() writes it: one column per variable.
                     name = frame.names.get(param.key, param.name)
-                    self.step.changes[name] = format_value(value)
+                    self.step.changes[name] = text = format_value(value)
+                    self.trace_chars += len(name) + len(text)
         self.depth += 1
         try:
             self.block(sub.body, frame)
@@ -358,6 +406,7 @@ class _Machine:
                     f"Ο πίνακας {source.name} είναι {ADJECTIVE[source.type]}, "
                     f"ενώ η παράμετρος {param.name} είναι {ADJECTIVE[slot.type]}.",
                 )
+            self.charge(len(source.cells))
             slot.cells = [c if c is UNSET else _fit(slot.type, c) for c in source.cells]  # type: ignore[misc]
             return (caller, arg.key)  # type: ignore[union-attr]
 
@@ -393,6 +442,7 @@ class _Machine:
             assert isinstance(target, _Frame) and isinstance(where, str)
             array = target.values[where]
             assert isinstance(array, _Array)
+            self.charge(len(value.cells))
             for i, cell in enumerate(value.cells):
                 if cell is not UNSET:
                     array.cells[i] = self.fit_or_fail(array.type, cell, node, array.name)  # type: ignore[arg-type]
@@ -528,16 +578,16 @@ class _Machine:
                 return self.compare(op, value, self.eval(expr, frame), condition)
         raise AssertionError(condition)
 
-    def next_text(self) -> str:
+    def next_text(self, target: n.Target) -> str:
         """The next input, as typed; out of inputs, the run stops to ask for one."""
         if self.next_input >= len(self.inputs):
-            raise _NeedsInput
+            raise _NeedsInput(target.line)
         text = self.inputs[self.next_input]
         self.next_input += 1
         return text
 
     def read(self, target: n.Target, frame: _Frame) -> Value:
-        text = self.next_text()
+        text = self.next_text(target)
         type_name = self.target_type(target, frame)
         plain = text.strip()
         if type_name == "ΑΚΕΡΑΙΑ":
@@ -547,7 +597,7 @@ class _Machine:
         if type_name == "ΠΡΑΓΜΑΤΙΚΗ":
             decimal = plain.replace(",", ".")  # 2,5 as Greeks write it
             if REAL_INPUT.fullmatch(decimal):
-                return float(decimal)
+                return real_input(decimal, target)
             raise _error(target, f"Δόθηκε «{text}», αλλά η {target.name} περιμένει αριθμό.")
         if type_name == "ΛΟΓΙΚΗ":
             word = normalize(plain)
@@ -559,16 +609,25 @@ class _Machine:
         return text
 
     def write(self, values: list[Value]) -> None:
-        text = ""
+        parts: list[str] = []
+        length = self.output_chars
         for i, value in enumerate(values):
             # Two numbers in a row get a space between them, as in the Διερμηνευτής.
             if i and _is_number(value) and _is_number(values[i - 1]):
-                text += " "
-            text += format_value(value)
+                parts.append(" ")
+            parts.append(format_value(value))
+            # Checked as it grows: one ΓΡΑΨΕ of many long strings could build a huge line.
+            length += len(parts[-1])
+            if length > self.limits.max_output_chars + 1:  # + the space that may go below
+                raise _Limit
+        text = "".join(parts)
         # A ΓΡΑΨΕ ending with a space leaves the cursor on its line (the space itself goes).
         stays = text.endswith(" ")
         if stays:
             text = text[:-1]
+        self.output_chars += len(text)
+        if self.output_chars > self.limits.max_output_chars:
+            raise _Limit
         if self.line_open and self.output:
             self.output[-1] += text
         else:
@@ -578,6 +637,7 @@ class _Machine:
         self.line_open = stays
         if row := self.current():
             row.output.append(text)
+            self.trace_chars += len(text)
 
     # Variables
 
@@ -646,6 +706,10 @@ class _Machine:
                         return BUILTINS[expr.key](argument)
                     except GlossaError as exc:
                         raise _error(expr, exc.message) from None
+                    except (OverflowError, ValueError):
+                        raise _error(
+                            expr, f"Η τιμή είναι εκτός ορίων για τη συνάρτηση {expr.name}."
+                        ) from None
                 result = self.call(self.subprograms[expr.key], args, expr, frame)
                 assert result is not None
                 return result
@@ -741,11 +805,21 @@ class _Machine:
 
 
 def integer_input(text: str, node: n.Node) -> int:
-    """A typed integer; past Python's digit limit for int(), an error instead of a crash."""
-    try:
-        return int(text)
-    except ValueError:
-        raise _error(node, "Ο αριθμός που δόθηκε είναι πολύ μεγάλος.") from None
+    """A typed integer, at most MAX_INTEGER: past it, an error instead of a crash later."""
+    if len(text.lstrip("+-").lstrip("0")) > len(str(MAX_INTEGER)):  # before int()'s digit limit
+        raise _error(node, "Ο αριθμός που δόθηκε είναι πολύ μεγάλος.")
+    value = int(text)
+    if abs(value) > MAX_INTEGER:
+        raise _error(node, "Ο αριθμός που δόθηκε είναι πολύ μεγάλος.")
+    return value
+
+
+def real_input(text: str, node: n.Node) -> float:
+    """A typed real; one too big for a float (inf) is an error."""
+    value = float(text)
+    if not math.isfinite(value):
+        raise _error(node, "Ο αριθμός που δόθηκε είναι πολύ μεγάλος.")
+    return value
 
 
 def _sample(type_name: str) -> Value:

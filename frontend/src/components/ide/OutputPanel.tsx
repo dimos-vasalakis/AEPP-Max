@@ -319,6 +319,7 @@ function InputLine({
         readOnly={waiting}
         aria-busy={waiting}
         value={value}
+        maxLength={1000} // schemas/run.py MAX_INPUT_CHARS
         onChange={(e) => setValue(e.target.value)}
         placeholder="γράψε μια τιμή και πάτα Enter"
         className={`min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-muted ${waiting ? "opacity-60" : ""}`}

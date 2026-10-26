@@ -14,6 +14,7 @@ import {
   type TransactionSpec,
 } from "@codemirror/state";
 import { keymap } from "@codemirror/view";
+import { keywordFix } from "./autocase";
 import { editorLanguage } from "./editorLanguage";
 import type { Language } from "./types";
 import { normalizeWord } from "./vocabulary";
@@ -194,8 +195,27 @@ function reindentFinishedWord(tr: Transaction): Transaction | readonly Transacti
   return change ? [tr, { changes: change, sequential: true }] : tr;
 }
 
-/** Enter: first put a finished «ΤΕΛΟΣ_ΑΝ»/«ΑΛΛΙΩΣ»/… in its place, then the usual new line. */
+/** Enter: first finish the word, put a finished «ΤΕΛΟΣ_ΑΝ»/«ΑΛΛΙΩΣ»/… in its place, then the usual new line. */
 export function newlineAndIndent(view: { state: EditorState; dispatch: (tr: Transaction) => void }): boolean {
+  // Read-only (the agent is writing): no fix may get through.
+  if (view.state.readOnly) return false;
+  // The word before the cursor first: Latin «telos_an» or «tote» only places
+  // its line, or opens a block, once it's the Greek word (autocase.ts).
+  const before = view.state.selection.main;
+  const beforeLine = view.state.doc.lineAt(before.head);
+  const fix = before.empty
+    ? keywordFix(
+        beforeLine.text,
+        before.head - beforeLine.from,
+        view.state.facet(editorLanguage),
+        view.state.doc,
+        beforeLine.from,
+      )
+    : null;
+  if (fix) {
+    const changes = { from: beforeLine.from + fix.from, to: beforeLine.from + fix.to, insert: fix.insert };
+    view.dispatch(view.state.update({ changes, userEvent: "input.autocase" }));
+  }
   const { state } = view;
   const range = state.selection.main;
   const line = state.doc.lineAt(range.head);

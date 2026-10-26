@@ -7,10 +7,17 @@ from agents import Agent, RunContextWrapper, function_tool
 from app import glossa
 from app.agent.context import AgentContext, CodeEdit
 from app.core.config import get_settings
+from app.schemas.run import MAX_SOURCE_CHARS
 
 # The model reads tool output as text; this many trace steps is plenty to
 # answer a πίνακας τιμών question without flooding the context.
 AGENT_TRACE_STEPS = 300
+# The same for characters: a run's output and trace go into the model's context.
+AGENT_OUTPUT_CHARS = 20_000
+
+# write_code's guardrails: a few edits per reply, a one-line summary.
+MAX_EDITS_PER_REPLY = 3
+MAX_SUMMARY_CHARS = 300
 
 
 def _run(code: str, inputs: list[str], trace: bool, language: glossa.Language) -> str:
@@ -19,6 +26,8 @@ def _run(code: str, inputs: list[str], trace: bool, language: glossa.Language) -
         max_steps=settings.run_max_steps,
         max_output_lines=settings.run_max_output_lines,
         max_trace_steps=AGENT_TRACE_STEPS,
+        max_output_chars=AGENT_OUTPUT_CHARS,
+        max_trace_chars=AGENT_OUTPUT_CHARS,
         timeout_seconds=settings.run_timeout_seconds,
     )
     result = glossa.run(code, inputs, language=language, limits=limits, trace=trace)
@@ -62,20 +71,48 @@ def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) ->
     return ctx.context.mode == "agent"
 
 
-@function_tool(is_enabled=_agent_mode)
-def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: str) -> str:
-    """Replace the student's code in the editor with a new version.
-
-    Args:
-        code: The complete new program (or algorithm), not a fragment.
-        summary: One sentence in Greek on what changes.
-    """
-    ctx.context.edits.append(CodeEdit(code=code, summary=summary))
+def _write(context: AgentContext, code: str, summary: str, error: glossa.ErrorInfo | None) -> str:
+    """write_code's work, after its guardrails: nothing reaches the student's
+    editor that is empty, too long or doesn't compile (`error`, from glossa.check).
+    A refusal goes back to the model, so it can fix the code and try again."""
+    if not code.strip():
+        return "Not written: the code is empty. Send the complete program."
+    if len(code) > MAX_SOURCE_CHARS:
+        return f"Not written: the code is over {MAX_SOURCE_CHARS} characters."
+    if context.writes >= MAX_EDITS_PER_REPLY:
+        return (
+            f"Not written: at most {MAX_EDITS_PER_REPLY} edits per reply. Stop editing and"
+            " tell the student what you changed."
+        )
+    if error is not None:
+        where = f" (line {error.line})" if error.line else ""
+        return (
+            f"Not written, it doesn't compile{where}: {error.message}"
+            " Fix it and call write_code again."
+        )
+    context.writes += 1
+    context.edits.append(CodeEdit(code=code, summary=summary.strip()[:MAX_SUMMARY_CHARS]))
     # Later tool calls without `code` now run what the editor holds.
-    ctx.context.code = code
-    if ctx.context.approve:
+    context.code = code
+    if context.approve:
         return "Η αλλαγή προτάθηκε· μπαίνει στον editor μόνο αν την εγκρίνει ο μαθητής."
     return "Ο κώδικας γράφτηκε στον editor του μαθητή."
+
+
+@function_tool(is_enabled=_agent_mode)
+async def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: str) -> str:
+    """Replace the student's code in the editor with a new version. It is refused if
+    it doesn't compile; then fix the error and call it again.
+
+    Args:
+        code: The complete new program (or algorithm), not a fragment, with `!` comments in Greek.
+        summary: One sentence in Greek on what changes.
+    """
+    # The parser is CPU-bound, like the runs above; the context changes back on the loop.
+    error = None
+    if code.strip() and len(code) <= MAX_SOURCE_CHARS:
+        error = await asyncio.to_thread(glossa.check, code, ctx.context.language)
+    return _write(ctx.context, code, summary, error)
 
 
 TOOLS = [run_program, trace_program, write_code]

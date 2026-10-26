@@ -60,7 +60,7 @@ type Props = {
   readOnly?: boolean;
   /** Whether the active color theme is dark (lib/theme.ts). */
   dark: boolean;
-  /** The πίνακας τιμών's current step: its line is marked and scrolled into view. */
+  /** The πίνακας τιμών's current step, or the ΔΙΑΒΑΣΕ waiting for a value: its line is marked and scrolled into view. */
   trace?: TraceMark;
 };
 

@@ -29,4 +29,6 @@ export type RunResult = {
   trace: TraceStep[] | null;
   trace_truncated: boolean;
   steps: number;
+  /** needs_input: the line of the ΔΙΑΒΑΣΕ waiting for a value. */
+  input_line: number | null;
 };

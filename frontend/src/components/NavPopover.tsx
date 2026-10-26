@@ -5,7 +5,7 @@ import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from 
 type Props = {
   /** Accessible name of the button and the panel. */
   label: string;
-  /** Tooltip; defaults to the label. */
+  /** The description shown on hover (`data-tip`, globals.css); defaults to the label. */
   title?: string;
   icon: ReactNode;
   /** Which edge of the button the panel lines up with, on wider screens. */
@@ -78,7 +78,8 @@ export function NavPopover({
         aria-expanded={open}
         aria-controls={panelId}
         aria-label={label}
-        title={title ?? label}
+        data-tip={title ?? label}
+        data-tip-align={align === "right" ? "right" : undefined}
         className={`flex h-8 w-8 items-center justify-center rounded-md hover:bg-panel-2 hover:text-text disabled:pointer-events-none disabled:opacity-40 ${open ? "bg-panel-2 text-text" : "text-muted"}`}
       >
         {icon}

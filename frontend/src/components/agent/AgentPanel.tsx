@@ -165,12 +165,6 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
   const input = useRef<HTMLTextAreaElement>(null);
   // Whether the transcript is scrolled to the bottom, so it may follow the reply.
   const atBottom = useRef(true);
-  // The editor now, for a proposal's base while a reply streams (`code` there is the request's).
-  const latestCode = useRef(code);
-  useEffect(() => {
-    latestCode.current = code;
-  }, [code]);
-
   // Another account (or none) in this tab: its chat, and any proposal in it, isn't theirs.
   const [chatUser, setChatUser] = useState(user?.id);
   if (user !== undefined && user?.id !== chatUser) {
@@ -178,6 +172,10 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
     setMessages([]);
     setConversationId(null);
   }
+  // …and a reply still streaming for the last account stops: no edit of theirs lands.
+  useEffect(() => {
+    abort.current?.abort();
+  }, [user?.id]);
 
   // The editor switched between Πρόγραμμα and Αλγόριθμος: a proposal waiting was
   // written for the other code. An edit still on its way is dropped too (below).
@@ -281,6 +279,9 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
         mode,
         approve: approving,
       };
+      // The code each edit was built from: the request's, then the previous edit's
+      // (write_code updates the server's copy). Typing since then disarms Ctrl/Cmd+Enter.
+      let built = request.code;
       for await (const event of streamChat(request, controller.signal)) {
         if (event.type === "conversation") {
           accepted = true;
@@ -295,8 +296,9 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
           // A newer edit, proposed or written, replaces the proposal still waiting
           // (each is the whole program).
           const proposal: Proposal | undefined = approving
-            ? { code: event.code, base: latestCode.current, status: "pending" }
+            ? { code: event.code, base: built, status: "pending" }
             : undefined;
+          built = event.code;
           setMessages((ms) => settle(ms, "replaced"));
           if (!proposal) onEdit(event.code);
           // The summary (and proposal) go under the write_code call that made it.

@@ -18,6 +18,13 @@ describe("pendingSave", () => {
     expect(takePendingSave(Date.now())).toBeNull();
   });
 
+  it("can give it back and keep it, for a sign-in that hasn't happened yet", () => {
+    stashForSignIn({ language: "glossa", code: "ΠΡΟΓΡΑΜΜΑ Α" });
+    expect(takePendingSave(Date.now(), undefined, true)?.code).toBe("ΠΡΟΓΡΑΜΜΑ Α");
+    expect(takePendingSave(Date.now())?.code).toBe("ΠΡΟΓΡΑΜΜΑ Α");
+    expect(takePendingSave(Date.now())).toBeNull();
+  });
+
   it("doesn't stash an empty editor", () => {
     stashForSignIn({ language: "glossa", code: "  \n" });
     expect(store.size).toBe(0);

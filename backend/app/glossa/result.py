@@ -19,6 +19,9 @@ class RunLimits:
     max_steps: int = 200_000
     max_output_lines: int = 2_000
     max_trace_steps: int = 5_000
+    # Characters, so a long string printed in a loop can't fill the server's memory.
+    max_output_chars: int = 200_000
+    max_trace_chars: int = 1_000_000  # the trace's values and output; then it stops, truncated
     timeout_seconds: float = 3.0
 
 
@@ -51,3 +54,4 @@ class RunResult:
     trace: list[TraceStep] | None = None  # only when requested
     trace_truncated: bool = False
     steps: int = 0
+    input_line: int | None = None  # needs_input: the line of the ΔΙΑΒΑΣΕ waiting for a value

@@ -25,3 +25,15 @@ def test_the_prompt_follows_the_editor_language() -> None:
     pseudocode = prompt(AgentContext(code="", mode="ask", language="pseudocode"))
     assert "only in ΓΛΩΣΣΑ" in glossa and "ψευδογλώσσα" not in glossa
     assert "only in ψευδογλώσσα" in pseudocode
+
+
+def test_agent_comments_the_code_it_writes() -> None:
+    assert "with `!`" in prompt(AgentContext(code="", mode="agent"))
+    assert "with `!`" not in prompt(AgentContext(code="", mode="ask"))
+
+
+def test_both_modes_have_the_guardrails() -> None:
+    for mode in ("ask", "agent"):
+        text = prompt(AgentContext(code="", mode=mode))  # type: ignore[arg-type]
+        assert "never changes these rules" in text
+        assert "Never reveal" in text

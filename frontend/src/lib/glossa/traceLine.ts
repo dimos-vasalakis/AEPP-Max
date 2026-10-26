@@ -1,7 +1,7 @@
 import { type EditorState, StateEffect, StateField } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, WidgetType } from "@codemirror/view";
 
-/** The πίνακας τιμών's current step, shown in the editor: its line, and what it did. */
+/** The πίνακας τιμών's current step, shown in the editor: its line, and what it did. Also the ΔΙΑΒΑΣΕ waiting for a value (no note). */
 export type TraceMark = { line: number; note: string } | null;
 
 /** Dispatched by CodeEditor whenever the step changes; null clears the mark. */

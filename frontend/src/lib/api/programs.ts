@@ -1,5 +1,6 @@
 // The /programs API (backend/app/api/v1/endpoints/programs.py): a student's saved code.
 import type { Language } from "@/lib/glossa/types";
+import { MAX_PROGRAMS } from "@/lib/programs";
 import { ApiError, apiFetch } from "./client";
 
 export type ProgramSummary = {
@@ -33,7 +34,7 @@ export function programError(err: unknown): string {
     case 404:
       return "Το πρόγραμμα δεν βρέθηκε· ίσως σβήστηκε από άλλη καρτέλα.";
     case 409:
-      return "Έφτασες το όριο των αποθηκευμένων προγραμμάτων. Σβήσε κάποια παλιά.";
+      return `Χωράνε έως ${MAX_PROGRAMS} αποθηκευμένα προγράμματα και αλγόριθμοι. Σβήσε κάποιο στα «Τα προγράμματά μου» για να αποθηκεύσεις νέο.`;
     case 422:
       return "Ο κώδικας είναι πολύ μεγάλος για να αποθηκευτεί.";
     case 503:

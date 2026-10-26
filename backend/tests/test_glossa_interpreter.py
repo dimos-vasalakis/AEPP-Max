@@ -1,6 +1,6 @@
 import pytest
 
-from app.glossa import RunLimits, RunResult, run
+from app.glossa import RunLimits, RunResult, check, run
 
 
 def program(body: str, declarations: str = "", subprograms: str = "") -> str:
@@ -54,7 +54,9 @@ class TestRunning:
         result = run(WATER, ["4"])
         assert result.status == "needs_input"
         assert result.output == []
+        assert result.input_line == 10  # the second ΔΙΑΒΑΣΕ, which the editor marks
         assert run(WATER, ["4", "3"]).status == "ok"
+        assert run(WATER, ["4", "3"]).input_line is None
 
     def test_the_prompt_comes_before_the_question(self) -> None:
         body = "  ΓΡΑΨΕ 'Δώσε αριθμό: '\n  ΔΙΑΒΑΣΕ x\n  ΓΡΑΨΕ 'Διπλάσιο: ', 2 * x"
@@ -474,3 +476,82 @@ class TestTrace:
 def test_a_huge_typed_integer_is_an_error() -> None:
     message, _ = error("  ΔΙΑΒΑΣΕ x", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", ["9" * 5000])
     assert message == "Ο αριθμός που δόθηκε είναι πολύ μεγάλος."
+
+
+class TestOutputSize:
+    """A long string printed in a loop can't fill the server's memory."""
+
+    LONG = "  σ <- '" + "Α" * 1000 + "'\n"
+
+    def test_output_stops_at_its_character_limit(self) -> None:
+        body = self.LONG + "  ΓΙΑ ι ΑΠΟ 1 ΜΕΧΡΙ 1000\n    ΓΡΑΨΕ σ, σ, σ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        source = program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΧΑΡΑΚΤΗΡΕΣ: σ\n  ΑΚΕΡΑΙΕΣ: ι")
+        result = run(source, [], limits=RunLimits(max_output_chars=10_000))
+        assert result.status == "limit"
+        assert sum(len(line) for line in result.output) <= 10_000
+
+    def test_a_line_kept_open_counts_too(self) -> None:
+        body = self.LONG + "  ΓΙΑ ι ΑΠΟ 1 ΜΕΧΡΙ 1000\n    ΓΡΑΨΕ σ, ' '\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        source = program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΧΑΡΑΚΤΗΡΕΣ: σ\n  ΑΚΕΡΑΙΕΣ: ι")
+        result = run(source, [], limits=RunLimits(max_output_chars=10_000))
+        assert result.status == "limit" and len(result.output) == 1
+
+    def test_the_trace_stops_at_its_character_limit(self) -> None:
+        body = self.LONG + "  ΓΙΑ ι ΑΠΟ 1 ΜΕΧΡΙ 100\n    σ <- σ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        source = program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΧΑΡΑΚΤΗΡΕΣ: σ\n  ΑΚΕΡΑΙΕΣ: ι")
+        result = run(source, [], trace=True, limits=RunLimits(max_trace_chars=10_000))
+        assert result.status == "ok" and result.trace_truncated
+        assert result.trace is not None and len(result.trace) < 30
+
+
+class TestHugeValues:
+    """Numbers past MAX_INTEGER or a float's range are errors, never a crash."""
+
+    def test_a_huge_literal_is_a_syntax_error(self) -> None:
+        for literal in ("1" * 5000, "1" * 400, "1" * 400 + ".0"):
+            error = check(program(f"  x <- {literal}", "ΜΕΤΑΒΛΗΤΕΣ\n  ΠΡΑΓΜΑΤΙΚΕΣ: x"))
+            assert error is not None and error.message == "Ο αριθμός είναι πολύ μεγάλος."
+
+    def test_a_huge_input_is_an_error(self) -> None:
+        for decl in ("ΑΚΕΡΑΙΕΣ: x", "ΠΡΑΓΜΑΤΙΚΕΣ: x"):
+            result = run(
+                program("  ΔΙΑΒΑΣΕ x\n  ΓΡΑΨΕ Α_Μ(x)", f"ΜΕΤΑΒΛΗΤΕΣ\n  {decl}"), ["9" * 400]
+            )
+            assert result.status == "error"
+            assert result.error is not None and "πολύ μεγάλος" in result.error.message
+
+    def test_algorithm_data_too(self) -> None:
+        source = "Αλγόριθμος Α\nΔεδομένα // x //\nΕμφάνισε x / 2\nΤέλος Α"
+        result = run(source, ["9" * 400], language="pseudocode")
+        assert result.status == "error"
+
+
+class TestArrayMemory:
+    """All arrays alive at once share a budget, and copying them costs steps."""
+
+    def test_many_big_arrays_are_an_error(self) -> None:
+        names = ", ".join(f"Χ{k}[1000000]" for k in range(10))
+        result = run(program("  ΓΡΑΨΕ 1", f"ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: {names}"))
+        assert result.status == "error" and result.error is not None
+        assert result.error.message.startswith("Οι πίνακες δεν χωράνε στη μνήμη")
+
+    def test_a_recursive_procedure_with_an_array_is_an_error(self) -> None:
+        sub = (
+            "ΔΙΑΔΙΚΑΣΙΑ Δ(ν)\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: ν, Β[500000]\nΑΡΧΗ\n"
+            "  ΑΝ ν > 0 ΤΟΤΕ\n    ΚΑΛΕΣΕ Δ(ν - 1)\n  ΤΕΛΟΣ_ΑΝ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+        )
+        result = run(program("  ΚΑΛΕΣΕ Δ(100)", "", sub))
+        assert result.status == "error" and result.error is not None
+        assert result.error.message.startswith("Οι πίνακες δεν χωράνε στη μνήμη")
+
+    def test_arrays_are_freed_when_a_call_returns(self) -> None:
+        sub = "ΔΙΑΔΙΚΑΣΙΑ Δ\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Β[900000]\nΑΡΧΗ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+        body = "  ΓΙΑ ι ΑΠΟ 1 ΜΕΧΡΙ 5\n    ΚΑΛΕΣΕ Δ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ 1"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: ι", sub))
+        assert result.status == "ok"
+
+    def test_copying_a_big_array_counts_as_steps(self) -> None:
+        sub = "ΔΙΑΔΙΚΑΣΙΑ Δ(Β)\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Β[100000]\nΑΡΧΗ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+        result = run(program("  ΚΑΛΕΣΕ Δ(Α)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Α[100000]", sub))
+        assert result.status == "ok"
+        assert result.steps >= 300  # Α, Β, the copy in and back: 100 steps each

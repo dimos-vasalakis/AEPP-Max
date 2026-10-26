@@ -1,4 +1,4 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { glossaAutocase, keywordFix } from "./autocase";
 
@@ -28,12 +28,66 @@ describe("keywordFix", () => {
   });
 });
 
+describe("keywordFix with the keyboard on English", () => {
+  it("turns the Greek layout's keys and greeklish into the keyword", () => {
+    expect(keywordFix("  grace", 7)?.insert).toBe("ΓΡΑΨΕ");
+    expect(keywordFix("grapse", 6)?.insert).toBe("ΓΡΑΨΕ");
+    expect(keywordFix("diavase", 7)?.insert).toBe("ΔΙΑΒΑΣΕ");
+    expect(keywordFix("an", 2)?.insert).toBe("ΑΝ");
+    expect(keywordFix("gia", 3)?.insert).toBe("ΓΙΑ");
+    expect(keywordFix("x > 0 tote", 10)?.insert).toBe("ΤΟΤΕ");
+    expect(keywordFix("telos_an", 8)?.insert).toBe("ΤΕΛΟΣ_ΑΝ");
+    expect(keywordFix("TELOS_EPANALHCHS", 16)?.insert).toBe("ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ");
+    expect(keywordFix("telos_epanalipsis", 17)?.insert).toBe("ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ");
+    expect(keywordFix("metavlhtes", 10)?.insert).toBe("ΜΕΤΑΒΛΗΤΕΣ");
+    expect(keywordFix("akeraies", 8)?.insert).toBe("ΑΚΕΡΑΙΕΣ");
+    expect(keywordFix("x kai", 5)?.insert).toBe("ΚΑΙ");
+  });
+
+  it("writes ψευδογλώσσα's words as the textbook does", () => {
+    expect(keywordFix("algorithmos", 11, "pseudocode")?.insert).toBe("Αλγόριθμος");
+    expect(keywordFix("algoriumos", 10, "pseudocode")?.insert).toBe("Αλγόριθμος");
+    expect(keywordFix("an", 2, "pseudocode")?.insert).toBe("Αν");
+    expect(keywordFix("dedomena", 8, "pseudocode")?.insert).toBe("Δεδομένα");
+  });
+
+  it("leaves Latin names, one letter words and built-in functions alone", () => {
+    for (const name of ["i", "h", "e", "x", "max", "sum", "temp", "count", "telos", "log", "syn", "x1"]) {
+      expect(keywordFix(name, name.length), name).toBeNull();
+    }
+    expect(keywordFix("algorithmos", 11)).toBeNull(); // no Αλγόριθμος in ΓΛΩΣΣΑ
+    expect(keywordFix("telos", 5, "pseudocode")).toBeNull(); // «telos ← n»
+    expect(keywordFix("ΓΡΑΨΕ 'grace", 12)).toBeNull();
+    expect(keywordFix("x <- 1 ! an", 11)).toBeNull();
+  });
+});
+
+describe("Latin names that spell a keyword", () => {
+  it("stay names in declarations and once used elsewhere", () => {
+    expect(keywordFix("  ΑΚΕΡΑΙΕΣ: apo", 15)).toBeNull();
+    expect(keywordFix("  ΑΚΕΡΑΙΕΣ: x, oso", 18)).toBeNull();
+    const doc = Text.of(["ΜΕΤΑΒΛΗΤΕΣ", "  ΑΚΕΡΑΙΕΣ: apo", "ΑΡΧΗ", "  apo"]);
+    expect(keywordFix("  apo", 5, "glossa", doc, doc.line(4).from)).toBeNull();
+    // Only in a comment or a string: still the keyword.
+    const other = Text.of(["! apo", "x apo"]);
+    expect(keywordFix("x apo", 5, "glossa", other, other.line(2).from)?.insert).toBe("ΑΠΟ");
+  });
+
+  it("make ΑΡΧΗ only alone on a line, finished with Enter", () => {
+    expect(keywordFix("arxh", 4)?.insert).toBe("ΑΡΧΗ");
+    expect(keywordFix("arxi ", 4)).toBeNull(); // a space: «arxi <- 1» may follow
+    expect(keywordFix("mesi <- (arxi", 13)).toBeNull();
+  });
+});
+
 describe("glossaAutocase", () => {
   it("capitalizes on space, Enter and punctuation", () => {
     expect(type("  γραψε", " ")).toBe("  ΓΡΑΨΕ ");
     expect(type("για i απο", " ")).toBe("για i ΑΠΟ ");
     expect(type("τέλος_αν", "\n", "input")).toBe("ΤΕΛΟΣ_ΑΝ\n");
     expect(type("x <- τ_ρ", "(")).toBe("x <- Τ_Ρ(");
+    expect(type("  grace", " ")).toBe("  ΓΡΑΨΕ ");
+    expect(type("ΑΚΕΡΑΙΕΣ: kai\nΑΡΧΗ\n  kai", " ")).toBe("ΑΚΕΡΑΙΕΣ: kai\nΑΡΧΗ\n  kai ");
   });
 
   it("doesn't touch letters, names or pastes", () => {

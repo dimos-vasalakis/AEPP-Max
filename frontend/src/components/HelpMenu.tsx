@@ -2,11 +2,12 @@
 
 import { type ReactNode, useId, useState } from "react";
 import { NavPopover } from "@/components/NavPopover";
+import { MAX_PROGRAMS } from "@/lib/programs";
 
 /** The info button: a short guide to the whole app, one foldable section per part. */
 export function HelpMenu() {
   return (
-    <NavPopover label="Οδηγός χρήσης" icon={<InfoIcon />} wide>
+    <NavPopover label="Οδηγός χρήσης" title="Οδηγός χρήσης: πώς δουλεύει η εφαρμογή" icon={<InfoIcon />} wide>
       <Guide />
     </NavPopover>
   );
@@ -127,6 +128,7 @@ function Guide() {
           <li>
             Στο <b>«Τα προγράμματά μου»</b> τα βρίσκεις όλα, από όποια συσκευή συνδεθείς: άνοιγμα,
             μετονομασία, αντίγραφο, διαγραφή, αναζήτηση. Ένας αλγόριθμος ανοίγει στον Αλγόριθμο.
+            Χωράνε έως {MAX_PROGRAMS} προγράμματα και αλγόριθμοι μαζί.
           </li>
           <li>Κλικ στο όνομα του προγράμματος, πάνω από τον editor, το μετονομάζει.</li>
         </Section>

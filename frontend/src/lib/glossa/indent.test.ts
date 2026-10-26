@@ -93,6 +93,36 @@ function editor(doc: string, cursor = doc.length) {
 }
 
 describe("typing in the editor", () => {
+  it("indents after a block typed with the keyboard on English", () => {
+    const e = editor("");
+    e.type("arxh");
+    e.enter();
+    e.type("an x > 0 tote");
+    e.enter();
+    e.type("grace x");
+    e.enter();
+    e.type("telos_an");
+    e.enter();
+    expect(e.text).toBe("ΑΡΧΗ\n  ΑΝ x > 0 ΤΟΤΕ\n    ΓΡΑΨΕ x\n  ΤΕΛΟΣ_ΑΝ\n  ");
+  });
+
+  it("changes nothing on Enter while read-only", () => {
+    let state = EditorState.create({
+      doc: "ΑΡΧΗ\n  grace",
+      extensions: [glossa, glossaIndent, glossaAutocase, EditorState.readOnly.of(true)],
+    });
+    const view = {
+      get state() {
+        return state;
+      },
+      dispatch(tr: Transaction) {
+        state = tr.state;
+      },
+    };
+    expect(newlineAndIndent(view)).toBe(false);
+    expect(state.doc.toString()).toBe("ΑΡΧΗ\n  grace");
+  });
+
   it("indents the line after Enter on a block's first line", () => {
     const e = editor("ΑΡΧΗ\n  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10");
     e.enter();

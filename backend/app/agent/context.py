@@ -26,3 +26,4 @@ class AgentContext:
     # Agent mode only: the student approves each edit (Ctrl+Enter) before it reaches the editor.
     approve: bool = False
     edits: list[CodeEdit] = field(default_factory=list)
+    writes: int = 0  # write_code calls accepted in this reply (tools.MAX_EDITS_PER_REPLY)

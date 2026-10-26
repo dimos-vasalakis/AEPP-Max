@@ -19,12 +19,13 @@ export function stashForSignIn(pending: PendingSave) {
 }
 
 /**
- * The stashed code if `accept` takes it, which removes it; null if there is none, it
- * is stale (also removed), or `accept` declines (kept for the next visit).
+ * The stashed code if `accept` takes it, which removes it unless `keep`; null if
+ * there is none, it is stale (also removed), or `accept` declines (kept for the next visit).
  */
 export function takePendingSave(
   now: number,
   accept: (pending: PendingSave) => boolean = () => true,
+  keep = false,
 ): PendingSave | null {
   try {
     const raw = localStorage.getItem(KEY);
@@ -38,7 +39,7 @@ export function takePendingSave(
     }
     const pending: PendingSave = { language, code };
     if (!accept(pending)) return null;
-    localStorage.removeItem(KEY);
+    if (!keep) localStorage.removeItem(KEY);
     return pending;
   } catch {
     try {

@@ -120,12 +120,12 @@ export function Ide() {
   }
 
   /**
-   * Runs the editor's code; `traced` also builds the πίνακας τιμών. A re-run for
-   * ΔΙΑΒΑΣΕ keeps the last result on screen until the new one arrives, and the
-   * table stays on its step.
+   * Runs the editor's code (or `source`); `traced` also builds the πίνακας τιμών. A
+   * re-run for ΔΙΑΒΑΣΕ keeps the last result on screen until the new one arrives,
+   * and the table stays on its step.
    */
-  async function execute(inputs: string[], marks: number[], traced = false) {
-    const code = codeRef.current;
+  async function execute(inputs: string[], marks: number[], traced = false, source?: string) {
+    const code = source ?? codeRef.current;
     const seq = ++runSeq.current;
     request.current?.abort();
     const controller = new AbortController();
@@ -184,17 +184,22 @@ export function Ide() {
 
   function readInput(value: string) {
     if (run.kind !== "done" || run.pending || run.stopped) return;
-    execute([...run.inputs, value], [...run.marks, run.result.output.length], run.traced);
+    // The code that asked for the value, even if the editor changed since: the earlier
+    // values were typed for it (the screen then says the code changed).
+    execute([...run.inputs, value], [...run.marks, run.result.output.length], run.traced, run.code);
   }
 
-  // The table's step, marked in the editor while the table shows and still matches the code.
+  // The table's step, marked in the editor while the table shows and still matches the code;
+  // otherwise the ΔΙΑΒΑΣΕ waiting for a value.
   const traceLength = run.kind === "done" ? (run.result.trace?.length ?? 0) : 0;
   const step = Math.min(traceStep, Math.max(0, traceLength - 1));
   const stale = run.kind === "done" && run.code !== code;
   const traceMark = useMemo((): TraceMark => {
-    if (run.kind !== "done" || !run.traced || stale || outputTab !== "trace") return null;
-    const current = run.result.trace?.[step];
-    return current ? { line: current.line, note: stepSummary(current) } : null;
+    if (run.kind !== "done" || stale) return null;
+    const current = run.traced && outputTab === "trace" ? run.result.trace?.[step] : undefined;
+    if (current) return { line: current.line, note: stepSummary(current) };
+    const waiting = run.result.status === "needs_input" && !run.stopped;
+    return waiting && run.result.input_line ? { line: run.result.input_line, note: "" } : null;
   }, [run, stale, outputTab, step]);
 
   // Saving
@@ -289,17 +294,24 @@ export function Ide() {
 
   // Code stashed before signing in to save it (lib/pendingSave.ts) comes back once
   // the session is known, and a signed-in student is asked its name straight away.
-  const restored = useRef(false);
+  // Signed out (back from /login without signing in), it comes back but stays
+  // stashed, for the magic link's tab; signing in here then takes it.
+  const restored = useRef<"no" | "kept" | "taken">("no");
   useEffect(() => {
-    if (user === undefined || restored.current) return;
+    if (user === undefined || restored.current === "taken") return;
+    if (user === null && restored.current === "kept") return;
     // A timeout, so the state changes happen outside the effect's own pass.
     const timer = setTimeout(() => {
-      restored.current = true;
-      // Never over code typed while the session loaded (the page starts on Πρόγραμμα);
-      // it then stays stashed for the next visit.
+      restored.current = user ? "taken" : "kept";
+      // Never over code typed while the session loaded (the page starts on Πρόγραμμα),
+      // except the same code restored while signed out; it then stays stashed for the next visit.
       const pending = takePendingSave(
         Date.now(),
-        (p) => languageRef.current !== p.language || !codeRef.current.trim(),
+        (p) =>
+          languageRef.current !== p.language ||
+          !codeRef.current.trim() ||
+          codeRef.current === p.code,
+        !user,
       );
       if (!pending) return;
       setCodes((all) => ({ ...all, [pending.language]: pending.code }));
@@ -339,7 +351,7 @@ export function Ide() {
         {/* A blank page; it asks first: one click opens the question, the second clears. */}
         <NavPopover
           label="Κενή σελίδα"
-          title="Κενή σελίδα (σβήνει όλο τον κώδικα)"
+          title="Κενή σελίδα: σβήνει όλο τον κώδικα"
           icon={<BlankPageIcon />}
           disabled={!code || agentWriting}
         >
@@ -396,7 +408,7 @@ export function Ide() {
           type="button"
           onClick={stoppable ? stop : () => execute([], [])}
           aria-label={stoppable ? "Διακοπή" : "Εκτέλεση"}
-          title={stoppable ? "Διακοπή της εκτέλεσης" : "Εκτέλεση (F9 ή Ctrl+Enter)"}
+          data-tip={stoppable ? "Διακοπή της εκτέλεσης" : "Εκτέλεση (F9 ή Ctrl+Enter)"}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
         >
           {stoppable ? <StopIcon /> : <RunIcon />}
@@ -406,7 +418,7 @@ export function Ide() {
           onClick={() => execute([], [], true)}
           disabled={busy}
           aria-label="Πίνακας τιμών (βήμα-βήμα)"
-          title="Πίνακας τιμών, βήμα-βήμα (F10 ή Ctrl+Shift+Enter)"
+          data-tip="Πίνακας τιμών, βήμα-βήμα (F10 ή Ctrl+Shift+Enter)"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
         >
           <TraceIcon />
@@ -540,7 +552,8 @@ function LanguageSwitch({
       role="switch"
       aria-checked={algorithms}
       aria-label="Αλγόριθμος (ψευδογλώσσα) αντί για Πρόγραμμα (ΓΛΩΣΣΑ)"
-      title={algorithms ? "Αλλαγή σε Πρόγραμμα (ΓΛΩΣΣΑ)" : "Αλλαγή σε Αλγόριθμο (ψευδογλώσσα)"}
+      data-tip={algorithms ? "Αλλαγή σε Πρόγραμμα (ΓΛΩΣΣΑ)" : "Αλλαγή σε Αλγόριθμο (ψευδογλώσσα)"}
+      data-tip-align="left"
       onClick={onSwitch}
       disabled={disabled}
       className="flex shrink-0 items-center gap-0.5 rounded-md border border-border bg-panel-2 p-0.5 text-xs font-medium hover:border-accent/60 disabled:opacity-50"
