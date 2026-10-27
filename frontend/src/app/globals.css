@@ -105,6 +105,12 @@
   --run-arrow: #1f9d1f;
   /* The output line waiting for a value. */
   --input-line: #fffd72;
+  /* Windows-style buttons (.btn-primary), instead of the other themes' solid accent. */
+  --btn-border: #707070;
+  --btn-bg: linear-gradient(#f6f6f6, #dddddd);
+  --btn-text: #000000;
+  --btn-hover-border: #3c7fb1;
+  --btn-hover-bg: linear-gradient(#eaf6fd, #bee6fd);
   --selection: #3399ff4d;
   --editor-font: "Courier New", Courier, monospace;
   --syn-keyword: #0000ff;
@@ -125,10 +131,10 @@
 }
 
 /*
- * Its output screen, as in the Διερμηνευτής: a tab-like title, a blue-gray number
- * strip down the left (like the editor's), program output in bold black, typed
- * values in blue italic, and the line waiting for input in yellow. The other
- * themes hide the numbers.
+ * Its output screen, as in the Διερμηνευτής: a tab-like title, a pink-red number
+ * strip down the left (--output-gutter-bg), program output in bold black, typed
+ * values in blue italic, and ΔΙΑΒΑΣΕ typed on a yellow line (--input-line). The
+ * other themes hide the numbers.
  */
 [data-theme="classic"] .output-header {
   background: var(--panel-2);
@@ -199,8 +205,11 @@
 /*
  * ΔΙΑΒΑΣΕ: as in the Διερμηνευτής, the value is typed on the output's next line,
  * which turns yellow (not over the strip, where its number goes), with no box.
+ * Only on the output screen, whose strip it lines up with; the πίνακας τιμών
+ * (TracePanel) keeps the box.
  */
-[data-theme="classic"] .output-input {
+[data-theme="classic"] .output-body .output-input {
+  position: relative;
   gap: 0;
   margin: 0;
   padding: 0 0.75rem 0 var(--output-indent);
@@ -208,29 +217,28 @@
   border-radius: 0;
   background: linear-gradient(to right, transparent calc(var(--output-strip) + 1px), var(--input-line) 0);
 }
-[data-theme="classic"] .output-input .output-num {
+[data-theme="classic"] .output-body .output-input .output-num {
+  display: inline-block;
   margin-left: calc(-1 * var(--output-indent));
 }
-[data-theme="classic"] .output-input input {
+[data-theme="classic"] .output-input .output-num {
+  display: none;
+}
+[data-theme="classic"] .output-body .output-input input {
   color: var(--syn-keyword);
   font-style: italic;
 }
-[data-theme="classic"] .output-input input::placeholder {
+[data-theme="classic"] .output-body .output-input input::placeholder {
   color: transparent;
 }
 /* Still read by screen readers. */
-[data-theme="classic"] .output-input-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
+[data-theme="classic"] .output-body .output-input-label {
+  @apply sr-only;
 }
 
 /* The column beside the editor: Windows-style tabs, like the output's. */
+/* Only the tabs sit on the bottom edge; the header's other contents stay centered. */
 [data-theme="classic"] .side-header {
-  align-items: flex-end;
   background: var(--panel-2);
 }
 [data-theme="classic"] .side-tab {
@@ -256,15 +264,15 @@
 }
 
 /* Buttons: Windows-style (gray, framed), not the other themes' solid accent. */
-[data-theme="classic"] .bg-accent.text-on-accent {
-  border: 1px solid #707070;
+[data-theme="classic"] .btn-primary {
+  border: 1px solid var(--btn-border);
   border-radius: 3px;
-  background: linear-gradient(#f6f6f6, #dddddd);
-  color: #000000;
+  background: var(--btn-bg);
+  color: var(--btn-text);
 }
-[data-theme="classic"] .bg-accent.text-on-accent:hover:not(:disabled) {
-  border-color: #3c7fb1;
-  background: linear-gradient(#eaf6fd, #bee6fd);
+[data-theme="classic"] .btn-primary:hover:not(:disabled) {
+  border-color: var(--btn-hover-border);
+  background: var(--btn-hover-bg);
   filter: none;
 }
 
@@ -337,24 +345,24 @@
 [data-theme="classic"] .cm-editor .cm-traceNote {
   border: 1px solid var(--border);
   border-radius: 0;
-  background: #ffffe1;
+  background: var(--active-line);
   color: var(--text);
   font-style: normal;
 }
 [data-theme="classic"] .cm-editor .cm-lineNumbers .cm-gutterElement.cm-traceGutter {
-  position: relative;
   color: var(--gutter-text);
   font-weight: normal;
 }
-[data-theme="classic"] .cm-editor .cm-lineNumbers .cm-gutterElement.cm-traceGutter::before {
-  content: "➜";
-  position: absolute;
-  left: 0;
+/* The arrow's own column (traceLine.ts), left of the numbers; only Κλασικό shows it. */
+.cm-editor .cm-traceArrows {
+  display: none;
+}
+[data-theme="classic"] .cm-editor .cm-traceArrows {
+  display: block;
+  padding-left: 1px;
   color: var(--run-arrow);
   font-family: system-ui, sans-serif;
-  font-size: 1.15em;
   font-weight: bold;
-  line-height: inherit;
 }
 
 /* The line number of a line with an error turns red (errorLineNumbers in lib/glossa/lint.ts). */

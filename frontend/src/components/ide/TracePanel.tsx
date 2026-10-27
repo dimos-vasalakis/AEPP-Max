@@ -142,7 +142,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
             disabled={atEnd}
             aria-label={playing ? "Παύση" : "Αναπαραγωγή"}
             title={playing ? "Παύση (κενό)" : "Αναπαραγωγή: ένα βήμα κάθε λίγο (κενό)"}
-            className="mx-0.5 flex h-7 items-center gap-1 rounded-md bg-accent px-2 font-medium text-on-accent hover:brightness-110 disabled:opacity-40"
+            className="mx-0.5 flex h-7 items-center gap-1 rounded-md btn-primary bg-accent px-2 font-medium text-on-accent hover:brightness-110 disabled:opacity-40"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
               {playing ? <path d="M6 4h4v16H6zM14 4h4v16h-4z" /> : <path d="M6 4v16l14-8z" />}

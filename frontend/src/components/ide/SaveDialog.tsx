@@ -79,7 +79,7 @@ export function SaveDialog({ signedIn, language, suggested, onSave, onSignIn, on
             <Link
               href="/login"
               onClick={onSignIn}
-              className="rounded-md bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110"
+              className="rounded-md btn-primary bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110"
             >
               Σύνδεση
             </Link>
@@ -124,7 +124,7 @@ export function SaveDialog({ signedIn, language, suggested, onSave, onSignIn, on
             <button
               type="submit"
               disabled={saving || !title.trim() || signedIn === undefined}
-              className="rounded-md bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110 disabled:opacity-50"
+              className="rounded-md btn-primary bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110 disabled:opacity-50"
             >
               {saving ? "Αποθήκευση…" : "Αποθήκευση"}
             </button>

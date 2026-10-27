@@ -99,7 +99,7 @@ export function ThemeEditor({ theme, onDone }: Props) {
         <button
           type="submit"
           disabled={full}
-          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-50"
+          className="rounded-md btn-primary bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:brightness-110 disabled:opacity-50"
         >
           Αποθήκευση
         </button>

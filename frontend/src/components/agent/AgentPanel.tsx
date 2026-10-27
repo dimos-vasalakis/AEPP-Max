@@ -876,7 +876,7 @@ function ProposalBox({
         <button
           type="button"
           onClick={onApply}
-          className="rounded-md bg-accent px-2.5 py-1 font-medium text-on-accent hover:brightness-110"
+          className="rounded-md btn-primary bg-accent px-2.5 py-1 font-medium text-on-accent hover:brightness-110"
         >
           {edited ? "Εφαρμογή" : "Εφαρμογή (Ctrl+Enter)"}
         </button>

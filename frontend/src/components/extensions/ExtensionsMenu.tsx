@@ -140,7 +140,7 @@ function ThemeRow({
             disabled={active}
             aria-pressed={active}
             className={`rounded px-2.5 py-1 text-xs font-medium ${
-              active ? "bg-panel-2 text-muted" : "bg-accent text-on-accent hover:brightness-110"
+              active ? "bg-panel-2 text-muted" : "btn-primary bg-accent text-on-accent hover:brightness-110"
             }`}
           >
             {active ? "✓ Ενεργό" : "Ενεργοποίηση"}

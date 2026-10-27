@@ -169,7 +169,7 @@ export function DiamondDialog({ opening, onClose }: { opening: DiamondOpening; o
           {user === null ? (
             <Link
               href="/login?mode=signup"
-              className="block rounded-md bg-accent px-3 py-2 text-center font-semibold text-on-accent hover:brightness-110"
+              className="block rounded-md btn-primary bg-accent px-3 py-2 text-center font-semibold text-on-accent hover:brightness-110"
             >
               Κάνε εγγραφή για το Diamond
             </Link>
@@ -187,7 +187,7 @@ export function DiamondDialog({ opening, onClose }: { opening: DiamondOpening; o
               type="button"
               onClick={() => go("/billing/checkout")}
               disabled={busy || !plan.can_buy || activation === "waiting"}
-              className="w-full rounded-md bg-accent px-3 py-2 font-semibold text-on-accent hover:brightness-110 disabled:opacity-50"
+              className="w-full rounded-md btn-primary bg-accent px-3 py-2 font-semibold text-on-accent hover:brightness-110 disabled:opacity-50"
             >
               {busy ? "Μεταφορά στην πληρωμή…" : `Απόκτησε το Diamond · ${DIAMOND_PRICE}`}
             </button>

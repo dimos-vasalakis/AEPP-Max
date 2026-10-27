@@ -177,7 +177,7 @@ export function LoginForm() {
             <button
               type="submit"
               disabled={state === "sending"}
-              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-on-accent disabled:opacity-60"
+              className="w-full rounded-md btn-primary bg-accent px-3 py-2 text-sm font-medium text-on-accent disabled:opacity-60"
             >
               {copy.submit}
             </button>

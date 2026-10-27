@@ -102,7 +102,7 @@ function Body({
         <button
           type="button"
           onClick={onConfirm}
-          className="rounded-md bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110"
+          className="rounded-md btn-primary bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110"
         >
           {confirmLabel}
         </button>

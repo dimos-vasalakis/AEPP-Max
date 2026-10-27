@@ -193,7 +193,7 @@ export function ProgramsDialog({
                   close();
                   onNew();
                 }}
-                className="flex h-9 shrink-0 items-center gap-1 rounded-md bg-accent px-3 font-medium text-on-accent hover:brightness-110"
+                className="flex h-9 shrink-0 items-center gap-1 rounded-md btn-primary bg-accent px-3 font-medium text-on-accent hover:brightness-110"
               >
                 <span aria-hidden className="text-base leading-none">
                   +
@@ -458,7 +458,7 @@ function SignedOut({ onSignIn }: { onSignIn: () => void }) {
         <Link
           href="/login"
           onClick={onSignIn}
-          className="rounded-md bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110"
+          className="rounded-md btn-primary bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110"
         >
           Σύνδεση
         </Link>

@@ -93,7 +93,7 @@ export function FileBar({ file, dirty, empty, onPrograms, onSave, onRename, disa
         title="Αποθήκευση (Ctrl/Cmd+S)"
         className={`ml-auto flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 font-medium disabled:opacity-40 ${
           (!file && !empty) || dirty
-            ? "bg-accent text-on-accent hover:brightness-110"
+            ? "btn-primary bg-accent text-on-accent hover:brightness-110"
             : "text-muted hover:bg-panel-2 hover:text-text"
         }`}
       >

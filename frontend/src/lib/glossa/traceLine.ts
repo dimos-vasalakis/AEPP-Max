@@ -1,9 +1,10 @@
-import { type EditorState, RangeSet, StateEffect, StateField } from "@codemirror/state";
+import { type EditorState, Prec, RangeSet, StateEffect, StateField } from "@codemirror/state";
 import {
   Decoration,
   type DecorationSet,
   EditorView,
   GutterMarker,
+  gutter,
   gutterLineClass,
   WidgetType,
 } from "@codemirror/view";
@@ -36,11 +37,19 @@ class NoteWidget extends WidgetType {
   }
 }
 
-/** The line's gutter: its number stands out (Κλασικό draws the Διερμηνευτής's arrow there). */
+/** The line's gutter: its number stands out. */
 class TraceGutter extends GutterMarker {
   elementClass = "cm-traceGutter";
 }
 const TRACE_GUTTER = new TraceGutter();
+
+/** The Διερμηνευτής's green arrow, in a column of its own (shown in Κλασικό only). */
+class Arrow extends GutterMarker {
+  toDOM() {
+    return document.createTextNode("➜");
+  }
+}
+const ARROW = new Arrow();
 
 type Marked = { decorations: DecorationSet; gutter: RangeSet<GutterMarker> };
 const NONE: Marked = { decorations: Decoration.none, gutter: RangeSet.empty };
@@ -70,5 +79,20 @@ export const traceLine = StateField.define<Marked>({
   provide: (field) => [
     EditorView.decorations.from(field, (marked) => marked.decorations),
     gutterLineClass.from(field, (marked) => marked.gutter),
+    // Left of the line numbers, as in the Διερμηνευτής; globals.css hides it in other themes.
+    Prec.highest(
+      gutter({
+        class: "cm-traceArrows",
+        markers: (view) => {
+          const marked = view.state.field(field).gutter;
+          const at: number[] = [];
+          marked.between(0, view.state.doc.length, (from) => {
+            at.push(from);
+          });
+          return RangeSet.of(at.map((from) => ARROW.range(from)));
+        },
+        initialSpacer: () => ARROW,
+      }),
+    ),
   ],
 });

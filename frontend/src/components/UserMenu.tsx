@@ -43,7 +43,7 @@ export function UserMenu() {
         </Link>
         <Link
           href="/login?mode=signup"
-          className="rounded-md bg-accent px-2.5 py-1 font-medium text-on-accent hover:brightness-110"
+          className="rounded-md btn-primary bg-accent px-2.5 py-1 font-medium text-on-accent hover:brightness-110"
         >
           Εγγραφή
         </Link>

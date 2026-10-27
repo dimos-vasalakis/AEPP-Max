@@ -60,7 +60,7 @@ function GetApp() {
       <button
         type="button"
         onClick={() => void install().then((done) => setDeclined(!done))}
-        className={`${box} w-full bg-accent font-medium text-on-accent hover:brightness-110`}
+        className={`${box} w-full btn-primary bg-accent font-medium text-on-accent hover:brightness-110`}
       >
         Εγκατάσταση εφαρμογής
       </button>
