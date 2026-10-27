@@ -5,6 +5,7 @@ import Link from "next/link";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type { AgentUsage } from "@/lib/api/agent";
 import { ApiError, apiFetch } from "@/lib/api/client";
+import { usePlan } from "@/lib/plan";
 import { createClient } from "@/lib/supabase/client";
 
 /**
@@ -17,6 +18,7 @@ export function SettingsDialog({ user, onClose }: { user: User; onClose: () => v
   const title = useId();
   const [deletion, setDeletion] = useState<Deletion>(IDLE);
   const deleting = deletion.step === "deleting";
+  const plan = usePlan();
 
   // showModal() centers it, traps focus and dims the page behind (::backdrop).
   // Unmounting removes it, which closes it; closing it here instead would fire a
@@ -52,7 +54,7 @@ export function SettingsDialog({ user, onClose }: { user: User; onClose: () => v
           </button>
         </div>
 
-        <Section title="Όρια σήμερα">
+        <Section title={`Όρια σήμερα · ${plan.plan === "diamond" ? "Diamond 💎" : "Δωρεάν πλάνο"}`}>
           <Limits />
         </Section>
 

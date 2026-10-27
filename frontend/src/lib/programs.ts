@@ -5,9 +5,6 @@ import type { Language } from "@/lib/glossa/types";
 /** The backend's limit on a title (schemas/program.py). */
 export const MAX_TITLE = 120;
 
-/** How many programs and algorithms, together, one account keeps (endpoints/programs.py). */
-export const MAX_PROGRAMS = 5;
-
 /**
  * The name the code gives itself, as a title to save it under: `ΠΡΟΓΡΑΜΜΑ Εμβαδόν`
  * or `Αλγόριθμος Εμβαδόν` on the first line that isn't blank or a comment. "" when

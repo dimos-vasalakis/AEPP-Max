@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
+from app.api.v1.endpoints.billing import delete_customer
 from app.core.config import get_settings, is_unset
 from app.core.db import DbSession, has_migration
 from app.core.security import CurrentUserDep
@@ -48,12 +49,14 @@ async def delete_auth_user(user_id: str, transport: httpx.AsyncBaseTransport | N
 async def delete_account(user: CurrentUserDep, _: AdminReady, db: DbSession) -> Response:
     """Delete the account and everything it owns, in one step that either happens
     or doesn't: auth.users cascades to profiles, programs and conversations, and
-    deleting a conversation deletes its agent session (migration 0002)."""
+    deleting a conversation deletes its agent session (migration 0002). Diamond is
+    cancelled first, so Stripe never charges an account that's gone."""
     # Without 0002's triggers the chat history would stay behind.
     if not await has_migration(db, "0002"):
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE, "Account deletion needs migration 0002"
         )
+    await delete_customer(db, user.id)
     # Release the pooled connection: the Admin API call can take seconds.
     await db.close()
     await delete_auth_user(str(user.id))

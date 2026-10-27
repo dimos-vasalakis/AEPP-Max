@@ -97,6 +97,34 @@ def test_run_runs_a_program_and_asks_for_input(client: TestClient) -> None:
     assert [step["line"] for step in body["trace"]] == [5, 6, 7]
 
 
+async def free_plan(*_):
+    from app.core.plans import get_plan
+
+    return get_plan("free")
+
+
+def test_agent_refuses_an_effort_beyond_the_plan(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api.v1.endpoints import agent
+    from app.core.config import get_settings
+    from app.core.db import get_db
+
+    async def no_db():
+        yield None
+
+    async def migrated(*_):
+        return True
+
+    monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
+    monkeypatch.setattr(agent, "has_migration", migrated)
+    monkeypatch.setattr(agent, "plan_for", free_plan)
+    monkeypatch.setitem(client.app.dependency_overrides, get_db, no_db)
+    body = {"message": "Γεια", "code": "", "effort": "high"}
+    res = client.post("/api/v1/agent/chat", json=body, headers=auth_header())
+    assert res.status_code == 403  # high is Diamond's
+
+
 def test_agent_refuses_past_the_daily_limit(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -116,6 +144,7 @@ def test_agent_refuses_past_the_daily_limit(
     monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
     monkeypatch.setattr(agent, "has_migration", migrated)
     monkeypatch.setattr(agent, "reserve_message", over_limit)
+    monkeypatch.setattr(agent, "plan_for", free_plan)
     monkeypatch.setitem(client.app.dependency_overrides, get_db, no_db)
     res = client.post(
         "/api/v1/agent/chat", json={"message": "Γεια", "code": ""}, headers=auth_header()
@@ -173,6 +202,8 @@ def test_agent_usage_reports_today_and_the_limit(
 
     async def today(*_):
         return 3_500, 2, datetime(2026, 10, 25, 22, tzinfo=UTC)
+
+    monkeypatch.setattr(agent, "plan_for", free_plan)
 
     monkeypatch.setattr(agent, "has_migration", migrated)
     monkeypatch.setattr(agent, "read_usage", today)

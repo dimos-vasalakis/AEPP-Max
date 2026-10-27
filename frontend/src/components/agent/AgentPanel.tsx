@@ -17,6 +17,16 @@ import { PanelConfirm } from "@/components/Confirm";
 import { ApiError } from "@/lib/api/client";
 import type { Language } from "@/lib/glossa/types";
 import { lineDiff } from "@/lib/lineDiff";
+import {
+  type Effort,
+  EFFORTS,
+  mascot,
+  type PlanName,
+  refreshPlan,
+  setEffort,
+  useEffort,
+  usePlanState,
+} from "@/lib/plan";
 import { useUser } from "@/lib/supabase/useUser";
 
 // A reply is its text and tool calls in the order they streamed, like Claude Code's
@@ -64,7 +74,8 @@ const MODES: Record<
     shortColor?: string;
     hint: string;
     placeholder: string;
-    mascot: string;
+    /** Its mascot: lib/plan.ts mascot(), with diamonds on Diamond. */
+    kind: "tutor" | "agent";
     color: string;
   }
 > = {
@@ -73,7 +84,7 @@ const MODES: Record<
     short: "υποδείξεις",
     hint: "εξηγεί και δίνει υποδείξεις, δεν αλλάζει τον κώδικα",
     placeholder: "Ρώτα κάτι για τον κώδικά σου…",
-    mascot: "/mascot-tutor.png",
+    kind: "tutor",
     color: "text-warn",
   },
   agent: {
@@ -82,7 +93,7 @@ const MODES: Record<
     shortColor: "text-purple",
     hint: "γράφει κατευθείαν στον κώδικά σου",
     placeholder: "Πες τι να αλλάξει στον κώδικα…",
-    mascot: "/mascot-agent.png",
+    kind: "agent",
     color: "text-accent",
   },
 };
@@ -97,8 +108,17 @@ const APPROVAL = {
 const COMMANDS = [
   { name: "/switch", hint: "αλλαγή ανάμεσα σε Tutor και Agent" },
   { name: "/new", hint: "νέα συζήτηση" },
+  { name: "/effort", hint: "πόσο σκέφτεται πριν απαντήσει" },
   { name: "/help", hint: "οι εντολές και τα πλήκτρα" },
 ];
+
+/** /effort's levels, as the panel describes them. */
+const EFFORT_TEXT: Record<Effort, string> = {
+  low: "γρήγορες απαντήσεις, λίγα tokens",
+  medium: "σκέφτεται περισσότερο: καλύτερο για θέματα Πανελλαδικών",
+  high: "σκέφτεται πολύ: τα δύσκολα θέματα (Diamond)",
+};
+
 
 const HELP = `Εντολές:
 ${COMMANDS.map((c) => `${c.name.padEnd(8)} ${c.hint}`).join("\n")}
@@ -160,7 +180,12 @@ export function AgentPanel({
   tabs,
 }: Props) {
   const user = useUser();
+  const { plan, loaded: planLoaded } = usePlanState();
   const [mode, setMode] = useState<AgentMode>("ask");
+  // /effort: null is the server's default.
+  const effort = useEffort();
+  // What a message asks for: a level the plan no longer has (Diamond ended) falls back.
+  const sentEffort = effort !== null && plan.efforts.includes(effort) ? effort : null;
   // Agent mode: false writes edits at once, true shows them for approval first.
   const [approve, setApprove] = useState(false);
   // The highlighted entry of the / command menu.
@@ -190,6 +215,29 @@ export function AgentPanel({
     setChatUser(user?.id);
     setMessages([]);
     setConversationId(null);
+  }
+  // A new plan is a new model, which may not read the old one's encrypted reasoning: a
+  // new conversation, said in the chat. Only between two plans read from the server,
+  // not when the page's first read turns the Free it assumed into Diamond.
+  const [chatPlan, setChatPlan] = useState<PlanName | null>(null);
+  if (planLoaded && plan.plan !== chatPlan) {
+    setChatPlan(plan.plan);
+    if (chatPlan !== null) {
+      setConversationId(null);
+      setMessages((ms) =>
+        ms.length === 0
+          ? ms
+          : [
+              {
+                role: "note",
+                text:
+                  plan.plan === "diamond"
+                    ? "Είσαι πλέον Diamond 💎: νέα συζήτηση, με το καλύτερο μοντέλο."
+                    : "Το Diamond έληξε: νέα συζήτηση, με το μοντέλο του δωρεάν πλάνου.",
+              },
+            ],
+      );
+    }
   }
   // …and a reply still streaming for the last account stops: no edit of theirs lands.
   // A layout effect, so no event of the reply is handled after this render.
@@ -299,6 +347,7 @@ export function AgentPanel({
         language,
         mode,
         approve: approving,
+        effort: sentEffort,
       };
       // A proposal's base, which Ctrl/Cmd+Enter needs the editor to still hold: the
       // request's code, or the previous edit if the student applied it meanwhile
@@ -352,7 +401,11 @@ export function AgentPanel({
         setDraft((d) => d || message);
       } else {
         if (!accepted) usedAgent.current = usedBefore; // never reached the agent: nothing ran
-        appendText(failureText(err));
+        appendText(failureText(err, plan.plan === "free" && plan.can_buy));
+        // Refused for the plan (effort, limit): the plan here may be out of date.
+        if (err instanceof ApiError && (err.status === 403 || err.status === 429)) {
+          void refreshPlan(user.id);
+        }
       }
     } finally {
       abort.current = null;
@@ -367,8 +420,35 @@ export function AgentPanel({
     else if (name === "/new") {
       if (busy) note("Περίμενε να τελειώσει η απάντηση ή σταμάτησέ την με Esc.", text);
       else newConversation();
-    } else if (name === "/help") note(HELP, text);
+    } else if (name === "/effort") effortCommand(text);
+    else if (name === "/help") note(HELP, text);
     else note(`Άγνωστη εντολή ${name}. Γράψε /help για τις εντολές.`, text);
+  }
+
+  /** /effort shows the levels; /effort low|medium|high (or default) picks one. */
+  function effortCommand(text: string) {
+    const arg = text.split(/\s+/)[1]?.toLowerCase();
+    if (!arg) {
+      const now = sentEffort ?? "προεπιλογή";
+      const levels = EFFORTS.map((e) => {
+        const locked = plan.efforts.includes(e) ? "" : " 💎";
+        return `  ${(e + locked).padEnd(9)} ${EFFORT_TEXT[e]}`;
+      }).join("\n");
+      note(
+        `Effort τώρα: ${now}\n${levels}\n\nΓράψε π.χ. /effort medium (ή /effort default). Περισσότερη σκέψη = καλύτερες λύσεις, αλλά περισσότερα tokens από το ημερήσιο όριο.`,
+        text,
+      );
+    } else if (arg === "default") {
+      setEffort(null);
+      note("Effort: προεπιλογή.", text);
+    } else if (!EFFORTS.includes(arg as Effort)) {
+      note(`Δεν υπάρχει effort «${arg}». Διάλεξε low, medium ή high.`, text);
+    } else if (!plan.efforts.includes(arg as Effort)) {
+      note(`Το effort ${arg} είναι μόνο για το Diamond 💎 (μενού λογαριασμού → Diamond).`, text);
+    } else {
+      setEffort(arg as Effort);
+      note(`Effort: ${arg}, ${EFFORT_TEXT[arg as Effort]}.`, text);
+    }
   }
 
   /** The panel's own answer, under the command that asked for it. */
@@ -469,7 +549,7 @@ export function AgentPanel({
           className="min-h-0 flex-1 space-y-3 overflow-auto p-3 leading-relaxed"
           aria-live="polite"
         >
-          {messages.length === 0 && <Welcome mode={mode} approve={approve} />}
+          {messages.length === 0 && <Welcome mode={mode} approve={approve} plan={plan.plan} />}
           {messages.map((m, i) =>
             m.role === "user" ? (
               <Line key={i} mark=">" className="text-muted">
@@ -635,7 +715,7 @@ export function AgentPanel({
                   title={`${current.label}: ${current.hint} · Shift+Tab για αλλαγή`}
                   className={`flex shrink-0 items-center gap-1.5 hover:opacity-80 ${current.color}`}
                 >
-                  <ModeLabel mode={current} />
+                  <ModeLabel mode={current} plan={plan.plan} effort={sentEffort} />
                 </button>
               </>
             ) : (
@@ -648,7 +728,7 @@ export function AgentPanel({
                   title={`${current.label}: ${current.hint} · /switch για Agent`}
                   className={`flex shrink-0 items-center gap-1.5 hover:opacity-80 ${current.color}`}
                 >
-                  <ModeLabel mode={current} />
+                  <ModeLabel mode={current} plan={plan.plan} effort={sentEffort} />
                 </button>
               </>
             )}
@@ -662,13 +742,18 @@ export function AgentPanel({
 // Why a reply couldn't start, by the backend's status (endpoints/agent.py).
 const FAILURES: Record<number, string> = {
   401: "Η σύνδεσή σου δεν ισχύει πια. Αποσυνδέσου και συνδέσου ξανά (ή κάνε Εγγραφή, αν διέγραψες τον λογαριασμό).",
+  403: "Αυτό το effort δεν είναι στο πλάνο σου. Γράψε /effort για να διαλέξεις άλλο.",
   429: "Έφτασες το όριο του agent για σήμερα. Θα είναι ξανά διαθέσιμος από τα μεσάνυχτα. Μέχρι τότε, ο editor και η εκτέλεση δουλεύουν κανονικά.",
   503: "Ο βοηθός δεν είναι διαθέσιμος αυτή τη στιγμή.",
 };
 
-function failureText(err: unknown): string {
-  const known = err instanceof ApiError ? FAILURES[err.status] : undefined;
-  return known ?? "Δεν ήταν δυνατή η σύνδεση με τον βοηθό.";
+/** `offerDiamond`: a Free student, and payments are on. */
+function failureText(err: unknown, offerDiamond: boolean): string {
+  const status = err instanceof ApiError ? err.status : 0;
+  const known = FAILURES[status] ?? "Δεν ήταν δυνατή η σύνδεση με τον βοηθό.";
+  return status === 429 && offerDiamond
+    ? `${known} Με το Diamond 💎 το όριο είναι πολύ μεγαλύτερο (μενού λογαριασμού → Diamond).`
+    : known;
 }
 
 /** One transcript line with its marker hanging in the left column, as in Claude Code. */
@@ -694,11 +779,17 @@ function Line({
 }
 
 /** The empty chat: the current mode's mascot, like Claude Code's welcome box. */
-function Welcome({ mode, approve }: { mode: AgentMode; approve: boolean }) {
+function Welcome({ mode, approve, plan }: { mode: AgentMode; approve: boolean; plan: PlanName }) {
   const m = MODES[mode];
   return (
     <div className="flex items-center gap-3 rounded-md border border-accent/60 p-3">
-      <Image src={m.mascot} alt="" width={56} height={56} className="h-14 w-auto shrink-0" />
+      <Image
+        src={mascot(m.kind, plan)}
+        alt=""
+        width={56}
+        height={56}
+        className="h-14 w-auto shrink-0"
+      />
       <div className="min-w-0 space-y-1">
         <p>
           <span className="text-accent">✻</span> Καλώς ήρθες στον{" "}
@@ -718,15 +809,21 @@ function Welcome({ mode, approve }: { mode: AgentMode; approve: boolean }) {
 
 function ModeLabel({
   mode,
+  plan,
+  effort,
 }: {
-  mode: { label: string; short: string; shortColor?: string; mascot: string };
+  mode: { label: string; short: string; shortColor?: string; kind: "tutor" | "agent" };
+  plan: PlanName;
+  /** The student's /effort, shown when they picked one. */
+  effort: Effort | null;
 }) {
   return (
     <>
-      <Image src={mode.mascot} alt="" width={20} height={20} className="h-5 w-auto" />
+      <Image src={mascot(mode.kind, plan)} alt="" width={20} height={20} className="h-5 w-auto" />
       <span className="font-semibold">{mode.label}</span>
       <span className="text-muted">·</span>
       <span className={mode.shortColor ?? "text-muted"}>{mode.short}</span>
+      {effort && <span className="text-muted">· {effort}</span>}
     </>
   );
 }

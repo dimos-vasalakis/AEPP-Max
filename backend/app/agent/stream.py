@@ -16,7 +16,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict
 
 import anyio
-from agents import Runner, Usage
+from agents import RunConfig, Runner, Usage
 from agents.memory import Session
 from openai.types.responses import ResponseTextDeltaEvent
 
@@ -39,6 +39,7 @@ async def stream_reply(
     context: AgentContext,
     session: Session,
     on_usage: Callable[[Usage], Awaitable[None]] | None = None,
+    run_config: RunConfig | None = None,
 ) -> AsyncIterator[str]:
     yield sse("conversation", {"id": str(conversation_id)})
     result = Runner.run_streamed(
@@ -47,6 +48,7 @@ async def stream_reply(
         context=context,
         session=session,
         max_turns=get_settings().agent_max_turns,
+        run_config=run_config,
     )
     try:
         async for event in result.stream_events():

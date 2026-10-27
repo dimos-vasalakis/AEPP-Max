@@ -1,4 +1,5 @@
 import type { Language } from "@/lib/glossa/types";
+import type { Effort } from "@/lib/plan";
 import { API_URL, apiHeaders, errorFrom } from "./client";
 import { createSseParser } from "./sse";
 
@@ -14,6 +15,8 @@ export type ChatRequest = {
   mode: AgentMode;
   /** Agent mode: write_code proposes, and the student approves (Ctrl+Enter). */
   approve?: boolean;
+  /** The student's /effort; null for the server's default. */
+  effort?: Effort | null;
 };
 
 /** GET /agent/usage: today's use against the daily limit (backend schemas/agent.py). */

@@ -15,6 +15,9 @@ os.environ["DATABASE_URL"] = ""
 os.environ["OPENAI_API_KEY"] = ""
 os.environ["SUPABASE_SECRET_KEY"] = ""
 os.environ["SENTRY_DSN"] = ""
+os.environ["STRIPE_SECRET_KEY"] = ""
+os.environ["STRIPE_WEBHOOK_SECRET"] = ""
+os.environ["STRIPE_PRICE_ID"] = ""
 
 from app.main import app  # noqa: E402
 

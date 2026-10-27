@@ -6,11 +6,11 @@ import {
   COLOR_FIELDS,
   type ColorKey,
   type CustomTheme,
-  MAX_CUSTOM_THEMES,
   newCustomId,
   type ThemeColors,
   themeVars,
 } from "@/lib/customTheme";
+import { DIAMOND, usePlan } from "@/lib/plan";
 import { saveCustomTheme, setTheme, useCustomThemes } from "@/lib/useTheme";
 import { ThemePreview } from "./ThemePreview";
 
@@ -32,7 +32,9 @@ export function ThemeEditor({ theme, onDone }: Props) {
   const count = useCustomThemes().length;
   const [name, setName] = useState(theme?.name ?? "");
   const [colors, setColors] = useState<ThemeColors>(theme?.colors ?? BASE_COLORS.dark);
-  const full = !theme && count >= MAX_CUSTOM_THEMES;
+  // A new one only within the plan's limit (3 free, 20 on Diamond).
+  const limit = usePlan().max_themes;
+  const full = !theme && count >= limit;
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -87,7 +89,11 @@ export function ThemeEditor({ theme, onDone }: Props) {
         ))}
       </div>
 
-      {full && <p className="text-xs text-danger">Έφτασες το όριο των {MAX_CUSTOM_THEMES} θεμάτων.</p>}
+      {full && (
+        <p className="text-xs text-danger">
+          Έφτασες το όριο των {limit} θεμάτων{limit < DIAMOND.max_themes && ` (${DIAMOND.max_themes} με το Diamond 💎)`}.
+        </p>
+      )}
 
       <div className="flex gap-2">
         <button

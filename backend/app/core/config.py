@@ -23,16 +23,23 @@ class Settings(BaseSettings):
 
     # AI agent (OpenAI Agents SDK). Empty key = /agent returns 503.
     openai_api_key: str = ""
-    openai_model: str = "gpt-5.6-sol"
-    # How hard the model thinks before answering: more solves exam problems better but
-    # spends more output tokens (the daily limit counts them). "" = the API's default,
-    # which is no reasoning for gpt-5.6-* models.
+    openai_model: str = "gpt-5.6-sol"  # the Free plan's
+    openai_model_diamond: str = "gpt-5.6-sol"  # the Diamond plan's: the better one
+    # How hard the model thinks before answering, unless the student picks another with
+    # /effort: more solves exam problems better but spends more output tokens (the daily
+    # limit counts them). "" = the API's default, which is no reasoning for gpt-5.6-*.
     openai_reasoning_effort: Literal["", "none", "low", "medium", "high"] = "low"
     agent_max_turns: int = 12
     # Agent tokens (input + output) per student per day, Athens time. 0 = no limit
     # (negative is refused at startup). A message costs about 1-4k tokens, more as
     # a conversation grows, and at least 1k (agent/usage.py).
     agent_daily_tokens: NonNegativeInt = 20_000
+    agent_daily_tokens_diamond: NonNegativeInt = 100_000
+
+    # Stripe, for the Diamond plan ($5 a month). Empty = no checkout (503); everyone is Free.
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""  # whsec_…, the webhook endpoint's signing secret
+    stripe_price_id: str = ""  # price_…, Diamond's monthly price
 
     # Sentry error reports and request traces. Empty = off.
     sentry_dsn: str = ""

@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.agent.context import AgentMode
+from app.core.plans import Effort
 from app.glossa import Language
 from app.schemas.run import MAX_SOURCE_CHARS
 
@@ -16,6 +17,7 @@ class ChatRequest(BaseModel):
     language: Language = "glossa"  # the editor's: Πρόγραμμα or Αλγόριθμος
     mode: AgentMode = "ask"
     approve: bool = False  # Agent mode: edits wait for the student's approval
+    effort: Effort | None = None  # the student's /effort; None = the server's default
 
 
 class AgentUsageOut(BaseModel):

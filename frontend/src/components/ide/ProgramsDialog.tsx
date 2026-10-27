@@ -11,10 +11,10 @@ import {
   type ProgramSummary,
   updateProgram,
 } from "@/lib/api/programs";
+import { usePlan } from "@/lib/plan";
 import {
   copyTitle,
   LANGUAGE_NAME,
-  MAX_PROGRAMS,
   MAX_TITLE,
   matchesSearch,
   timeAgo,
@@ -59,6 +59,7 @@ export function ProgramsDialog({
 }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const plan = usePlan();
   const [list, setList] = useState<ListState>({ kind: "loading" });
   const [query, setQuery] = useState("");
   // One row at a time is busy (opening, copying, deleting) or being renamed / asked about.
@@ -249,7 +250,7 @@ export function ProgramsDialog({
 
             {list.kind === "done" && programs.length > 0 && (
               <p className="border-t border-border px-5 py-2.5 text-xs text-muted">
-                {programs.length} από {MAX_PROGRAMS} · Τις
+                {programs.length} από {plan.max_programs} · Τις
                 αλλαγές σε ό,τι ανοίγεις από εδώ τις αποθηκεύεις με Ctrl/Cmd+S.
               </p>
             )}

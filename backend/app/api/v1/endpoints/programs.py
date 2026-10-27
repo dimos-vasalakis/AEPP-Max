@@ -4,14 +4,12 @@ from fastapi import APIRouter, HTTPException, Response, status
 from sqlalchemy import func, select
 
 from app.core.db import DbSession, has_migration
+from app.core.plans import plan_for
 from app.core.security import CurrentUser, CurrentUserDep
 from app.models import Program
 from app.schemas.program import ProgramCreate, ProgramOut, ProgramSummary, ProgramUpdate
 
 router = APIRouter(prefix="/programs", tags=["programs"])
-
-# Programs and algorithms together; frontend/src/lib/programs.ts MAX_PROGRAMS matches.
-MAX_PROGRAMS = 5
 
 
 async def require_programs(db: DbSession) -> None:
@@ -47,12 +45,13 @@ async def list_programs(user: CurrentUserDep, db: DbSession) -> list[ProgramSumm
 async def create_program(body: ProgramCreate, user: CurrentUserDep, db: DbSession) -> Program:
     await require_programs(db)
     # One create per user at a time (two tabs, a save and a copy), so the count
-    # below can't let both through at MAX_PROGRAMS - 1. Released at commit.
+    # below can't let both through at the plan's limit - 1. Released at commit.
     await db.execute(select(func.pg_advisory_xact_lock(func.hashtext(str(user.id)))))
     count = await db.scalar(
         select(func.count()).select_from(Program).where(Program.user_id == user.id)
     )
-    if count is not None and count >= MAX_PROGRAMS:
+    # Programs and algorithms together (core/plans.py).
+    if count is not None and count >= (await plan_for(db, user.id)).max_programs:
         raise HTTPException(status.HTTP_409_CONFLICT, "Program limit reached")
     program = Program(user_id=user.id, title=body.title, code=body.code, language=body.language)
     db.add(program)

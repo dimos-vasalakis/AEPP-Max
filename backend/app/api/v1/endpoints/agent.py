@@ -1,8 +1,10 @@
 from functools import partial
 from typing import Annotated
 
+from agents import ModelSettings, RunConfig
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
+from openai.types.shared import Reasoning
 from sqlalchemy import func, select
 
 from app.agent.context import AgentContext
@@ -12,6 +14,7 @@ from app.agent.usage import MESSAGE_TOKENS, read_usage, record_usage, reserve_me
 from app.api.v1.endpoints.programs import owned_program
 from app.core.config import get_settings, is_unset
 from app.core.db import DbSession, has_migration
+from app.core.plans import plan_for
 from app.core.security import CurrentUserDep
 from app.models import Conversation
 from app.schemas.agent import AgentUsageOut, ChatRequest
@@ -34,7 +37,7 @@ async def usage(user: CurrentUserDep, db: DbSession) -> AgentUsageOut:
     if not await has_migration(db, "0003"):
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Agent needs migration 0003")
     tokens, messages, resets_at = await read_usage(db, user.id)
-    limit = get_settings().agent_daily_tokens
+    limit = (await plan_for(db, user.id)).daily_tokens
     return AgentUsageOut(tokens=tokens, messages=messages, limit=limit, resets_at=resets_at)
 
 
@@ -46,7 +49,11 @@ async def chat(
     # The daily limit's table (agent/usage.py); migrations don't run on deploy.
     if not await has_migration(db, "0003"):
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Agent needs migration 0003")
-    limit = get_settings().agent_daily_tokens
+    # The plan sets the limit, the model and how hard /effort may make it think.
+    plan = await plan_for(db, user.id)
+    if body.effort is not None and body.effort not in plan.efforts:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Effort not in your plan")
+    limit = plan.daily_tokens
     reserved = MESSAGE_TOKENS if limit > 0 else 0
     # Committed with the conversation below; an error before that refunds it.
     if reserved and not await reserve_message(db, user.id, limit):
@@ -73,6 +80,14 @@ async def chat(
     context = AgentContext(
         code=body.code, mode=body.mode, approve=body.approve, language=body.language
     )
+    run_config = RunConfig(
+        model=plan.model,
+        # Over the agent's own (tutor.py): only what the student picked.
+        model_settings=ModelSettings(reasoning=Reasoning(effort=body.effort))
+        if body.effort
+        else None,
+        tracing_disabled=True,  # as main.py: students' messages never go to OpenAI's Traces
+    )
     return StreamingResponse(
         stream_reply(
             conversation.id,
@@ -80,6 +95,7 @@ async def chat(
             context,
             conversation_session(conversation.id),
             on_usage=partial(record_usage, user.id, reserved),
+            run_config=run_config,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

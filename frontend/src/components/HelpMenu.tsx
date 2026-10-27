@@ -2,7 +2,7 @@
 
 import { type ReactNode, useId, useState } from "react";
 import { NavPopover } from "@/components/NavPopover";
-import { MAX_PROGRAMS } from "@/lib/programs";
+import { DIAMOND, DIAMOND_PRICE, FREE } from "@/lib/plan";
 
 /** The info button: a short guide to the whole app, one foldable section per part. */
 export function HelpMenu() {
@@ -140,7 +140,8 @@ function Guide() {
           <li>
             Στο <b>«Τα προγράμματά μου»</b> τα βρίσκεις όλα, από όποια συσκευή συνδεθείς: άνοιγμα,
             μετονομασία, αντίγραφο, διαγραφή, αναζήτηση. Ένας αλγόριθμος ανοίγει στον Αλγόριθμο.
-            Χωράνε έως {MAX_PROGRAMS} προγράμματα και αλγόριθμοι μαζί.
+            Χωράνε έως {FREE.max_programs} προγράμματα και αλγόριθμοι μαζί ({DIAMOND.max_programs}{" "}
+            με το Diamond).
           </li>
           <li>Κλικ στο όνομα του προγράμματος, πάνω από τον editor, το μετονομάζει.</li>
         </Section>
@@ -162,7 +163,12 @@ function Guide() {
           </li>
           <li>
             Γράψε <Kbd>/</Kbd> για όλες τις εντολές: <Kbd>/switch</Kbd>, <Kbd>/new</Kbd> (νέα
-            συζήτηση· το κουμπί <b>Νέα</b> ρωτάει πρώτα), <Kbd>/help</Kbd>.
+            συζήτηση· το κουμπί <b>Νέα</b> ρωτάει πρώτα), <Kbd>/effort</Kbd>, <Kbd>/help</Kbd>.
+          </li>
+          <li>
+            <Kbd>/effort</Kbd> ορίζει πόσο σκέφτεται πριν απαντήσει: <b>low</b> (γρήγορα),{" "}
+            <b>medium</b> (καλύτερο για θέματα Πανελλαδικών), <b>high</b> (μόνο στο Diamond). Π.χ.{" "}
+            <Kbd>/effort medium</Kbd>. Περισσότερη σκέψη τρώει περισσότερο από το ημερήσιο όριο.
           </li>
           <li>
             <Kbd>Esc</Kbd> σταματά μια απάντηση. Υπάρχει ημερήσιο όριο, που μηδενίζεται τα
@@ -184,6 +190,12 @@ function Guide() {
           <li>
             Οι <b>Ρυθμίσεις</b> (μενού λογαριασμού, πάνω δεξιά) δείχνουν πόσο από το σημερινό όριο
             του agent έχεις χρησιμοποιήσει, τα στοιχεία του λογαριασμού σου και τη διαγραφή του.
+          </li>
+          <li>
+            Το <b>Diamond</b> 💎 ({DIAMOND_PRICE}, από το μενού λογαριασμού) δίνει καλύτερο μοντέλο
+            στον agent, πολύ μεγαλύτερο ημερήσιο όριο, <Kbd>/effort high</Kbd>, έως{" "}
+            {DIAMOND.max_programs} αποθηκευμένα προγράμματα και {DIAMOND.max_themes} δικά σου
+            θέματα. Ακυρώνεται όποτε θέλεις, από το ίδιο μενού.
           </li>
         </Section>
       </div>

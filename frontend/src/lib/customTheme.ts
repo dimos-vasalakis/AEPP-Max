@@ -64,7 +64,9 @@ const ID = /^custom-[a-z0-9]{1,16}$/;
 export const CUSTOM_THEMES_KEY = "aepp-custom-themes";
 export const CUSTOM_CSS_KEY = "aepp-custom-css";
 export const CUSTOM_STYLE_ID = "aepp-custom-themes";
-export const MAX_CUSTOM_THEMES = 12;
+// The most a browser keeps: Diamond's limit (lib/plan.ts). The plan's own limit only
+// stops new ones, so themes made on Diamond stay after it ends.
+export const MAX_CUSTOM_THEMES = 20;
 
 export function isCustomId(value: unknown): value is CustomTheme["id"] {
   return typeof value === "string" && ID.test(value);

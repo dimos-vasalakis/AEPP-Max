@@ -7,3 +7,4 @@ psycopg[binary]>=3.3
 sentry-sdk[fastapi]>=2.73
 # 0.x: minor releases can break the API, so upgrade deliberately.
 openai-agents[sqlalchemy]>=0.24,<0.25
+stripe>=16,<17
