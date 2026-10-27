@@ -115,6 +115,7 @@ export function DiamondDialog({ opening, onClose }: { opening: DiamondOpening; o
             alt=""
             width={64}
             height={64}
+            unoptimized
             className="h-16 w-auto shrink-0"
           />
           <div className="min-w-0">
@@ -256,8 +257,8 @@ function Status({
 function Mascots({ kind }: { kind: "" | "-diamond" }) {
   return (
     <span className="flex items-center gap-1">
-      <Image src={`/mascot-tutor${kind}.png`} alt="" width={28} height={28} className="h-7 w-auto" />
-      <Image src={`/mascot-agent${kind}.png`} alt="" width={28} height={28} className="h-7 w-auto" />
+      <Image src={`/mascot-tutor${kind}.png`} alt="" width={28} height={28} unoptimized className="h-7 w-auto" />
+      <Image src={`/mascot-agent${kind}.png`} alt="" width={28} height={28} unoptimized className="h-7 w-auto" />
     </span>
   );
 }

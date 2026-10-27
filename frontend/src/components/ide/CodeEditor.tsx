@@ -4,6 +4,7 @@ import type { Extension, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
 import { useEffect, useRef } from "react";
+import { trackCursor } from "@/lib/cursor";
 import { glossaAutocase } from "@/lib/glossa/autocase";
 import { glossaAutocomplete } from "@/lib/glossa/completion";
 import { glossaCounter } from "@/lib/glossa/counter";
@@ -27,6 +28,7 @@ const COMMON = [
   glossaAutocase,
   glossaLinter,
   traceLine,
+  trackCursor,
 ];
 // One per language: the highlighter, and the facet the other extensions read.
 const BASE: Record<Language, Extension[]> = {

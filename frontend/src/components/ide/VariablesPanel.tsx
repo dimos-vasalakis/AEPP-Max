@@ -52,7 +52,7 @@ export function VariablesPanel({ run, step, stale, tabs }: Props) {
     });
 
   return (
-    <section className="flex h-[80dvh] min-h-0 flex-col border-t border-border bg-output lg:h-auto lg:border-t-0 lg:border-l">
+    <section className="ide-pane flex h-[80dvh] min-h-0 flex-col border-t border-border bg-output lg:h-auto lg:border-t-0 lg:border-l">
       <div className="side-header flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
         {tabs}
       </div>
@@ -106,7 +106,7 @@ function FrameTable({
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       <table
-        className="w-full border-separate border-spacing-0 text-left"
+        className="var-table w-full border-separate border-spacing-0 text-left"
         style={{ fontSize: "var(--editor-font-size, 14px)" }}
       >
         <thead className="sticky top-0 z-10 bg-panel-2 text-xs">
@@ -220,7 +220,7 @@ function ValueRow({ row, type, nested }: { row: VariableRow; type: string | null
 
 function TypeWord({ type }: { type: string | null }) {
   if (type === null) return null;
-  return <span className="ml-2 font-sans text-[11px] text-muted">{TYPE_WORD[type] ?? type}</span>;
+  return <span className="var-type ml-2 font-sans text-[11px] text-muted">{TYPE_WORD[type] ?? type}</span>;
 }
 
 /** Values in the editor's colors: strings, logical values and numbers apart. */

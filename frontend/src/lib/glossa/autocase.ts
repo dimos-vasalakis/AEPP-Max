@@ -11,6 +11,7 @@ import { codeWords } from "./words";
 // («αλλιώς_αν» → «ΑΛΛΙΩΣ_ΑΝ»). In ψευδογλώσσα the words take the textbook's
 // spelling instead («τελος_αν» → «Τέλος_αν»). A word typed with the keyboard
 // still on English becomes the Greek one («grace» or «grapse» → «ΓΡΑΨΕ», latin.ts).
+// ψευδογλώσσα's «<-», «<=», «>=» and «<>» become ← ≤ ≥ ≠ as they're typed.
 // Names, strings and comments are left alone, Latin names included («arxi»
 // stays a name once declared or used elsewhere).
 
@@ -73,6 +74,20 @@ function latinMeantGreek(key: string, lineText: string, from: number, to: number
   return true;
 }
 
+/** ψευδογλώσσα's symbols as the textbook prints them (the lexer reads both spellings alike). */
+const SYMBOLS: Record<string, string> = { "<-": "←", "<=": "≤", ">=": "≥", "<>": "≠" };
+
+/**
+ * In ψευδογλώσσα, the two-character symbol ending at `offset` («<-», «<=», «>=»,
+ * «<>») as the textbook writes it (← ≤ ≥ ≠), or null. Not in strings or comments.
+ */
+export function symbolFix(lineText: string, offset: number, language: Language): Fix | null {
+  if (language !== "pseudocode" || offset < 2) return null;
+  const symbol = SYMBOLS[lineText.slice(offset - 2, offset)];
+  if (!symbol || inCommentOrString(lineText.slice(0, offset - 2))) return null;
+  return { from: offset - 2, to: offset, insert: symbol };
+}
+
 function capitalizeOnSeparator(tr: Transaction): Transaction | readonly TransactionSpec[] {
   // Typing, and Enter (which is plain "input"); not pastes, completions or undo.
   const typed = tr.isUserEvent("input.type") || tr.annotation(Transaction.userEvent) === "input";
@@ -86,7 +101,9 @@ function capitalizeOnSeparator(tr: Transaction): Transaction | readonly Transact
     if (!text || WORD_CHAR.test(text)) return;
     const line = tr.newDoc.lineAt(fromB);
     const language = tr.startState.facet(editorLanguage);
-    const lineFix = keywordFix(line.text, fromB - line.from, language, tr.newDoc, line.from);
+    const lineFix =
+      keywordFix(line.text, fromB - line.from, language, tr.newDoc, line.from) ??
+      (text.length === 1 ? symbolFix(line.text, fromB - line.from + 1, language) : null);
     if (lineFix) {
       fix = { from: line.from + lineFix.from, to: line.from + lineFix.to, insert: lineFix.insert };
     }

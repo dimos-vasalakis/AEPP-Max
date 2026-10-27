@@ -35,6 +35,11 @@
   --syn-comment: #6b6b76;
 }
 
+/* The mascots' own red, for their glow and trail whatever the theme's accent. */
+:root {
+  --mascot-red: #e5141b;
+}
+
 /* Λευκό: the logo's white and red, with the same range of syntax colors as Σκούρο. */
 [data-theme="light"] {
   color-scheme: light;
@@ -101,10 +106,16 @@
   --output-gutter-bg: linear-gradient(to right, #f7ebea, #f0c3c8 55%, #e3979f);
   --output-gutter-text: #3a0d0b;
   /* The line running (a step of the πίνακας τιμών, or the ΔΙΑΒΑΣΕ waiting): green with an arrow. */
-  --run-line: #9afb6f;
+  --run-line: #80ff20;
   --run-arrow: #1f9d1f;
   /* The output line waiting for a value. */
-  --input-line: #fffd72;
+  --input-line: #ffff00;
+  /* The editor's guide line at 80 columns. */
+  --margin-line: #c8c8c8;
+  /* Μεταβλητές' grid lines. */
+  --grid-line: #e3e3e3;
+  /* Windows' UI font, for the output screen, Μεταβλητές and the status bar. */
+  --ui-font: Tahoma, "Segoe UI", Verdana, sans-serif;
   /* Windows-style buttons (.btn-primary), instead of the other themes' solid accent. */
   --btn-border: #707070;
   --btn-bg: linear-gradient(#f6f6f6, #dddddd);
@@ -160,6 +171,7 @@
  * so a wrapped line continues beside the strip, not over it.
  */
 [data-theme="classic"] .output-body {
+  font-family: var(--ui-font);
   --output-strip: 2.25rem;
   --output-indent: calc(var(--output-strip) + 0.4rem);
   padding: 0 0 0.5rem;
@@ -236,6 +248,65 @@
   @apply sr-only;
 }
 
+/* The header shows only the tab; the status bar (StatusBar.tsx) says how the run went. */
+[data-theme="classic"] .output-badge {
+  @apply sr-only;
+}
+
+/*
+ * The window: gray frame, each pane (editor, output, side column) a framed
+ * white box with a gap between, and the status bar along the bottom.
+ */
+[data-theme="classic"] .ide-panes {
+  gap: 4px;
+  padding: 4px;
+  background: var(--panel-2);
+}
+/* Only on wide screens: a phone's column has fixed 60dvh/40dvh rows, which a gap would overflow. */
+@media (min-width: 64rem) {
+  [data-theme="classic"] .ide-column {
+    gap: 4px;
+  }
+}
+[data-theme="classic"] .ide-pane {
+  border: 1px solid var(--border);
+}
+[data-theme="classic"] .ide-pane > section {
+  border-top: 0;
+}
+.status-bar {
+  display: none;
+}
+[data-theme="classic"] .status-bar {
+  display: flex;
+  height: 22px;
+  border-top: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: var(--ui-font);
+  font-size: 12px;
+}
+[data-theme="classic"] .status-cell {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+[data-theme="classic"] .status-cell:last-child {
+  border-right: 0;
+}
+
+/* The editor's guide line at 80 columns (each line starts 6px in). */
+[data-theme="classic"] .cm-editor .cm-content {
+  background: linear-gradient(
+    to right,
+    transparent calc(6px + 80ch),
+    var(--margin-line) calc(6px + 80ch) calc(7px + 80ch),
+    transparent calc(7px + 80ch)
+  );
+}
+
 /* The column beside the editor: Windows-style tabs, like the output's. */
 /* Only the tabs sit on the bottom edge; the header's other contents stay centered. */
 [data-theme="classic"] .side-header {
@@ -257,7 +328,37 @@
   border-bottom-color: var(--output-bg);
   background: var(--output-bg);
 }
-/* Variables' values in plain black, as the Διερμηνευτής lists them. */
+/*
+ * Μεταβλητές as a Windows grid: the UI font, compact rows, thin gray lines both
+ * ways, a plain header, no types, values in plain black.
+ */
+[data-theme="classic"] .var-table {
+  font-family: var(--ui-font);
+  font-size: calc(var(--editor-font-size, 14px) - 2px) !important;
+}
+[data-theme="classic"] .var-table :is(thead, tbody, th, td) {
+  font-family: inherit;
+}
+[data-theme="classic"] .var-table :is(.trace-th, .trace-td) {
+  padding-block: 1px;
+  padding-right: 6px;
+  border-left: 0;
+  border-right: 1px solid var(--grid-line);
+  border-bottom: 1px solid var(--grid-line);
+}
+/* Not array elements and notes, which keep their indent (pl-8). */
+[data-theme="classic"] .var-table :is(.trace-th, .trace-td):not(.pl-8) {
+  padding-left: 6px;
+}
+[data-theme="classic"] .var-table .trace-th {
+  background: var(--output-bg);
+  color: var(--text);
+  font-size: inherit;
+  font-weight: normal;
+}
+[data-theme="classic"] .var-type {
+  display: none;
+}
 [data-theme="classic"] .var-value {
   color: var(--text) !important;
   font-weight: normal !important;
@@ -366,6 +467,164 @@
   font-weight: bold;
 }
 
+/*
+ * Mascots: the agent panel's welcome box (AgentPanel.tsx Welcome) gives each an
+ * entrance. The Tutor rises slowly off the ground, its glow swelling beneath it,
+ * then hovers; the Agent runs in from the left with a speed trail, overshoots,
+ * settles, and keeps jogging gently. Off for students who ask for less motion.
+ */
+.mascot-stage {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.mascot-stage > img {
+  position: relative;
+  z-index: 1;
+}
+.mascot-stage::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+.mascot-tutor > img {
+  animation:
+    tutor-rise 2.4s cubic-bezier(0.16, 0.84, 0.3, 1) both,
+    tutor-hover 3.6s ease-in-out 2.4s infinite;
+}
+.mascot-tutor::after {
+  left: 12%;
+  right: 12%;
+  bottom: -4px;
+  height: 16%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--mascot-red) 55%, transparent), transparent);
+  animation:
+    tutor-glow 2.4s ease-out both,
+    tutor-glow-pulse 3.6s ease-in-out 2.4s infinite;
+}
+@keyframes tutor-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(45%) scale(0.82);
+    filter: blur(3px) brightness(1.5);
+  }
+  30% {
+    opacity: 1;
+    filter: blur(0) brightness(1.2);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes tutor-hover {
+  0%,
+  100% {
+    transform: none;
+  }
+  50% {
+    transform: translateY(-6%);
+  }
+}
+@keyframes tutor-glow {
+  0% {
+    opacity: 0;
+    transform: scaleX(0.3);
+  }
+  40% {
+    opacity: 1;
+    transform: scaleX(1.25);
+  }
+  100% {
+    opacity: 0.7;
+    transform: none;
+  }
+}
+@keyframes tutor-glow-pulse {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: none;
+  }
+  50% {
+    opacity: 0.4;
+    transform: scaleX(0.85);
+  }
+}
+.mascot-agent > img {
+  animation:
+    agent-run-in 1.3s cubic-bezier(0.2, 0.7, 0.3, 1) both,
+    agent-jog 0.9s ease-in-out 1.3s infinite alternate;
+}
+.mascot-agent::after {
+  top: 32%;
+  bottom: 32%;
+  right: 55%;
+  width: 140%;
+  border-radius: 999px;
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--mascot-red) 45%, transparent));
+  transform-origin: right;
+  animation: agent-trail 1.3s ease-out both;
+}
+@keyframes agent-run-in {
+  0% {
+    opacity: 0;
+    transform: translateX(-140%) skewX(-14deg);
+    filter: blur(3px);
+  }
+  20% {
+    opacity: 1;
+  }
+  62% {
+    transform: translateX(8%) skewX(8deg) scaleX(0.92);
+    filter: blur(0);
+  }
+  80% {
+    transform: translateX(-3%) skewX(-3deg) scaleX(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+@keyframes agent-jog {
+  from {
+    transform: none;
+  }
+  to {
+    transform: translateY(-3%) rotate(-1.5deg);
+  }
+}
+@keyframes agent-trail {
+  0% {
+    opacity: 0;
+    transform: translateX(-120%) scaleX(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  62% {
+    opacity: 0.8;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mascot-stage > img,
+  .mascot-stage::after {
+    animation: none;
+  }
+  .mascot-stage::after {
+    display: none;
+  }
+}
+
 /* The line number of a line with an error turns red (errorLineNumbers in lib/glossa/lint.ts). */
 .cm-editor .cm-gutterElement.cm-errorLineNumber {
   color: var(--danger);
@@ -398,7 +657,7 @@ body {
   font-family: var(--font-sans), system-ui, sans-serif;
 }
 
-/* The output screen writes in the editor's font (Courier New in the Κλασικό theme). */
+/* The output screen writes in the editor's font; Κλασικό overrides it with --ui-font (Tahoma). */
 .output-body {
   font-family: var(--editor-font);
 }

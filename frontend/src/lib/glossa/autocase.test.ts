@@ -1,6 +1,7 @@
 import { EditorState, Text } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
-import { glossaAutocase, keywordFix } from "./autocase";
+import { glossaAutocase, keywordFix, symbolFix } from "./autocase";
+import { editorLanguage } from "./editorLanguage";
 
 /** Type `text` at the end of `doc` the way the editor does, and return the result. */
 function type(doc: string, text: string, userEvent = "input.type"): string {
@@ -94,5 +95,31 @@ describe("glossaAutocase", () => {
     expect(type("γραψ", "ε")).toBe("γραψε");
     expect(type("σύνολο", " ")).toBe("σύνολο ");
     expect(type("γραψε", " x", "input.paste")).toBe("γραψε x");
+  });
+});
+
+describe("ψευδογλώσσα's symbols", () => {
+  /** Type `text` at the end of `doc` in the Αλγόριθμος editor. */
+  function typeAlgorithm(doc: string, text: string, userEvent = "input.type"): string {
+    const state = EditorState.create({
+      doc,
+      extensions: [editorLanguage.of("pseudocode"), glossaAutocase],
+    });
+    return state.update({ changes: { from: doc.length, insert: text }, userEvent }).state.doc.toString();
+  }
+
+  it("become the textbook's ← ≤ ≥ ≠ as they're typed", () => {
+    expect(typeAlgorithm("x <", "-")).toBe("x ←");
+    expect(typeAlgorithm("Αν x <", "=")).toBe("Αν x ≤");
+    expect(typeAlgorithm("Αν x >", "=")).toBe("Αν x ≥");
+    expect(typeAlgorithm("Αν x <", ">")).toBe("Αν x ≠");
+  });
+
+  it("stay as typed in ΓΛΩΣΣΑ, strings, comments and pastes", () => {
+    expect(type("x <", "-")).toBe("x <-");
+    expect(typeAlgorithm("Γράψε '<", "=")).toBe("Γράψε '<=");
+    expect(typeAlgorithm("x ← 1 ! <", ">")).toBe("x ← 1 ! <>");
+    expect(typeAlgorithm("x ", "<-", "input.paste")).toBe("x <-");
+    expect(symbolFix("x <=", 4, "glossa")).toBeNull();
   });
 });

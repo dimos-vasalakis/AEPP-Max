@@ -199,7 +199,7 @@ function EditorPreview() {
       </div>
       {/* The tutor, answering beside the editor. */}
       <div className="absolute -bottom-8 -left-2 flex max-w-xs items-start gap-3 rounded-xl border border-border bg-panel-2 p-3 shadow-xl sm:-left-8">
-        <Image src="/mascot-tutor.png" alt="" width={40} height={40} className="h-10 w-auto shrink-0" />
+        <Image src="/mascot-tutor.png" alt="" width={40} height={40} unoptimized className="h-10 w-auto shrink-0" />
         <p className="text-xs leading-relaxed">
           <span className="font-semibold text-warn">Tutor</span>
           <span className="text-muted"> · </span>
@@ -321,7 +321,7 @@ function Assistant({
 }) {
   return (
     <div className="flex gap-5 rounded-2xl border border-border bg-panel p-6">
-      <Image src={mascot} alt="" width={72} height={72} className="h-16 w-auto shrink-0" />
+      <Image src={mascot} alt="" width={72} height={72} unoptimized className="h-16 w-auto shrink-0" />
       <div>
         <h3 className={`text-lg font-semibold ${color}`}>{name}</h3>
         <p className="mt-2 text-sm leading-relaxed text-muted">{text}</p>

@@ -499,7 +499,7 @@ export function AgentPanel({
         if (window.getSelection()?.toString()) return;
         input.current?.focus({ preventScroll: true });
       }}
-      className={`relative flex h-[80dvh] min-h-0 flex-col border-t border-border bg-agent font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l ${hidden ? "hidden" : ""}`}
+      className={`ide-pane relative flex h-[80dvh] min-h-0 flex-col border-t border-border bg-agent font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l ${hidden ? "hidden" : ""}`}
     >
       {askNew && (
         <PanelConfirm
@@ -778,18 +778,26 @@ function Line({
   );
 }
 
-/** The empty chat: the current mode's mascot, like Claude Code's welcome box. */
+/**
+ * The empty chat: the current mode's mascot, like Claude Code's welcome box. It
+ * makes an entrance (globals.css, «Mascots»): the Tutor rises slowly off its ring,
+ * the Agent runs in from the left; `key` replays it when the mode changes.
+ */
 function Welcome({ mode, approve, plan }: { mode: AgentMode; approve: boolean; plan: PlanName }) {
   const m = MODES[mode];
   return (
-    <div className="flex items-center gap-3 rounded-md border border-accent/60 p-3">
-      <Image
-        src={mascot(m.kind, plan)}
-        alt=""
-        width={56}
-        height={56}
-        className="h-14 w-auto shrink-0"
-      />
+    <div className="flex items-center gap-3 overflow-hidden rounded-md border border-accent/60 p-3">
+      <span key={m.kind} className={`mascot-stage mascot-${m.kind}`}>
+        {/* Unoptimized: the 256px PNG scaled down by the browser stays sharp; the optimizer's small WebP blurred it. */}
+        <Image
+          src={mascot(m.kind, plan)}
+          alt=""
+          width={64}
+          height={64}
+          unoptimized
+          className="h-16 w-auto"
+        />
+      </span>
       <div className="min-w-0 space-y-1">
         <p>
           <span className="text-accent">✻</span> Καλώς ήρθες στον{" "}
@@ -819,7 +827,7 @@ function ModeLabel({
 }) {
   return (
     <>
-      <Image src={mascot(mode.kind, plan)} alt="" width={20} height={20} className="h-5 w-auto" />
+      <Image src={mascot(mode.kind, plan)} alt="" width={20} height={20} unoptimized className="h-5 w-auto" />
       <span className="font-semibold">{mode.label}</span>
       <span className="text-muted">·</span>
       <span className={mode.shortColor ?? "text-muted"}>{mode.short}</span>

@@ -123,7 +123,7 @@ export function OutputPanel({
           </span>
         )}
         {badge && (
-          <span className={`flex items-center gap-1.5 font-medium ${badge.tone}`}>
+          <span className={`output-badge flex items-center gap-1.5 font-medium ${badge.tone}`}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
             {badge.label}
           </span>

@@ -23,6 +23,7 @@ import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
 import { ProgramsDialog } from "./ProgramsDialog";
 import { SaveDialog } from "./SaveDialog";
 import { type SideTab, SideTabs } from "./SideTabs";
+import { StatusBar } from "./StatusBar";
 import { VariablesPanel } from "./VariablesPanel";
 
 /** A question before an editor's unsaved code is replaced; `message` says what would be lost. */
@@ -536,7 +537,7 @@ export function Ide() {
       )}
 
       {/* minmax(0,1fr), not 1fr: long code lines scroll inside the editor instead of widening the page. */}
-      <div className="grid flex-1 grid-cols-[minmax(0,1fr)] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="ide-panes grid flex-1 grid-cols-[minmax(0,1fr)] lg:min-h-0 lg:grid-cols-[minmax(0,1fr)_380px]">
         {/* A dragged output height replaces the default rows; min() keeps the editor visible if the window shrinks later. */}
         <div
           ref={column}
@@ -545,9 +546,9 @@ export function Ide() {
               ? undefined
               : { gridTemplateRows: `minmax(0,1fr) min(${outputHeight}px, calc(100% - ${MIN_EDITOR}px))` }
           }
-          className="grid h-dvh min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[60dvh_40dvh] lg:h-auto lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_minmax(140px,35%)]"
+          className="ide-column grid h-dvh min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[60dvh_40dvh] lg:h-auto lg:min-h-0 lg:grid-rows-[minmax(0,1fr)_minmax(140px,35%)]"
         >
-          <main className="flex min-h-0 flex-col">
+          <main className="ide-pane flex min-h-0 flex-col">
             <FileBar
               file={files.file}
               dirty={files.file !== null && code !== files.file.saved}
@@ -576,11 +577,11 @@ export function Ide() {
               />
             </div>
           </main>
-          <div className="relative grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
+          <div className="ide-pane relative grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)]">
             <OutputResizer column={column} />
             <OutputPanel
               run={shownRun}
-              playing={play !== null}
+              playing={playing}
               onInput={readInput}
               onClear={resetRun}
               tab={outputTab}
@@ -606,6 +607,12 @@ export function Ide() {
           <VariablesPanel run={run} step={tracing ? step : play} stale={stale} tabs={sideTabs} />
         )}
       </div>
+      {/* Τροποποιημένο: a linked program's unsaved changes, or new code not saved yet. */}
+      <StatusBar
+        run={shownRun}
+        modified={files.file ? code !== files.file.saved : code.trim() !== ""}
+        playing={playing}
+      />
     </div>
   );
 }
