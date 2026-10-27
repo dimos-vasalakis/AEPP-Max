@@ -79,7 +79,7 @@
   --bg: #ffffff;
   --panel: #ffffff;
   --agent-bg: var(--panel);
-  --panel-2: #f3f3f3;
+  --panel-2: #f0f0f0;
   --border: #aca899;
   --text: #000000;
   --muted: #5a5850;
@@ -94,9 +94,17 @@
   --run: #22a81e;
   --run-light: #7dec5f;
   --run-outline: #0e6b0c;
-  --gutter-bg: linear-gradient(to right, #dddefd, #b2c4e4);
+  --gutter-bg: linear-gradient(to right, #e1e1fb, #bac7dc 55%, #93a6c0);
   --gutter-text: #1a1a1a;
-  --gutter-border: 1px solid #aca899;
+  --gutter-border: none;
+  /* The output screen's number strip is pink-red, the editor's blue-gray. */
+  --output-gutter-bg: linear-gradient(to right, #f7ebea, #f0c3c8 55%, #e3979f);
+  --output-gutter-text: #3a0d0b;
+  /* The line running (a step of the πίνακας τιμών, or the ΔΙΑΒΑΣΕ waiting): green with an arrow. */
+  --run-line: #9afb6f;
+  --run-arrow: #1f9d1f;
+  /* The output line waiting for a value. */
+  --input-line: #fffd72;
   --selection: #3399ff4d;
   --editor-font: "Courier New", Courier, monospace;
   --syn-keyword: #0000ff;
@@ -151,7 +159,7 @@
   padding: 0 0 0.5rem;
   background:
     linear-gradient(var(--border), var(--border)) var(--output-strip) 0 / 1px 100% no-repeat,
-    var(--gutter-bg) left top / var(--output-strip) 100% no-repeat,
+    var(--output-gutter-bg, var(--gutter-bg)) left top / var(--output-strip) 100% no-repeat,
     var(--output-bg);
 }
 [data-theme="classic"] .output-body > p {
@@ -168,7 +176,7 @@
   padding-right: 0.3rem;
   margin-right: 0.4rem;
   text-align: right;
-  color: var(--gutter-text);
+  color: var(--output-gutter-text, var(--gutter-text));
   font-size: 0.75em;
   font-style: normal;
   font-weight: normal;
@@ -188,13 +196,76 @@
 [data-theme="classic"] .output-prompt {
   display: none;
 }
-/* The ΔΙΑΒΑΣΕ box is the same as in the other themes, lined up with the text beside the strip. */
+/*
+ * ΔΙΑΒΑΣΕ: as in the Διερμηνευτής, the value is typed on the output's next line,
+ * which turns yellow (not over the strip, where its number goes), with no box.
+ */
 [data-theme="classic"] .output-input {
-  margin-left: var(--output-indent);
-  margin-right: 0.75rem;
+  gap: 0;
+  margin: 0;
+  padding: 0 0.75rem 0 var(--output-indent);
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(to right, transparent calc(var(--output-strip) + 1px), var(--input-line) 0);
 }
 [data-theme="classic"] .output-input .output-num {
-  display: none;
+  margin-left: calc(-1 * var(--output-indent));
+}
+[data-theme="classic"] .output-input input {
+  color: var(--syn-keyword);
+  font-style: italic;
+}
+[data-theme="classic"] .output-input input::placeholder {
+  color: transparent;
+}
+/* Still read by screen readers. */
+[data-theme="classic"] .output-input-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* The column beside the editor: Windows-style tabs, like the output's. */
+[data-theme="classic"] .side-header {
+  align-items: flex-end;
+  background: var(--panel-2);
+}
+[data-theme="classic"] .side-tab {
+  align-self: flex-end;
+  height: auto;
+  margin-bottom: -1px;
+  padding: 3px 10px;
+  border: 1px solid transparent;
+  border-radius: 3px 3px 0 0;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: normal;
+}
+[data-theme="classic"] .side-tab[aria-selected="true"] {
+  border-color: var(--border);
+  border-bottom-color: var(--output-bg);
+  background: var(--output-bg);
+}
+/* Variables' values in plain black, as the Διερμηνευτής lists them. */
+[data-theme="classic"] .var-value {
+  color: var(--text) !important;
+  font-weight: normal !important;
+}
+
+/* Buttons: Windows-style (gray, framed), not the other themes' solid accent. */
+[data-theme="classic"] .bg-accent.text-on-accent {
+  border: 1px solid #707070;
+  border-radius: 3px;
+  background: linear-gradient(#f6f6f6, #dddddd);
+  color: #000000;
+}
+[data-theme="classic"] .bg-accent.text-on-accent:hover:not(:disabled) {
+  border-color: #3c7fb1;
+  background: linear-gradient(#eaf6fd, #bee6fd);
+  filter: none;
 }
 
 /* The Κλασικό theme's output tabs (a traced run): the open one is the tab-like title above. */
@@ -251,6 +322,39 @@
   color: var(--accent);
   font-size: 0.85em;
   font-style: italic;
+}
+
+/* Its number in the gutter. */
+.cm-editor .cm-lineNumbers .cm-gutterElement.cm-traceGutter {
+  color: var(--accent);
+  font-weight: bold;
+}
+/* Κλασικό: the Διερμηνευτής's green line, and a green arrow by the number. */
+[data-theme="classic"] .cm-editor .cm-line.cm-traceLine {
+  background: var(--run-line);
+  box-shadow: none;
+}
+[data-theme="classic"] .cm-editor .cm-traceNote {
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background: #ffffe1;
+  color: var(--text);
+  font-style: normal;
+}
+[data-theme="classic"] .cm-editor .cm-lineNumbers .cm-gutterElement.cm-traceGutter {
+  position: relative;
+  color: var(--gutter-text);
+  font-weight: normal;
+}
+[data-theme="classic"] .cm-editor .cm-lineNumbers .cm-gutterElement.cm-traceGutter::before {
+  content: "➜";
+  position: absolute;
+  left: 0;
+  color: var(--run-arrow);
+  font-family: system-ui, sans-serif;
+  font-size: 1.15em;
+  font-weight: bold;
+  line-height: inherit;
 }
 
 /* The line number of a line with an error turns red (errorLineNumbers in lib/glossa/lint.ts). */

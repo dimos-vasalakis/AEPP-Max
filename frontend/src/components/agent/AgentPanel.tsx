@@ -514,7 +514,7 @@ export function AgentPanel({
           Η τωρινή συζήτηση κλείνει και ο agent δεν θα θυμάται τα παραπάνω.
         </PanelConfirm>
       )}
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
+      <div className="side-header flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
         {tabs ?? <h2 className="text-sm font-semibold">Agent</h2>}
         {messages.length > 0 && (
           <button

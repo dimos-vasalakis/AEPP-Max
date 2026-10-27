@@ -6,7 +6,7 @@ const start = () => EditorState.create({ doc: "ΑΡΧΗ\n  x <- 1\nΤΕΛΟΣ", 
 
 function marked(state: EditorState): { from: number; class?: string; widget: boolean }[] {
   const found: { from: number; class?: string; widget: boolean }[] = [];
-  state.field(traceLine).between(0, state.doc.length, (from, _to, deco) => {
+  state.field(traceLine).decorations.between(0, state.doc.length, (from, _to, deco) => {
     found.push({ from, class: deco.spec.class, widget: Boolean(deco.spec.widget) });
   });
   return found;
@@ -24,6 +24,15 @@ describe("traceLine", () => {
   it("marks the line without a note when the step changed nothing", () => {
     const state = start().update({ effects: setTraceMark.of({ line: 1, note: "" }) }).state;
     expect(marked(state)).toEqual([{ from: 0, class: "cm-traceLine", widget: false }]);
+  });
+
+  it("marks the line's gutter too", () => {
+    const state = start().update({ effects: setTraceMark.of({ line: 2, note: "" }) }).state;
+    const gutter: number[] = [];
+    state.field(traceLine).gutter.between(0, state.doc.length, (from) => {
+      gutter.push(from);
+    });
+    expect(gutter).toEqual([5]);
   });
 
   it("clears on null, on a line that isn't there, and on any edit", () => {

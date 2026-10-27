@@ -53,7 +53,7 @@ export function VariablesPanel({ run, step, stale, tabs }: Props) {
 
   return (
     <section className="flex h-[80dvh] min-h-0 flex-col border-t border-border bg-output lg:h-auto lg:border-t-0 lg:border-l">
-      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
+      <div className="side-header flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
         {tabs}
       </div>
       {run.kind !== "done" ? (
@@ -209,7 +209,7 @@ function ValueRow({ row, type, nested }: { row: VariableRow; type: string | null
         {!nested && <TypeWord type={row.type} />}
       </td>
       <td
-        className={`trace-td border-l border-border whitespace-pre ${row.changed ? "trace-changed font-semibold" : ""}`}
+        className={`var-value trace-td border-l border-border whitespace-pre ${row.changed ? "trace-changed font-semibold" : ""}`}
         style={row.changed ? undefined : { color: valueColor(type, row.value) }}
       >
         {row.value === undefined ? "" : type === "ΧΑΡΑΚΤΗΡΑΣ" ? `"${row.value}"` : row.value}

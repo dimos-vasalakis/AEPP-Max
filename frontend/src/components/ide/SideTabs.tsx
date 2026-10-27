@@ -16,7 +16,7 @@ export function SideTabs({ tab, onTab }: { tab: SideTab; onTab: (tab: SideTab) =
           role="tab"
           aria-selected={t === tab}
           onClick={() => onTab(t)}
-          className={`-mb-px border-b-2 px-0.5 text-sm font-semibold ${
+          className={`side-tab -mb-px border-b-2 px-0.5 text-sm font-semibold ${
             t === tab ? "border-accent text-text" : "border-transparent text-muted hover:text-text"
           }`}
         >
