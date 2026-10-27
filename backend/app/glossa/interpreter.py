@@ -11,13 +11,14 @@ import math
 import re
 import sys
 import time
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from app.glossa import nodes as n
 from app.glossa.builtins import BUILTINS
 from app.glossa.errors import GlossaError
 from app.glossa.lexer import normalize
-from app.glossa.result import RunLimits, RunResult, TraceStep
+from app.glossa.result import Frame, RunLimits, RunResult, TraceStep, Variable
 
 Value = int | float | str | bool
 
@@ -32,6 +33,10 @@ MAX_LIVE_CELLS = 2_000_000
 # Allocating and copying arrays costs time too: this many cells count as one step.
 CELLS_PER_STEP = 1_000
 CLOCK_EVERY = 256  # steps between clock checks
+# What RunResult.frames may hold: array elements in all, and characters per value.
+SNAPSHOT_CELLS = 5_000
+SNAPSHOT_ARRAY_CELLS = 500  # per array: Μεταβλητές lists no more (variables.ts MAX_ELEMENTS)
+SNAPSHOT_CHARS = 200
 
 ADJECTIVE = {
     "ΑΚΕΡΑΙΑ": "ακέραια",
@@ -86,6 +91,9 @@ class _Frame:
     constants: dict[str, Value] = field(default_factory=dict)
     result: Value | _Unset = UNSET  # a function's return value
     cells: int = 0  # its arrays' cells, freed when the call returns (MAX_LIVE_CELLS)
+    depth: int = 0  # how deep in calls (0: the program)
+    call: int = 0  # which call (0: the program), as TraceStep.call
+    copied: dict[str, str] = field(default_factory=dict)  # as TraceStep.copied
 
 
 # Where an argument came from, so a procedure can copy its parameter back.
@@ -144,6 +152,26 @@ def format_value(value: Value) -> str:
     return str(value)
 
 
+def _shown(value: Value) -> str:
+    """A value as Μεταβλητές shows it: as ΓΡΑΨΕ would, a long string cut short."""
+    text = format_value(value)
+    return text if len(text) <= SNAPSHOT_CHARS else text[:SNAPSHOT_CHARS] + "…"
+
+
+def unit_title(unit: n.Unit) -> str:
+    """How a unit starts, as Μεταβλητές names it: «ΔΙΑΔΙΚΑΣΙΑ Ταξινόμηση»."""
+    match unit:
+        case n.Function():
+            word = "ΣΥΝΑΡΤΗΣΗ"
+        case n.Procedure():
+            word = "ΔΙΑΔΙΚΑΣΙΑ"
+        case n.Algorithm():
+            word = "Αλγόριθμος"
+        case _:
+            word = "ΠΡΟΓΡΑΜΜΑ"
+    return f"{word} {unit.name}"
+
+
 def execute(program: n.Program, inputs: list[str], *, limits: RunLimits, trace: bool) -> RunResult:
     """Run a parsed program.
 
@@ -196,6 +224,8 @@ def run_machine(machine: "_Machine") -> RunResult:
         trace_truncated=machine.trace_truncated,
         steps=machine.steps,
         input_line=input_line,
+        frames=machine.snapshot(),
+        units=list(machine.declared.values()),
     )
 
 
@@ -220,9 +250,16 @@ class _Machine:
         # The caller's step after a call, added to the trace once something happens in it.
         self.resume: TraceStep | None = None
         self.main_constants: dict[str, Value] = {}
+        # The calls running, the program first. A call leaves only when it returns, so
+        # after an error, a missing value or a limit this is where the run stopped.
+        self.stack: list[_Frame] = []
+        self.calls = 0  # calls started, to number them (TraceStep.call)
+        # Traced runs: each unit that ran, with its declarations (RunResult.units).
+        self.declared: dict[str, Frame] = {}
 
     def run(self) -> None:
         frame = self.frame(self.program)
+        self.stack.append(frame)
         self.main_constants = frame.constants
         self.block(self.program.body, frame)
 
@@ -237,7 +274,9 @@ class _Machine:
             raise _Limit
         self.resume = None
         if self.trace is not None:
-            self.step = self.record(TraceStep(line=node.line, scope=frame.unit.name))
+            self.step = self.record(
+                TraceStep(line=node.line, scope=frame.unit.name, depth=frame.depth, call=frame.call)
+            )
 
     def charge(self, cells: int) -> None:
         """Count allocating or copying `cells` array cells as steps, and check the clock:
@@ -306,7 +345,61 @@ class _Machine:
                 frame.values[variable.key] = _Array(variable.name, variable.type, dims, cells)
             else:
                 frame.values[variable.key] = UNSET
+        if self.trace is not None and unit.name not in self.declared:
+            self.declared[unit.name] = Frame(unit.name, unit_title(unit), self.variables(frame))
         return frame
+
+    # What Μεταβλητές shows
+
+    def snapshot(self) -> list[Frame]:
+        """The running calls' variables and their values (RunResult.frames), with at
+        most SNAPSHOT_CELLS array elements in all."""
+        budget = [SNAPSHOT_CELLS]
+        return [
+            Frame(f.unit.name, unit_title(f.unit), self.variables(f, budget)) for f in self.stack
+        ]
+
+    def variables(self, frame: _Frame, budget: list[int] | None = None) -> list[Variable]:
+        """`frame`'s variables in the order they were declared (or first given a value),
+        then a function's own value. Without `budget`, no values: only declarations."""
+        shown = []
+        for key, value in frame.values.items():
+            name = frame.names.get(key) or getattr(value, "name", key)
+            variable = Variable(name, frame.types.get(key))
+            if budget is not None:
+                self.fill(variable, value, budget)
+            elif isinstance(value, _Array):
+                variable.dims = list(value.dims)
+            shown.append(variable)
+        unit = frame.unit
+        if isinstance(unit, n.Function):
+            result = frame.result
+            value = None if budget is None or result is UNSET else _shown(result)  # type: ignore[arg-type]
+            shown.append(Variable(unit.name, unit.return_type, value))
+        return shown
+
+    def fill(self, variable: Variable, value: object, budget: list[int]) -> None:
+        """Give `variable` its value, or an array its elements while `budget` lasts."""
+        if isinstance(value, _Array):
+            variable.dims = list(value.dims)
+            cells = ((value.label(i), c) for i, c in enumerate(value.cells) if c is not UNSET)
+            self.fill_cells(variable, cells, budget)  # type: ignore[arg-type]
+        elif value is not UNSET:
+            variable.value = _shown(value)  # type: ignore[arg-type]
+
+    @staticmethod
+    def fill_cells(
+        variable: Variable, cells: Iterable[tuple[str, Value]], budget: list[int]
+    ) -> None:
+        """The first SNAPSHOT_ARRAY_CELLS elements with a value, in order (so all those
+        Μεταβλητές lists), while `budget` lasts."""
+        variable.cells = {}
+        for label, cell in cells:
+            if budget[0] <= 0 or len(variable.cells) >= SNAPSHOT_ARRAY_CELLS:
+                variable.cells_truncated = True
+                return
+            budget[0] -= 1
+            variable.cells[label] = _shown(cell)
 
     def constant_value(self, expr: n.Expr, frame: _Frame) -> Value:
         # The checker allows only these forms.
@@ -364,10 +457,21 @@ class _Machine:
         """A called subprogram's statements; the caller's trace step resumes after."""
         caller = self.resume or self.step
         self.resume = None
+        self.calls += 1
+        frame.depth, frame.call = self.depth + 1, self.calls
+        self.stack.append(frame)
         if self.trace is not None:
             # A row on the subprogram's first line with what its parameters were given,
             # as the πίνακας τιμών writes on entering it (arrays left out: too many cells).
-            self.step = self.record(TraceStep(line=sub.line, scope=sub.name))
+            self.step = self.record(
+                TraceStep(
+                    line=sub.line,
+                    scope=sub.name,
+                    depth=frame.depth,
+                    call=frame.call,
+                    copied=frame.copied,
+                )
+            )
             for param in sub.params:  # type: ignore[attr-defined]
                 value = frame.values.get(param.key)
                 if self.step is not None and isinstance(value, int | float | str):
@@ -378,6 +482,8 @@ class _Machine:
         self.depth += 1
         try:
             self.block(sub.body, frame)
+            # Only on return: a run that stops in the call stops with it on the stack.
+            self.stack.pop()
         finally:
             self.depth -= 1
             self.step = caller
@@ -386,7 +492,9 @@ class _Machine:
                 # function's value being assigned) goes after the call's own steps,
                 # in the order a student writes the πίνακας τιμών by hand.
                 self.step = None
-                self.resume = TraceStep(line=caller.line, scope=caller.scope)
+                self.resume = TraceStep(
+                    line=caller.line, scope=caller.scope, depth=caller.depth, call=caller.call
+                )
 
     def bind(self, param: n.Param, arg: n.Expr, frame: _Frame, caller: _Frame) -> _Ref | None:
         """Give `param` the argument's value; return where the argument lives, if a variable."""
@@ -407,6 +515,7 @@ class _Machine:
                     f"ενώ η παράμετρος {param.name} είναι {ADJECTIVE[slot.type]}.",
                 )
             self.charge(len(source.cells))
+            frame.copied[slot.name] = source.name
             slot.cells = [c if c is UNSET else _fit(slot.type, c) for c in source.cells]  # type: ignore[misc]
             return (caller, arg.key)  # type: ignore[union-attr]
 
@@ -445,7 +554,11 @@ class _Machine:
             self.charge(len(value.cells))
             for i, cell in enumerate(value.cells):
                 if cell is not UNSET:
-                    array.cells[i] = self.fit_or_fail(array.type, cell, node, array.name)  # type: ignore[arg-type]
+                    stored = self.fit_or_fail(array.type, cell, node, array.name)  # type: ignore[arg-type]
+                    # Only the elements that changed, as for a variable below.
+                    if not same_value(array.cells[i], stored):
+                        self.note(array.label(i), stored)
+                    array.cells[i] = stored
             return
         if value is UNSET:
             return
@@ -806,9 +919,11 @@ class _Machine:
 
 def integer_input(text: str, node: n.Node) -> int:
     """A typed integer, at most MAX_INTEGER: past it, an error instead of a crash later."""
-    if len(text.lstrip("+-").lstrip("0")) > len(str(MAX_INTEGER)):  # before int()'s digit limit
+    sign = "-" if text.startswith("-") else ""
+    digits = text.lstrip("+-").lstrip("0") or "0"  # int() refuses past 4300 digits, zeros too
+    if len(digits) > len(str(MAX_INTEGER)):
         raise _error(node, "Ο αριθμός που δόθηκε είναι πολύ μεγάλος.")
-    value = int(text)
+    value = int(sign + digits)
     if abs(value) > MAX_INTEGER:
         raise _error(node, "Ο αριθμός που δόθηκε είναι πολύ μεγάλος.")
     return value

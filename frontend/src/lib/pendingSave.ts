@@ -19,8 +19,10 @@ export function stashForSignIn(pending: PendingSave) {
 }
 
 /**
- * The stashed code if `accept` takes it, which removes it unless `keep`; null if
- * there is none, it is stale (also removed), or `accept` declines (kept for the next visit).
+ * The stashed code if `accept` takes it, which removes it; null if there is none, it
+ * is stale (also removed), or `accept` declines (kept for the next visit). With `keep`
+ * (still signed out) it stays for the sign-in, but is given back only once: a
+ * reload doesn't bring back code the student has since cleared.
  */
 export function takePendingSave(
   now: number,
@@ -30,7 +32,7 @@ export function takePendingSave(
   try {
     const raw = localStorage.getItem(KEY);
     if (raw === null) return null;
-    const { language, code, at } = JSON.parse(raw);
+    const { language, code, at, shown } = JSON.parse(raw);
     const fresh = typeof at === "number" && now - at < MAX_AGE_MS;
     const valid = typeof code === "string" && code.trim() !== "";
     if (!fresh || !valid || (language !== "glossa" && language !== "pseudocode")) {
@@ -38,8 +40,9 @@ export function takePendingSave(
       return null;
     }
     const pending: PendingSave = { language, code };
-    if (!accept(pending)) return null;
-    if (!keep) localStorage.removeItem(KEY);
+    if ((keep && shown) || !accept(pending)) return null;
+    if (keep) localStorage.setItem(KEY, JSON.stringify({ language, code, at, shown: true }));
+    else localStorage.removeItem(KEY);
     return pending;
   } catch {
     try {

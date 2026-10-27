@@ -1,4 +1,5 @@
 from functools import lru_cache
+from typing import Literal
 
 from pydantic import NonNegativeInt
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -23,6 +24,10 @@ class Settings(BaseSettings):
     # AI agent (OpenAI Agents SDK). Empty key = /agent returns 503.
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-sol"
+    # How hard the model thinks before answering: more solves exam problems better but
+    # spends more output tokens (the daily limit counts them). "" = the API's default,
+    # which is no reasoning for gpt-5.6-* models.
+    openai_reasoning_effort: Literal["", "none", "low", "medium", "high"] = "low"
     agent_max_turns: int = 12
     # Agent tokens (input + output) per student per day, Athens time. 0 = no limit
     # (negative is refused at startup). A message costs about 1-4k tokens, more as

@@ -15,7 +15,17 @@ const step = (
   line: number,
   changes: Record<string, string> = {},
   extra: Partial<TraceStep> = {},
-): TraceStep => ({ line, scope: "Κύριο", changes, output: [], condition: null, ...extra });
+): TraceStep => ({
+  line,
+  scope: "Κύριο",
+  changes,
+  output: [],
+  condition: null,
+  depth: 0,
+  call: 0,
+  copied: {},
+  ...extra,
+});
 
 const names = (trace: TraceStep[]) => traceColumns(trace).map((c) => `${c.scope}.${c.name}`);
 

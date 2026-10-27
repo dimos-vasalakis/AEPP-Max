@@ -414,3 +414,31 @@ x ← 0
 Εμφάνισε x"""
         )
         assert output(source, ["-3"]) == ["2"]
+
+
+def test_frames_show_arrays_without_a_size() -> None:
+    result = go(algorithm("Για i από 1 μέχρι 2\n  Π[i] ← 10 * i\nΤέλος_επανάληψης"))
+    frame = result.frames[0]
+    assert frame.title.startswith("Αλγόριθμος ")
+    i, array = frame.variables
+    assert (i.name, i.type, i.value) == ("i", None, "3")
+    assert (array.dims, array.cells) == ([], {"Π[1]": "10", "Π[2]": "20"})
+
+
+def test_a_copied_array_is_traced() -> None:
+    source = """Αλγόριθμος Κύριος
+Π[1] ← 4
+Κάλεσε Διπλό(Π, χ)
+Εμφάνισε χ
+Τέλος Κύριος
+
+Αλγόριθμος Διπλό
+Δεδομένα // Α //
+χ ← 2 * Α[1]
+Αποτελέσματα // χ //
+Τέλος Διπλό
+"""
+    result = go(source, trace=True)
+    assert result.output == ["8"], result.error
+    assert result.trace is not None
+    assert next(s for s in result.trace if s.scope == "Διπλό").copied == {"Α": "Π"}

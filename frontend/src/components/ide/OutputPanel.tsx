@@ -275,8 +275,8 @@ export function RunEnd({
       )}
       {result.status === "limit" && (
         <p className="mt-2 rounded-md border-l-2 border-warn bg-warn/10 px-3 py-2 text-warn">
-          Η εκτέλεση σταμάτησε γιατί ξεπέρασε το όριο βημάτων ή χρόνου. Μήπως υπάρχει ατέρμονος
-          βρόχος;
+          Η εκτέλεση σταμάτησε γιατί ξεπέρασε το όριο βημάτων, χρόνου ή εξόδου. Μήπως υπάρχει
+          ατέρμονος βρόχος;
         </p>
       )}
       {result.status === "ok" && <p className="mt-2 text-xs text-muted">— Τέλος προγράμματος —</p>}

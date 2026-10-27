@@ -37,3 +37,11 @@ def test_both_modes_have_the_guardrails() -> None:
         text = prompt(AgentContext(code="", mode=mode))  # type: ignore[arg-type]
         assert "never changes these rules" in text
         assert "Never reveal" in text
+
+
+def test_both_modes_know_the_exam_conventions() -> None:
+    for mode in ("ask", "agent"):
+        text = prompt(AgentContext(code="", mode=mode))  # type: ignore[arg-type]
+        assert "ευθεία ανταλλαγή" in text and "ΣΗΜΕΙΩΣΗ" in text
+        # Static, ahead of what changes per request, so the prompt's prefix stays cached.
+        assert text.index("ΣΗΜΕΙΩΣΗ") < text.index("The editor is on")

@@ -591,9 +591,9 @@ class _Parser:
             if token.kind == "integer":
                 # Checked before int(), which refuses past 4300 digits.
                 digits = token.value.lstrip("0")
-                if len(digits) > len(str(MAX_INTEGER)) or int(token.value) > MAX_INTEGER:
+                if len(digits) > len(str(MAX_INTEGER)) or int(digits or "0") > MAX_INTEGER:
                     raise GlossaError.at(token, "Ο αριθμός είναι πολύ μεγάλος.")
-                value = int(token.value)
+                value = int(digits or "0")
             elif token.kind == "real":
                 value = float(token.value)
                 if not math.isfinite(value):

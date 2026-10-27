@@ -31,7 +31,13 @@ def _run(code: str, inputs: list[str], trace: bool, language: glossa.Language) -
         timeout_seconds=settings.run_timeout_seconds,
     )
     result = glossa.run(code, inputs, language=language, limits=limits, trace=trace)
-    return json.dumps(asdict(result), ensure_ascii=False)
+    data = asdict(result)
+    # What only the IDE's Μεταβλητές needs: the model would pay tokens for it, and the
+    # trace already has every value.
+    del data["frames"], data["units"]
+    for step in data["trace"] or []:
+        del step["depth"], step["call"], step["copied"]
+    return json.dumps(data, ensure_ascii=False)
 
 
 @function_tool

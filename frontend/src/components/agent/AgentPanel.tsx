@@ -7,6 +7,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -143,9 +144,21 @@ type Props = {
   onWriting: (writing: boolean) => void;
   /** Applies the proposal waiting for approval, or null when Ctrl/Cmd+Enter should run instead (Ide.tsx). */
   onProposal: (apply: (() => void) | null) => void;
+  /** Out of sight (Μεταβλητές shows instead), but still mounted: the chat and a reply go on. */
+  hidden?: boolean;
+  /** The column's tabs, in place of the «Agent» title, once there are two. */
+  tabs?: ReactNode;
 };
 
-export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Props) {
+export function AgentPanel({
+  code,
+  language,
+  onEdit,
+  onWriting,
+  onProposal,
+  hidden = false,
+  tabs,
+}: Props) {
   const user = useUser();
   const [mode, setMode] = useState<AgentMode>("ask");
   // Agent mode: false writes edits at once, true shows them for approval first.
@@ -165,6 +178,12 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
   const input = useRef<HTMLTextAreaElement>(null);
   // Whether the transcript is scrolled to the bottom, so it may follow the reply.
   const atBottom = useRef(true);
+  // The editor now, to tell whether the student applied the last proposal mid-reply.
+  const latestCode = useRef(code);
+  useEffect(() => {
+    latestCode.current = code;
+  }, [code]);
+
   // Another account (or none) in this tab: its chat, and any proposal in it, isn't theirs.
   const [chatUser, setChatUser] = useState(user?.id);
   if (user !== undefined && user?.id !== chatUser) {
@@ -173,7 +192,8 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
     setConversationId(null);
   }
   // …and a reply still streaming for the last account stops: no edit of theirs lands.
-  useEffect(() => {
+  // A layout effect, so no event of the reply is handled after this render.
+  useLayoutEffect(() => {
     abort.current?.abort();
   }, [user?.id]);
 
@@ -189,19 +209,20 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
     setMessages((ms) => settle(ms, "rejected"));
   }
 
-  // Follow the reply as it streams, unless the student scrolled up to read.
+  // Follow the reply as it streams, unless the student scrolled up to read. Again when
+  // the panel shows: while hidden it has no height, so a reply streamed then wasn't followed.
   useEffect(() => {
     const el = scroller.current;
-    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
-  }, [messages, busy]);
+    if (el && atBottom.current && !hidden) el.scrollTop = el.scrollHeight;
+  }, [messages, busy, hidden]);
 
-  // The box grows with the message, up to its max height.
+  // The box grows with the message, up to its max height (measured only while it shows).
   useEffect(() => {
     const el = input.current;
-    if (!el) return;
+    if (!el || hidden) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [draft]);
+  }, [draft, hidden]);
 
   // The proposal waiting for approval, offered to Ide's Ctrl/Cmd+Enter only while the
   // editor is unchanged since it arrived; otherwise the shortcut runs the program.
@@ -279,8 +300,9 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
         mode,
         approve: approving,
       };
-      // The code each edit was built from: the request's, then the previous edit's
-      // (write_code updates the server's copy). Typing since then disarms Ctrl/Cmd+Enter.
+      // A proposal's base, which Ctrl/Cmd+Enter needs the editor to still hold: the
+      // request's code, or the previous edit if the student applied it meanwhile
+      // (each edit is built on the one before). Any typing since disarms it.
       let built = request.code;
       for await (const event of streamChat(request, controller.signal)) {
         if (event.type === "conversation") {
@@ -296,7 +318,11 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
           // A newer edit, proposed or written, replaces the proposal still waiting
           // (each is the whole program).
           const proposal: Proposal | undefined = approving
-            ? { code: event.code, base: built, status: "pending" }
+            ? {
+                code: event.code,
+                base: latestCode.current === built ? built : request.code,
+                status: "pending",
+              }
             : undefined;
           built = event.code;
           setMessages((ms) => settle(ms, "replaced"));
@@ -393,7 +419,7 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
         if (window.getSelection()?.toString()) return;
         input.current?.focus({ preventScroll: true });
       }}
-      className="relative flex h-[80dvh] min-h-0 flex-col border-t border-border bg-agent font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l"
+      className={`relative flex h-[80dvh] min-h-0 flex-col border-t border-border bg-agent font-mono text-[13px] lg:h-auto lg:border-t-0 lg:border-l ${hidden ? "hidden" : ""}`}
     >
       {askNew && (
         <PanelConfirm
@@ -409,7 +435,7 @@ export function AgentPanel({ code, language, onEdit, onWriting, onProposal }: Pr
         </PanelConfirm>
       )}
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 font-sans">
-        <h2 className="text-sm font-semibold">Agent</h2>
+        {tabs ?? <h2 className="text-sm font-semibold">Agent</h2>}
         {messages.length > 0 && (
           <button
             type="button"

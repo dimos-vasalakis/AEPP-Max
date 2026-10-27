@@ -22,6 +22,8 @@ import { type OutputTab, OutputPanel, type RunState } from "./OutputPanel";
 import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
 import { ProgramsDialog } from "./ProgramsDialog";
 import { SaveDialog } from "./SaveDialog";
+import { type SideTab, SideTabs } from "./SideTabs";
+import { VariablesPanel } from "./VariablesPanel";
 
 /** A question before an editor's unsaved code is replaced; `message` says what would be lost. */
 type Ask = { kind: "open"; program: Program; message: string } | { kind: "new"; message: string };
@@ -65,6 +67,10 @@ export function Ide() {
   // The πίνακας τιμών: which tab the output shows, and the step it is on.
   const [outputTab, setOutputTab] = useState<OutputTab>("screen");
   const [traceStep, setTraceStep] = useState(0);
+  // The column beside the editor: a run switches it from the agent to Μεταβλητές.
+  // Before any run (or after Καθαρισμός) there is only the agent.
+  const [pickedSide, setSideTab] = useState<SideTab>("agent");
+  const sideTab: SideTab = run.kind === "idle" ? "agent" : pickedSide;
 
   // Saved programs: which one each editor holds, and the dialogs around them.
   const user = useUser();
@@ -134,6 +140,7 @@ export function Ide() {
       setRun({ kind: "running", traced });
       setOutputTab(traced ? "trace" : "screen");
       setTraceStep(0);
+      setSideTab("variables");
     } else {
       setRun((last) => (last.kind === "done" ? { ...last, pending: true } : last));
     }
@@ -175,8 +182,10 @@ export function Ide() {
       if (e.repeat) return;
       if (isSave) {
         if (dialog === null && ask === null && !askSwitch && !agentWriting) save();
-      } else if (isRun && modEnter && applyProposal.current) applyProposal.current();
-      else if (!busy) void execute([], [], isTrace);
+      } else if (isRun && modEnter && applyProposal.current && sideTab === "agent") {
+        // Only while the proposal is in sight: on Μεταβλητές, Ctrl/Cmd+Enter runs.
+        applyProposal.current();
+      } else if (!busy) void execute([], [], isTrace);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -201,6 +210,9 @@ export function Ide() {
     const waiting = run.result.status === "needs_input" && !run.stopped;
     return waiting && run.result.input_line ? { line: run.result.input_line, note: "" } : null;
   }, [run, stale, outputTab, step]);
+  // Μεταβλητές follows the table's step while the table shows.
+  const tracing = run.kind === "done" && run.traced && outputTab === "trace";
+  const sideTabs = run.kind === "idle" ? undefined : <SideTabs tab={sideTab} onTab={setSideTab} />;
 
   // Saving
 
@@ -524,7 +536,12 @@ export function Ide() {
           onEdit={updateCode}
           onWriting={setAgentWriting}
           onProposal={setProposal}
+          hidden={sideTab !== "agent"}
+          tabs={sideTabs}
         />
+        {sideTab === "variables" && (
+          <VariablesPanel run={run} step={tracing ? step : null} stale={stale} tabs={sideTabs} />
+        )}
       </div>
     </div>
   );

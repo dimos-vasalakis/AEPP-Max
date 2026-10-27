@@ -1,6 +1,8 @@
 import pytest
 
 from app.glossa import RunLimits, RunResult, check, run
+from app.glossa.interpreter import SNAPSHOT_ARRAY_CELLS, SNAPSHOT_CELLS
+from app.glossa.result import Frame
 
 
 def program(body: str, declarations: str = "", subprograms: str = "") -> str:
@@ -473,6 +475,130 @@ class TestTrace:
         assert result.trace_truncated
 
 
+def values(frame: Frame) -> dict[str, str | dict[str, str] | None]:
+    return {v.name: v.cells if v.dims is not None else v.value for v in frame.variables}
+
+
+class TestFrames:
+    """Μεταβλητές: the calls running when the run stopped, with their values."""
+
+    def test_the_program_at_the_end(self) -> None:
+        result = with_subprograms("  x <- 1\n  ΚΑΛΕΣΕ Γέμισε(Α, ν)")
+        assert [(f.scope, f.title) for f in result.frames] == [("Δοκιμή", "ΠΡΟΓΡΑΜΜΑ Δοκιμή")]
+        x, _, array, _ = result.frames[0].variables
+        assert (x.name, x.type, x.value) == ("x", "ΑΚΕΡΑΙΑ", "1")
+        assert array.dims == [3]
+        assert values(result.frames[0]) == {
+            "x": "1",
+            "y": None,  # declared, never given a value
+            "Α": {"Α[1]": "1", "Α[2]": "4", "Α[3]": "9"},
+            "ν": "3",
+        }
+
+    def test_a_run_stopped_in_a_call_keeps_it(self) -> None:
+        result = with_subprograms("  ΓΡΑΨΕ Μισή(-4)")
+        assert result.status == "error"
+        assert [f.title for f in result.frames] == ["ΠΡΟΓΡΑΜΜΑ Δοκιμή"]  # it returned
+        result = with_subprograms("  ΓΡΑΨΕ Ατέρμονη(1)")
+        assert len(result.frames) == 201
+        assert values(result.frames[-1]) == {"ν": "200", "Ατέρμονη": None}
+
+    def test_waiting_for_input_in_a_procedure(self) -> None:
+        subprogram = """
+ΔΙΑΔΙΚΑΣΙΑ Ρώτα(α)
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: α
+ΑΡΧΗ
+  ΔΙΑΒΑΣΕ α
+ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ
+"""
+        source = program("  x <- 5\n  ΚΑΛΕΣΕ Ρώτα(x)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", subprogram)
+        result = run(source)
+        assert result.status == "needs_input"
+        assert [f.title for f in result.frames] == ["ΠΡΟΓΡΑΜΜΑ Δοκιμή", "ΔΙΑΔΙΚΑΣΙΑ Ρώτα"]
+        assert values(result.frames[1]) == {"α": "5"}
+        assert values(run(source, ["7"]).frames[0]) == {"x": "7"}
+
+    def test_a_function_shows_its_value(self) -> None:
+        result = with_subprograms("  ΓΡΑΨΕ Παραγοντικό(3)")
+        assert result.trace is None and result.units == []
+        traced = run(program("  ΓΡΑΨΕ Παραγοντικό(2)", subprograms=SUBPROGRAMS), trace=True)
+        unit = next(u for u in traced.units if u.scope == "Παραγοντικό")
+        assert unit.title == "ΣΥΝΑΡΤΗΣΗ Παραγοντικό"
+        assert [(v.name, v.type, v.value) for v in unit.variables] == [
+            ("ν", "ΑΚΕΡΑΙΑ", None),
+            ("Παραγοντικό", "ΑΚΕΡΑΙΑ", None),
+        ]
+
+    def test_big_arrays_send_only_some_cells(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 6000\n    Α[i] <- 'αβγ'\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i\n  ΧΑΡΑΚΤΗΡΕΣ: Α[6000]"))
+        array = result.frames[0].variables[1]
+        assert array.cells is not None and len(array.cells) == SNAPSHOT_ARRAY_CELLS
+        assert array.cells_truncated
+
+    def test_each_array_gets_its_own_share(self) -> None:
+        body = (
+            "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 5000\n    Α[i] <- i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n"
+            "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10\n    Β[i] <- i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        )
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i, Α[5000], Β[10]"))
+        _, big, small = result.frames[0].variables
+        assert big.cells is not None and len(big.cells) == SNAPSHOT_ARRAY_CELLS
+        assert small.cells is not None and len(small.cells) == 10
+        assert not small.cells_truncated
+
+    def test_all_arrays_share_a_budget(self) -> None:
+        # 12 running calls, each with its own copy of a full 500-cell array.
+        subprogram = """
+ΣΥΝΑΡΤΗΣΗ Βάθος(Α, ν): ΑΚΕΡΑΙΑ
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: Α[500], ν
+ΑΡΧΗ
+  Βάθος <- 1 DIV ν + Βάθος(Α, ν - 1)
+ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ
+"""
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 500\n    Α[i] <- i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ Βάθος(Α, 10)"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i, Α[500]", subprogram))
+        assert result.status == "error" and len(result.frames) == 12
+        arrays = [f.variables[0] for f in result.frames[1:]] + [result.frames[0].variables[1]]
+        assert sum(len(a.cells or {}) for a in arrays) == SNAPSHOT_CELLS
+        assert result.frames[-1].variables[0].cells_truncated
+
+    def test_an_array_parameter_is_traced_in_and_back(self) -> None:
+        subprogram = """
+ΔΙΑΔΙΚΑΣΙΑ Αλλαγή(Β)
+ΜΕΤΑΒΛΗΤΕΣ
+  ΑΚΕΡΑΙΕΣ: Β[2], τ
+ΑΡΧΗ
+  τ <- Β[1]
+  Β[1] <- Β[2]
+  Β[2] <- τ
+ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ
+"""
+        body = "  Α[1] <- 5\n  Α[2] <- 3\n  ΚΑΛΕΣΕ Αλλαγή(Α)\n  ΓΡΑΨΕ Α[1]"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Α[2]", subprogram), trace=True)
+        assert result.trace is not None
+        entry = next(s for s in result.trace if s.scope == "Αλλαγή")
+        assert entry.copied == {"Β": "Α"}
+        back = [s.changes for s in result.trace if s.scope == "Δοκιμή" and s.changes]
+        assert back[-1] == {"Α[1]": "3", "Α[2]": "5"}
+
+    def test_trace_steps_say_which_call(self) -> None:
+        result = run(
+            program(
+                "  x <- Παραγοντικό(1) + Παραγοντικό(1)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", SUBPROGRAMS
+            ),
+            trace=True,
+        )
+        assert result.trace is not None
+        rows = [(s.scope, s.depth, s.call) for s in result.trace]
+        # The second call starts at the same depth as the first, with a call of its own.
+        assert rows[0] == ("Δοκιμή", 0, 0)
+        assert ("Παραγοντικό", 1, 1) in rows and ("Παραγοντικό", 1, 2) in rows
+        assert rows[-1] == ("Δοκιμή", 0, 0)  # x, back on the program's line
+
+
 def test_a_huge_typed_integer_is_an_error() -> None:
     message, _ = error("  ΔΙΑΒΑΣΕ x", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", ["9" * 5000])
     assert message == "Ο αριθμός που δόθηκε είναι πολύ μεγάλος."
@@ -519,6 +645,12 @@ class TestHugeValues:
             )
             assert result.status == "error"
             assert result.error is not None and "πολύ μεγάλος" in result.error.message
+
+    def test_leading_zeros_dont_count(self) -> None:
+        padded = "0" * 5000 + "7"
+        decl = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x"
+        assert output(f"  x <- {padded}\n  ΓΡΑΨΕ x", decl) == ["7"]
+        assert output("  ΔΙΑΒΑΣΕ x\n  ΓΡΑΨΕ x", decl, ["-" + padded]) == ["-7"]
 
     def test_algorithm_data_too(self) -> None:
         source = "Αλγόριθμος Α\nΔεδομένα // x //\nΕμφάνισε x / 2\nΤέλος Α"

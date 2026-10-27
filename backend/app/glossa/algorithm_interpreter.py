@@ -30,7 +30,7 @@ from app.glossa.interpreter import (
     type_of,
 )
 from app.glossa.lexer import normalize
-from app.glossa.result import RunLimits, RunResult
+from app.glossa.result import RunLimits, RunResult, Variable
 
 Position = tuple[int, ...]
 
@@ -80,6 +80,7 @@ class _AlgorithmMachine(_Machine):
     def run(self) -> None:
         main = self.main
         frame = self.frame(main)
+        self.stack.append(frame)
         if main.data:
             self.tick(main.data[0], frame)
             self.line_open = False  # as after Διάβασε
@@ -195,6 +196,7 @@ class _AlgorithmMachine(_Machine):
                 self.copied_cells += size
                 self.charge(len(slot.cells))
                 frame.values[param.key] = _Grid(param.name, dict(slot.cells))
+                frame.copied[param.name] = slot.name
                 return size
             if slot is UNSET:
                 return 0
@@ -233,6 +235,14 @@ class _AlgorithmMachine(_Machine):
             self.store(arg, value, caller)  # type: ignore[arg-type]
 
     # Variables
+
+    def fill(self, variable: Variable, value: object, budget: list[int]) -> None:
+        if isinstance(value, _Grid):
+            variable.dims = []  # no size: only the elements that have a value
+            cells = ((value.label(at), value.cells[at]) for at in sorted(value.cells))
+            self.fill_cells(variable, cells, budget)
+        else:
+            super().fill(variable, value, budget)
 
     def position(self, ref: n.Index, frame: _Frame) -> Position:
         at = []
