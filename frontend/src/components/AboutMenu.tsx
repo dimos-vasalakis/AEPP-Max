@@ -1,6 +1,10 @@
+"use client";
+
 import Image from "next/image";
 import Link from "next/link";
 import { NavPopover } from "@/components/NavPopover";
+import { useState } from "react";
+import { install, type InstallWay, useInstallWay } from "@/lib/install";
 
 /** The logo button: opens the copyright notice. */
 export function AboutMenu() {
@@ -37,20 +41,42 @@ export function AboutMenu() {
   );
 }
 
-/** Where the app can be downloaded; NEXT_PUBLIC_DOWNLOAD_URL, unset until there is a build to offer. */
+/** Installs AEPP Max as an app (lib/install.ts): its own window and icon, no app store. */
 function GetApp() {
-  const url = process.env.NEXT_PUBLIC_DOWNLOAD_URL;
-  const cls = "mt-3 flex items-center justify-center rounded-md px-3 py-2 text-sm font-medium";
-  if (!url) {
+  const way = useInstallWay();
+  // The student closed the browser's dialog: it can't be shown again on this page.
+  const [declined, setDeclined] = useState(false);
+  const box = "mt-3 rounded-md px-3 py-2 text-sm";
+  if (way === null) return null;
+  if (way === "installed") {
     return (
-      <span className={`${cls} bg-panel-2 text-muted`} aria-disabled>
-        Κατέβασε την εφαρμογή · σύντομα
-      </span>
+      <p className={`${box} bg-panel-2 text-muted`}>
+        ✓ Το AEPP Max είναι εγκατεστημένο: άνοιξέ το από τις εφαρμογές σου.
+      </p>
+    );
+  }
+  if (way === "prompt") {
+    return (
+      <button
+        type="button"
+        onClick={() => void install().then((done) => setDeclined(!done))}
+        className={`${box} w-full bg-accent font-medium text-on-accent hover:brightness-110`}
+      >
+        Εγκατάσταση εφαρμογής
+      </button>
     );
   }
   return (
-    <a href={url} target="_blank" rel="noopener noreferrer" className={`${cls} bg-accent text-on-accent hover:brightness-110`}>
-      Κατέβασε την εφαρμογή
-    </a>
+    <p className={`${box} bg-panel-2 text-xs text-muted`}>
+      <b className="text-text">Εγκατάσταση εφαρμογής:</b> {HOW[way]}
+      {declined && " (ή ξαναφόρτωσε τη σελίδα για το κουμπί)"}
+    </p>
   );
 }
+
+const HOW: Record<Exclude<InstallWay, "installed" | "prompt">, string> = {
+  ios: "στο Safari, πάτα Κοινοποίηση (το τετράγωνο με το βέλος) και μετά «Προσθήκη στην οθόνη Αφετηρίας». Μέσα στην εφαρμογή συνδέσου με Google: ο σύνδεσμος του email ανοίγει στο Safari.",
+  "mac-safari": "στο Safari, μενού Αρχείο → «Προσθήκη στο Dock».",
+  firefox: "ο Firefox δεν εγκαθιστά εφαρμογές στον υπολογιστή· άνοιξε το AEPP Max σε Chrome ή Edge.",
+  menu: "από το μενού του browser, «Εγκατάσταση εφαρμογής» ή «Προσθήκη στην αρχική οθόνη».",
+};

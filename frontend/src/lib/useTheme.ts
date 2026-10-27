@@ -31,9 +31,16 @@ function notify() {
   listeners.forEach((listener) => listener());
 }
 
+/** The installed app's title bar (<meta name="theme-color">) in the navbar's color. */
+function syncThemeColor() {
+  const color = getComputedStyle(document.documentElement).getPropertyValue("--panel").trim();
+  if (color) document.querySelector('meta[name="theme-color"]')?.setAttribute("content", color);
+}
+
 function subscribe(listener: () => void) {
   listeners.add(listener);
   ensureStyle();
+  syncThemeColor();
   return () => {
     listeners.delete(listener);
   };
@@ -88,6 +95,7 @@ export function setTheme(id: ThemeId) {
   } catch {
     // Private mode or blocked storage: the theme still applies for this visit.
   }
+  syncThemeColor();
   notify();
 }
 
