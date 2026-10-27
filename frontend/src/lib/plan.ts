@@ -5,6 +5,7 @@
 // student is on.
 import { useEffect, useSyncExternalStore } from "react";
 import { apiFetch } from "@/lib/api/client";
+import { DIAMOND_LIMITS, DIAMOND_PRICE, FREE_LIMITS } from "@/lib/planLimits";
 import { useUser } from "@/lib/supabase/useUser";
 
 /** What /effort picks: how hard the model thinks before it answers. */
@@ -29,7 +30,7 @@ export type PlanInfo = {
   efforts: Effort[];
 };
 
-export const DIAMOND_PRICE = "$5 / μήνα";
+export { DIAMOND_PRICE };
 
 export const FREE: PlanInfo = {
   plan: "free",
@@ -37,19 +38,12 @@ export const FREE: PlanInfo = {
   renews_at: null,
   cancel_at_period_end: false,
   can_buy: false,
-  daily_tokens: 20_000,
-  max_programs: 5,
-  max_themes: 3,
+  ...FREE_LIMITS,
   efforts: ["low", "medium"],
 };
 
-/** Diamond's limits, for the page that offers it (the server's defaults; its env can change them). */
-export const DIAMOND = {
-  daily_tokens: 100_000,
-  max_programs: 50,
-  max_themes: 20,
-  efforts: EFFORTS,
-} as const;
+/** Diamond's limits (lib/planLimits.ts), for the page that offers it. */
+export const DIAMOND = { ...DIAMOND_LIMITS, efforts: EFFORTS } as const;
 
 // One copy for the whole page, so every component sees the same plan. `loaded`: the
 // last read worked; a failed one keeps what was known and is tried again later.

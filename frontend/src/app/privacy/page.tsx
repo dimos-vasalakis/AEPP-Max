@@ -15,7 +15,7 @@ export default function PrivacyPage() {
   return (
     <main className="min-h-dvh bg-bg px-4 py-10 text-text">
       <article className="mx-auto max-w-2xl space-y-6 text-sm leading-relaxed">
-        <Link href="/" className="text-accent hover:underline">
+        <Link href="/editor" className="text-accent hover:underline">
           ← Πίσω στον editor
         </Link>
         <header>

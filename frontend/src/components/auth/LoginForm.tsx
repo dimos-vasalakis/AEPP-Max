@@ -60,7 +60,7 @@ export function LoginForm() {
   const failed = state === "error" || (state === "idle" && linkProblem !== null);
 
   function callbackUrl() {
-    const next = safeNext(params.get("next")) ?? "/";
+    const next = safeNext(params.get("next")) ?? "/editor";
     return `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
   }
 

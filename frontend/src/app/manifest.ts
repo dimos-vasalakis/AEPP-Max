@@ -10,7 +10,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description:
       "Γράψε και τρέξε ΓΛΩΣΣΑ, με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
     lang: "el",
-    start_url: "/",
+    start_url: "/editor",
     scope: "/",
     display: "standalone",
     // The dark theme's, the default (globals.css --bg), so the launch splash matches.

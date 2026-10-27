@@ -1,4 +1,4 @@
-# The IDE (/) and the privacy policy are public pages worth finding.
+# The landing page (/), the editor (/editor) and the privacy policy are public pages worth finding.
 # /auth/ is the sign-in callback: no content, only redirects.
 User-Agent: *
 Allow: /

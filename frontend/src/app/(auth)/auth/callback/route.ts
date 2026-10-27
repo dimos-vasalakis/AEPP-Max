@@ -18,7 +18,7 @@ export async function GET(request: Request) {
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type");
-  const next = safeNext(searchParams.get("next")) ?? "/";
+  const next = safeNext(searchParams.get("next")) ?? "/editor";
   // Keep Supabase's reason (e.g. a wrong Google client secret) for the login page and the URL.
   const failed = new URL("/login", origin);
   for (const key of ["error", "error_code", "error_description"]) {

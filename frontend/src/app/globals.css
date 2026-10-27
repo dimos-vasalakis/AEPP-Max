@@ -264,13 +264,14 @@
 }
 
 /* Buttons: Windows-style (gray, framed), not the other themes' solid accent. */
-[data-theme="classic"] .btn-primary {
+/* Not inside a page that fixes its own theme (the landing page's dark, /login's light). */
+[data-theme="classic"] .btn-primary:not(:is([data-theme="dark"], [data-theme="light"]) *) {
   border: 1px solid var(--btn-border);
   border-radius: 3px;
   background: var(--btn-bg);
   color: var(--btn-text);
 }
-[data-theme="classic"] .btn-primary:hover:not(:disabled) {
+[data-theme="classic"] .btn-primary:hover:not(:disabled):not(:is([data-theme="dark"], [data-theme="light"]) *) {
   border-color: var(--btn-hover-border);
   background: var(--btn-hover-bg);
   filter: none;

@@ -202,8 +202,8 @@ async def checkout(
                 "line_items": [{"price": get_settings().stripe_price_id, "quantity": 1}],
                 "client_reference_id": str(user.id),
                 "subscription_data": {"metadata": {"user_id": str(user.id)}},
-                "success_url": f"{here}/?diamond=welcome",
-                "cancel_url": f"{here}/?diamond=cancel",
+                "success_url": f"{here}/editor?diamond=welcome",
+                "cancel_url": f"{here}/editor?diamond=cancel",
             }
         )
     except stripe.StripeError as err:
