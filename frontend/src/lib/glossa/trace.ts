@@ -86,6 +86,25 @@ export function sourceLine(code: string, line: number): string {
   return (code.split("\n")[line - 1] ?? "").trim();
 }
 
+/**
+ * The screen as it was after `step` (the slow run shows it growing): the run's `output`
+ * cut to the lines written so far, the last one to the characters written so far
+ * (a ΓΡΑΨΕ ending in a space keeps its line open for the next).
+ */
+export function screenAt(output: string[], trace: TraceStep[], step: number): string[] {
+  let lines = 0;
+  let chars = 0;
+  for (const s of trace.slice(0, step + 1)) {
+    if (s.output.length === 0) continue;
+    lines = s.lines;
+    for (const text of s.output) chars += text.length;
+  }
+  const screen = output.slice(0, lines);
+  const before = screen.slice(0, -1).reduce((sum, line) => sum + line.length, 0);
+  if (screen.length > 0) screen[screen.length - 1] = screen[screen.length - 1].slice(0, chars - before);
+  return screen;
+}
+
 /** What a step did, in short, for the editor's inline note: «x = 5, y = 2 · ΑΛΗΘΗΣ». */
 export function stepSummary(step: TraceStep): string {
   const changes = Object.entries(step.changes).map(([name, value]) => `${name} = ${value}`);

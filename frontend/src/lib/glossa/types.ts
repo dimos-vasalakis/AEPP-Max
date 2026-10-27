@@ -19,6 +19,8 @@ export type TraceStep = {
   scope: string;
   changes: Record<string, string>;
   output: string[];
+  /** With output: the screen's lines after this step (the last may still be open); 0 without. */
+  lines: number;
   condition: boolean | null;
   /** How deep in calls (0: the program), and which call (0: the program, then in the order calls start). */
   depth: number;

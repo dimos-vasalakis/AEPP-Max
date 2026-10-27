@@ -8,7 +8,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "AEPP Max",
     short_name: "AEPP Max",
     description:
-      "Γράψε και τρέξε ΓΛΩΣΣΑ, με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
+      "Περιβάλλον ανάπτυξης για ΓΛΩΣΣΑ με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
     lang: "el",
     start_url: "/editor",
     scope: "/",

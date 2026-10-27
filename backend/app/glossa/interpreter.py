@@ -750,6 +750,7 @@ class _Machine:
         self.line_open = stays
         if row := self.current():
             row.output.append(text)
+            row.lines = len(self.output)
             self.trace_chars += len(text)
 
     # Variables

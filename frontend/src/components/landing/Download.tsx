@@ -12,8 +12,8 @@ const PLATFORMS: { id: Platform; title: string; where: string; steps: ReactNode 
     where: "Windows, Mac ή Linux · Chrome ή Edge",
     steps: (
       <>
-        Πάτα <b>Κατέβασε την εφαρμογή</b> εδώ, ή το εικονίδιο εγκατάστασης στη γραμμή
-        διευθύνσεων του browser.
+        Επιλέξτε <b>Εγκατάσταση εφαρμογής</b> σε αυτή τη σελίδα ή το εικονίδιο εγκατάστασης
+        στη γραμμή διευθύνσεων του browser.
       </>
     ),
   },
@@ -33,7 +33,7 @@ const PLATFORMS: { id: Platform; title: string; where: string; steps: ReactNode 
     where: "Chrome",
     steps: (
       <>
-        Πάτα <b>Κατέβασε την εφαρμογή</b>, ή μενού ⋮ → <b>Εγκατάσταση εφαρμογής</b>.
+        Επιλέξτε <b>Εγκατάσταση εφαρμογής</b> σε αυτή τη σελίδα ή από το μενού ⋮ του Chrome.
       </>
     ),
   },
@@ -43,8 +43,8 @@ const PLATFORMS: { id: Platform; title: string; where: string; steps: ReactNode 
     where: "Safari",
     steps: (
       <>
-        Πάτα <b>Κοινοποίηση</b> (το τετράγωνο με το βέλος) → <b>Προσθήκη στην οθόνη
-        Αφετηρίας</b>. Μέσα στην εφαρμογή, συνδέσου με Google.
+        <b>Κοινοποίηση</b> (το τετράγωνο με το βέλος) → <b>Προσθήκη στην οθόνη
+        Αφετηρίας</b>. Μέσα στην εφαρμογή, η σύνδεση γίνεται με Google.
       </>
     ),
   },
@@ -64,7 +64,7 @@ export function Download() {
         >
           {mine === p.id && (
             <span className="absolute -top-2.5 left-5 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-on-accent">
-              Η συσκευή σου
+              Η συσκευή σας
             </span>
           )}
           <h3 className="font-semibold">{p.title}</h3>

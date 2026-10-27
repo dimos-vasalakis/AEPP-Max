@@ -10,6 +10,7 @@ import { TracePanel } from "./TracePanel";
  * typed values can be shown where they were read. (Each input re-runs the
  * program from the start with one more value; the output is the same up to there.)
  * `traced` runs (the «Πίνακας τιμών» button) carry the trace; `code` is what ran.
+ * `slow`: an Αργή εκτέλεση run, traced to be played back (it shows no table).
  * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way. `stopped`: the
  * student stopped it (■) while it waited for a value or re-ran; `kind: "stopped"`
  * when it was stopped before anything came back.
@@ -24,6 +25,7 @@ export type RunState =
       result: RunResult;
       code: string;
       traced: boolean;
+      slow?: boolean;
       pending?: boolean;
       stopped?: boolean;
     }
@@ -44,11 +46,13 @@ type Props = {
   onStep: (step: number) => void;
   /** The editor's code is no longer what ran. */
   stale: boolean;
+  /** A slow run is playing (or was stopped while it played): `run` holds the screen so far. */
+  playing: boolean;
 };
 
 /** The badge in the header: where the last run ended up. */
-function statusBadge(run: RunState): { label: string; tone: string } | null {
-  if (run.kind === "running") return { label: "Εκτελείται…", tone: "text-muted" };
+function statusBadge(run: RunState, playing: boolean): { label: string; tone: string } | null {
+  if (run.kind === "running" || (playing && run.kind === "done" && !run.stopped)) return { label: "Εκτελείται…", tone: "text-muted" };
   if (run.kind === "failed") return { label: "Αποτυχία σύνδεσης", tone: "text-danger" };
   if (run.kind === "stopped" || (run.kind === "done" && run.stopped)) {
     return { label: "Διακόπηκε", tone: "text-warn" };
@@ -66,11 +70,21 @@ function statusBadge(run: RunState): { label: string; tone: string } | null {
   }
 }
 
-export function OutputPanel({ run, onInput, onClear, tab, onTab, step, onStep, stale }: Props) {
+export function OutputPanel({
+  run,
+  onInput,
+  onClear,
+  tab,
+  onTab,
+  step,
+  onStep,
+  stale,
+  playing,
+}: Props) {
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [askClear, setAskClear] = useState(false);
-  const badge = statusBadge(run);
+  const badge = statusBadge(run, playing);
   const hasContent = run.kind === "done" || run.kind === "failed" || run.kind === "stopped";
   const traced = (run.kind === "running" || run.kind === "done") && run.traced;
   const showTrace = traced && tab === "trace";
@@ -116,7 +130,7 @@ export function OutputPanel({ run, onInput, onClear, tab, onTab, step, onStep, s
         )}
         <span className="ml-auto flex items-center gap-3 text-muted">
           {/* The table counts its own rows (a call adds some), so only the screen shows this. */}
-          {run.kind === "done" && !showTrace && <span>{run.result.steps} βήματα</span>}
+          {run.kind === "done" && !showTrace && !playing && <span>{run.result.steps} βήματα</span>}
           {run.kind === "done" && !showTrace && run.result.output.length > 0 && (
             <button type="button" onClick={copy} className="hover:text-text">
               {copied ? "✓ Αντιγράφηκε" : "Αντιγραφή"}
@@ -171,7 +185,7 @@ export function OutputPanel({ run, onInput, onClear, tab, onTab, step, onStep, s
           {run.kind === "running" && <p className="text-muted">Εκτέλεση…</p>}
           {run.kind === "stopped" && <p className="text-warn">— Η εκτέλεση διακόπηκε —</p>}
           {run.kind === "failed" && <p className="text-danger">{run.message}</p>}
-          {run.kind === "done" && <RunOutput run={run} onInput={onInput} />}
+          {run.kind === "done" && <RunOutput run={run} onInput={onInput} playing={playing} />}
         </div>
       )}
     </section>
@@ -206,7 +220,15 @@ function OutputTabButton({
 
 type Done = Extract<RunState, { kind: "done" }>;
 
-function RunOutput({ run, onInput }: { run: Done; onInput: (value: string) => void }) {
+function RunOutput({
+  run,
+  onInput,
+  playing,
+}: {
+  run: Done;
+  onInput: (value: string) => void;
+  playing: boolean;
+}) {
   const { inputs, marks, result } = run;
   const lines: { text: string; input: boolean }[] = [];
   let next = 0;
@@ -239,7 +261,7 @@ function RunOutput({ run, onInput }: { run: Done; onInput: (value: string) => vo
           {line.text}
         </div>
       ))}
-      <RunEnd run={run} onInput={onInput} number={lines.length + 1} />
+      <RunEnd run={run} onInput={onInput} number={lines.length + 1} playing={playing} />
     </>
   );
 }
@@ -249,14 +271,18 @@ export function RunEnd({
   run,
   onInput,
   number,
+  playing = false,
 }: {
   run: Done;
   onInput: (value: string) => void;
   /** The input line's number in the Κλασικό theme's strip. */
   number?: number;
+  /** A slow run still playing hasn't reached its end. */
+  playing?: boolean;
 }) {
   const { inputs, result } = run;
   if (run.stopped) return <p className="mt-2 text-xs text-warn">— Η εκτέλεση διακόπηκε —</p>;
+  if (playing) return null;
   return (
     <>
       {result.status === "needs_input" && (

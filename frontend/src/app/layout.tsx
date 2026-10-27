@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
-import { INSTALL_INIT_SCRIPT } from "@/lib/installScript";
+import { APP_LAUNCH_SCRIPT, INSTALL_INIT_SCRIPT } from "@/lib/installScript";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -10,7 +10,7 @@ const mono = JetBrains_Mono({ variable: "--font-jetbrains", subsets: ["latin", "
 export const metadata: Metadata = {
   title: "AEPP Max",
   description:
-    "Γράψε και τρέξε ΓΛΩΣΣΑ στον browser, με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
+    "Περιβάλλον ανάπτυξης για ΓΛΩΣΣΑ με AI βοηθό, για την Πληροφορική των Πανελλαδικών.",
   // Installed on iOS (app/manifest.ts): the name under the icon, and its own window.
   appleWebApp: { capable: true, title: "AEPP Max", statusBarStyle: "black" },
 };
@@ -24,6 +24,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // suppressHydrationWarning: THEME_INIT_SCRIPT sets data-theme before React hydrates.
     <html lang="el" className={`${sans.variable} ${mono.variable} antialiased`} suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: APP_LAUNCH_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: INSTALL_INIT_SCRIPT }} />
       </head>

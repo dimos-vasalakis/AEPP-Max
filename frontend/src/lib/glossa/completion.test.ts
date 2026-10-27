@@ -5,6 +5,7 @@ import {
   completionOptions,
   glossaAutocomplete,
   inCommentOrString,
+  inDeclarations,
   namesIn,
   type Place,
   placeOf,
@@ -77,8 +78,15 @@ describe("completionOptions", () => {
   });
 
   it("completes declaration types with the colon", () => {
-    const option = completionOptions("ακ", "line-start", []).find((o) => o.label === "ΑΚΕΡΑΙΕΣ");
+    const option = completionOptions("ακ", "declaration", []).find((o) => o.label === "ΑΚΕΡΑΙΕΣ");
     expect(option?.apply).toBe("ΑΚΕΡΑΙΕΣ: ");
+  });
+
+  it("offers only the types in ΜΕΤΑΒΛΗΤΕΣ, and no types elsewhere", () => {
+    expect(labels("α", "declaration", ["αθροισμα"])).toEqual(["ΑΚΕΡΑΙΕΣ"]);
+    expect(labels("π", "declaration")).toEqual(["ΠΡΑΓΜΑΤΙΚΕΣ"]);
+    expect(labels("", "declaration")).toEqual(["ΑΚΕΡΑΙΕΣ", "ΠΡΑΓΜΑΤΙΚΕΣ", "ΧΑΡΑΚΤΗΡΕΣ", "ΛΟΓΙΚΕΣ"]);
+    expect(labels("ακ", "line-start")).not.toContain("ΑΚΕΡΑΙΕΣ");
   });
 
   it("offers only names where only a name fits", () => {
@@ -89,6 +97,17 @@ describe("completionOptions", () => {
   it("offers ΑΛΛΙΩΣ after ΠΕΡΙΠΤΩΣΗ, and return types after a function's header", () => {
     expect(labels("αλ", "case")).toEqual(["ΑΛΛΙΩΣ", "ΑΛΗΘΗΣ"]);
     expect(labels("α", "return-type")).toEqual(["ΑΚΕΡΑΙΑ"]);
+  });
+});
+
+describe("inDeclarations", () => {
+  it("is true only below ΜΕΤΑΒΛΗΤΕΣ and before the next section", () => {
+    expect(inDeclarations("ΠΡΟΓΡΑΜΜΑ α\nΜΕΤΑΒΛΗΤΕΣ\n")).toBe(true);
+    expect(inDeclarations("ΠΡΟΓΡΑΜΜΑ α\nμεταβλητές\n  ΑΚΕΡΑΙΕΣ: x\n  ! σχόλιο\n")).toBe(true);
+    expect(inDeclarations("ΠΡΟΓΡΑΜΜΑ α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x\nΑΡΧΗ\n")).toBe(false);
+    expect(inDeclarations("ΠΡΟΓΡΑΜΜΑ α\n")).toBe(false);
+    expect(inDeclarations("")).toBe(false);
+    expect(inDeclarations("ΔΙΑΔΙΚΑΣΙΑ Π(α)\nΜΕΤΑΒΛΗΤΕΣ\n")).toBe(true);
   });
 });
 

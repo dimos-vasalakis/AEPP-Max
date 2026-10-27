@@ -164,7 +164,7 @@ function AgentLimit({ usage, at }: { usage: AgentUsage; at: number }) {
         </p>
       )}
       <p className="mt-1 text-xs text-muted">
-        Μηδενίζεται τα μεσάνυχτα (ώρα Ελλάδας), {until(new Date(usage.resets_at).getTime() - at)}.
+        Μηδενίζεται {until(new Date(usage.resets_at).getTime() - at)}.
       </p>
     </>
   );

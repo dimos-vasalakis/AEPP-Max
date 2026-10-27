@@ -138,6 +138,7 @@ const LINE_START: Record<Language, string[]> = {
 /** Where the cursor's word is, which decides what fits there. */
 export type Place =
   | "line-start" // a statement or section: ΓΡΑΨΕ, ΑΝ …, a name to assign to
+  | "declaration" // a line in ΜΕΤΑΒΛΗΤΕΣ: only the four types
   | "value" // a value is expected: after <-, ΓΡΑΨΕ, ΑΝ, (, an operator, …
   | "after-value" // right after a value: ΤΟΤΕ, ΑΠΟ, ΜΕΧΡΙ, ΚΑΙ, MOD, …
   | "name" // only a variable fits: after ΓΙΑ, ΔΙΑΒΑΣΕ, in a declaration
@@ -187,6 +188,23 @@ export function placeOf(before: string, language: Language = "glossa"): Place {
   return "value";
 }
 
+/** Words that start a section of a program or subprogram (normalized). */
+const SECTIONS = new Set([
+  "ΠΡΟΓΡΑΜΜΑ", "ΣΥΝΑΡΤΗΣΗ", "ΔΙΑΔΙΚΑΣΙΑ", "ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ",
+  "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ", "ΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ", "ΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ",
+]);
+
+/** True when the line after `textBefore` (the document up to that line) is in a
+ * ΜΕΤΑΒΛΗΤΕΣ section: the nearest section word above it is ΜΕΤΑΒΛΗΤΕΣ. */
+export function inDeclarations(textBefore: string): boolean {
+  const lines = textBefore.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const first = normalizeWord(FIRST_WORD.exec(lines[i])?.[1] ?? "");
+    if (SECTIONS.has(first)) return first === "ΜΕΤΑΒΛΗΤΕΣ";
+  }
+  return false;
+}
+
 /** What may follow a value, by the statement it's in. */
 function continuations(first: string): string[] {
   const operators = ["ΚΑΙ", "DIV", "MOD"]; // Η (or) is left out: one letter
@@ -220,12 +238,14 @@ const blockOptions: Record<Language, Completion[]> = {
   pseudocode: snippets(PSEUDOCODE_BLOCKS),
 };
 const lineStartOptions: Record<Language, Completion[]> = {
-  glossa: [
-    ...LINE_START.glossa.map(keywordOption),
-    ...DECLARATION_TYPES.map((label) => ({ label, apply: `${label}: `, type: "type" })),
-  ],
+  glossa: LINE_START.glossa.map(keywordOption),
   pseudocode: LINE_START.pseudocode.map(keywordOption),
 };
+const declarationOptions: Completion[] = DECLARATION_TYPES.map((label) => ({
+  label,
+  apply: `${label}: `,
+  type: "type",
+}));
 const functionOptions: Completion[] = Object.entries(BUILTINS).map(([name, detail]) =>
   snippetCompletion(`${name}(\${})`, { label: name, displayLabel: `${name}()`, detail, type: "function" }),
 );
@@ -293,6 +313,8 @@ export function completionOptions(
         ...lineStartOptions[language].filter(useful),
         ...nameOptions.filter(useful),
       ];
+    case "declaration":
+      return declarationOptions.filter(useful);
     case "value":
       return [nameOptions, functionOptions, valueWordOptions(language)].flat().filter(useful);
     case "case":
@@ -317,9 +339,14 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
   const before = line.text.slice(0, word.from - line.from);
   if (inCommentOrString(before)) return null;
   const language = context.state.facet(editorLanguage);
+  let place = placeOf(before, language);
+  // In ΜΕΤΑΒΛΗΤΕΣ only a type starts a line; the statements belong after ΑΡΧΗ.
+  if (place === "line-start" && language === "glossa") {
+    if (inDeclarations(context.state.doc.sliceString(0, line.from))) place = "declaration";
+  }
   const options = completionOptions(
     word.text,
-    placeOf(before, language),
+    place,
     namesIn(context.state.doc.toString(), word.from, language),
     FIRST_WORD.exec(before)?.[1],
     language,

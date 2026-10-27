@@ -4,6 +4,7 @@ import {
   changeAt,
   conditionText,
   scopeGroups,
+  screenAt,
   sourceLine,
   stepSummary,
   traceColumns,
@@ -20,6 +21,7 @@ const step = (
   scope: "Κύριο",
   changes,
   output: [],
+  lines: 0,
   condition: null,
   depth: 0,
   call: 0,
@@ -103,5 +105,30 @@ describe("text", () => {
     expect(stepSummary(step(3, { i: "1" }, { condition: true }))).toBe("i = 1 · ΑΛΗΘΗΣ");
     expect(stepSummary(step(3, {}, { condition: false }))).toBe("ΨΕΥΔΗΣ");
     expect(stepSummary(step(3))).toBe("");
+  });
+});
+
+describe("screenAt", () => {
+  // ΓΡΑΨΕ 'α ' · x <- 1 · ΓΡΑΨΕ 'β' · ΓΡΑΨΕ 'γ': the first line stays open for «β».
+  const output = ["αβ", "γ"];
+  const trace = [
+    step(1, {}, { output: ["α"], lines: 1 }),
+    step(2, { x: "1" }),
+    step(3, {}, { output: ["β"], lines: 1 }),
+    step(4, {}, { output: ["γ"], lines: 2 }),
+  ];
+
+  it("shows the screen as it was after each step", () => {
+    expect([0, 1, 2, 3].map((i) => screenAt(output, trace, i))).toEqual([
+      ["α"],
+      ["α"],
+      ["αβ"],
+      ["αβ", "γ"],
+    ]);
+  });
+
+  it("is empty before anything is written, and keeps empty lines", () => {
+    expect(screenAt(output, [step(1)], 0)).toEqual([]);
+    expect(screenAt(["", "x"], [step(1, {}, { output: [""], lines: 1 })], 0)).toEqual([""]);
   });
 });

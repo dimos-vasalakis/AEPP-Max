@@ -43,6 +43,10 @@ class TraceStep:
     scope: str  # program, procedure or function name
     changes: dict[str, str] = field(default_factory=dict)  # name (or Π[2,3]) → new value
     output: list[str] = field(default_factory=list)  # lines ΓΡΑΨΕ wrote at this step
+    # With output: how many lines the screen had after this step (its last one may still
+    # be open, a ΓΡΑΨΕ ending in a space), so the IDE's slow run can show the screen at
+    # any step: `output`'s text continues the line or starts new ones. 0 without output.
+    lines: int = 0
     condition: bool | None = None  # value of the condition, for ΑΝ/ΟΣΟ/ΜΕΧΡΙΣ_ΟΤΟΥ/ΓΙΑ
     # Where the step ran, for Μεταβλητές step by step: how deep in calls (0: the
     # program), and which call (0: the program, then numbered as calls start).

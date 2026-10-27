@@ -584,6 +584,19 @@ class TestFrames:
         back = [s.changes for s in result.trace if s.scope == "Δοκιμή" and s.changes]
         assert back[-1] == {"Α[1]": "3", "Α[2]": "5"}
 
+    def test_trace_steps_count_the_screen_lines(self) -> None:
+        body = "  ΓΡΑΨΕ 'α '\n  x <- 1\n  ΓΡΑΨΕ 'β'\n  ΓΡΑΨΕ 'γ'"
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x"), trace=True)
+        assert result.output == ["αβ", "γ"]
+        assert result.trace is not None
+        # The open line continues at the third step; only steps with output count lines.
+        assert [(s.output, s.lines) for s in result.trace] == [
+            (["α"], 1),
+            ([], 0),
+            (["β"], 1),
+            (["γ"], 2),
+        ]
+
     def test_trace_steps_say_which_call(self) -> None:
         result = run(
             program(

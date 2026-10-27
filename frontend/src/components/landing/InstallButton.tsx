@@ -4,7 +4,7 @@ import { useState } from "react";
 import { install, useInstallWay } from "@/lib/install";
 
 /**
- * The landing page's «Κατέβασε την εφαρμογή»: the browser's own install dialog
+ * The landing page's «Εγκατάσταση εφαρμογής»: the browser's own install dialog
  * where there is one (Chrome, Edge), and otherwise a jump to the page's
  * instructions for this browser (#download).
  */
@@ -26,7 +26,7 @@ export function InstallButton({ className }: { className: string }) {
         className={className}
       >
         <DownloadIcon />
-        Κατέβασε την εφαρμογή
+        Εγκατάσταση εφαρμογής
       </button>
     );
   }
@@ -34,7 +34,7 @@ export function InstallButton({ className }: { className: string }) {
   return (
     <a href="#download" className={className}>
       <DownloadIcon />
-      Κατέβασε την εφαρμογή
+      Εγκατάσταση εφαρμογής
     </a>
   );
 }

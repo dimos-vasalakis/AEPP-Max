@@ -26,7 +26,7 @@ const step = (
   call: number,
   changes: Record<string, string> = {},
   copied: Record<string, string> = {},
-): TraceStep => ({ line: 1, scope, changes, output: [], condition: null, depth, call, copied });
+): TraceStep => ({ line: 1, scope, changes, output: [], lines: 0, condition: null, depth, call, copied });
 
 describe("frameRows", () => {
   it("lists declared variables in order, blank until they get a value", () => {
