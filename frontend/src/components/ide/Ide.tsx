@@ -487,7 +487,7 @@ export function Ide() {
           aria-label="Αργή εκτέλεση"
           data-tip={
             slowMode
-              ? "Αργή εκτέλεση: ενεργή. Το ▶ δείχνει μία μία τις γραμμές που εκτελούνται"
+              ? "Αργή εκτέλεση: ενεργή. Το ▶ δείχνει μία-μία τις γραμμές που εκτελούνται"
               : "Αργή εκτέλεση: ανενεργή"
           }
           className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 ${
@@ -555,7 +555,8 @@ export function Ide() {
               onPrograms={() => setDialog("programs")}
               onSave={save}
               onRename={rename}
-              disabled={agentWriting || busy}
+              // Not during a slow run's playback: the run is already back, and it can last minutes.
+              disabled={agentWriting || run.kind === "running" || (run.kind === "done" && run.pending === true)}
             />
             {agentWriting && (
               <div className="shrink-0 border-b border-border bg-panel-2 px-3 py-1.5 font-mono text-xs text-warn">

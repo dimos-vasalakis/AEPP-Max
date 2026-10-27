@@ -96,7 +96,7 @@ export function screenAt(output: string[], trace: TraceStep[], step: number): st
   let chars = 0;
   for (const s of trace.slice(0, step + 1)) {
     if (s.output.length === 0) continue;
-    lines = s.lines;
+    lines = s.lines ?? lines; // missing from a backend older than the field
     for (const text of s.output) chars += text.length;
   }
   const screen = output.slice(0, lines);
