@@ -79,6 +79,12 @@ export function LoginForm() {
     }
   }
 
+  /** Back to the page the student came from; the landing page if the login was opened directly. */
+  function goBack() {
+    if (history.length > 1) router.back();
+    else router.push("/");
+  }
+
   function switchMode(next: Mode) {
     setState("idle");
     setProblem(null);
@@ -125,6 +131,13 @@ export function LoginForm() {
 
   return (
     <div className="w-full max-w-sm rounded-xl border border-border bg-panel p-6">
+      <button
+        type="button"
+        onClick={goBack}
+        className="mb-4 text-sm text-muted hover:text-text hover:underline"
+      >
+        ← Πίσω
+      </button>
       <Link href="/" className="mb-6 flex items-center gap-2">
         <Image src="/logo-cloud.png" alt="" width={32} height={32} />
         <span className="font-semibold">AEPP Max</span>
