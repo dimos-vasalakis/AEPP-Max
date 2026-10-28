@@ -6,18 +6,24 @@ import type { RunResult } from "@/lib/glossa/types";
 import { TracePanel } from "./TracePanel";
 
 /**
+ * A run played back step by step: `slow` on its own (Αργή εκτέλεση, the 50 sign),
+ * `step` one step per Επόμενο (Βηματική εκτέλεση).
+ */
+export type Pace = "slow" | "step";
+
+/**
  * `marks[i]` is how many output lines existed when `inputs[i]` was typed, so the
  * typed values can be shown where they were read. (Each input re-runs the
  * program from the start with one more value; the output is the same up to there.)
  * `traced` runs (the «Πίνακας τιμών» button) carry the trace; `code` is what ran.
- * `slow`: an Αργή εκτέλεση run, traced to be played back (it shows no table).
+ * `pace`: a run traced to be played back (it shows no table).
  * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way. `stopped`: the
  * student stopped it (■) while it waited for a value or re-ran; `kind: "stopped"`
  * when it was stopped before anything came back.
  */
 export type RunState =
   | { kind: "idle" }
-  | { kind: "running"; traced: boolean }
+  | { kind: "running"; traced: boolean; pace?: Pace }
   | {
       kind: "done";
       inputs: string[];
@@ -25,7 +31,7 @@ export type RunState =
       result: RunResult;
       code: string;
       traced: boolean;
-      slow?: boolean;
+      pace?: Pace;
       pending?: boolean;
       stopped?: boolean;
     }
@@ -46,7 +52,7 @@ type Props = {
   onStep: (step: number) => void;
   /** The editor's code is no longer what ran. */
   stale: boolean;
-  /** A slow run is playing (or was stopped while it played): `run` holds the screen so far. */
+  /** A slow or step run is playing (or was stopped while it played): `run` holds the screen so far. */
   playing: boolean;
 };
 
@@ -277,7 +283,7 @@ export function RunEnd({
   onInput: (value: string) => void;
   /** The input line's number in the Κλασικό theme's strip. */
   number?: number;
-  /** A slow run still playing hasn't reached its end. */
+  /** A played run (slow or step) hasn't reached its end. */
   playing?: boolean;
 }) {
   const { inputs, result } = run;
@@ -321,6 +327,12 @@ function InputLine({
   waiting: boolean;
 }) {
   const [value, setValue] = useState("");
+  // The box appears at the end of a step run, from Enter on Επόμενο: a held or quick
+  // second Enter must not send an empty value.
+  const shownAt = useRef(0);
+  useEffect(() => {
+    shownAt.current = performance.now();
+  }, []);
   return (
     <form
       className="output-input mt-1 flex items-center gap-2 rounded-md border border-accent/50 bg-bg px-2 py-1 focus-within:border-accent"
@@ -347,6 +359,11 @@ function InputLine({
         value={value}
         maxLength={1000} // schemas/run.py MAX_INPUT_CHARS
         onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.repeat || performance.now() - shownAt.current < 400)) {
+            e.preventDefault();
+          }
+        }}
         placeholder="γράψε μια τιμή και πάτα Enter"
         className={`min-w-0 flex-1 bg-transparent text-text outline-none placeholder:text-muted ${waiting ? "opacity-60" : ""}`}
       />

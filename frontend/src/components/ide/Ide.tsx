@@ -18,7 +18,7 @@ import { useProgramFiles } from "@/lib/useProgramFiles";
 import { useThemeInfo } from "@/lib/useTheme";
 import { CodeEditor, type EditorActions } from "./CodeEditor";
 import { FileBar } from "./FileBar";
-import { type OutputTab, OutputPanel, type RunState } from "./OutputPanel";
+import { type OutputTab, OutputPanel, type Pace, type RunState } from "./OutputPanel";
 import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
 import { ProgramsDialog } from "./ProgramsDialog";
 import { SaveDialog } from "./SaveDialog";
@@ -56,15 +56,19 @@ export function Ide() {
   // Αργή εκτέλεση (the 50 sign): ▶ then runs traced and plays the steps back, the
   // running line marked in the editor and the screen growing; `play` is the step on
   // screen, null once it's done (or for any other run). Stopped (■), it stays there.
+  // Βηματική εκτέλεση plays the same way, one step per Επόμενο.
   const [slowMode, setSlowMode] = useState(false);
   const [play, setPlay] = useState<number | null>(null);
   const playing = play !== null && run.kind === "done" && !run.stopped;
   // A ΔΙΑΒΑΣΕ re-run keeps the last result on screen (`pending`); either way it's busy,
-  // and so is a slow run still playing.
+  // and so is a slow or step run still playing.
   const busy = run.kind === "running" || (run.kind === "done" && run.pending === true) || playing;
   // Still running as far as the student can tell, waiting for a value included: ▶ becomes ■.
   const stoppable =
     busy || (run.kind === "done" && run.result.status === "needs_input" && !run.stopped);
+  // A step run still going: the navbar shows Επόμενο and Διακοπή instead of its button.
+  const stepping = stoppable && (run.kind === "running" || run.kind === "done") && run.pace === "step";
+  const nextButton = useRef<HTMLButtonElement>(null);
   // The request of the run on screen, aborted when it is stopped or replaced.
   const request = useRef<AbortController | null>(null);
   // Bumped when a program is opened: a fresh editor, so Ctrl+Z can't bring back the last one's code.
@@ -151,8 +155,8 @@ export function Ide() {
 
   /**
    * Runs the editor's code (or `source`); `traced` also builds the πίνακας τιμών, and
-   * `slow` plays the run back step by step. A re-run for ΔΙΑΒΑΣΕ keeps the last result
-   * on screen until the new one arrives, the table stays on its step, and a slow run
+   * `pace` plays the run back step by step. A re-run for ΔΙΑΒΑΣΕ keeps the last result
+   * on screen until the new one arrives, the table stays on its step, and a played run
    * goes on from the ΔΙΑΒΑΣΕ (the steps before it are the same).
    */
   async function execute(
@@ -160,7 +164,7 @@ export function Ide() {
     marks: number[],
     traced = false,
     source?: string,
-    slow = false,
+    pace?: Pace,
   ) {
     // A new run tidies the code first; a ΔΙΑΒΑΣΕ re-run passes the code it asked for.
     const code = source ?? tidy();
@@ -172,7 +176,7 @@ export function Ide() {
       inputs.length > 0 && run.kind === "done" ? Math.max(0, (run.result.trace?.length ?? 0) - 1) : 0;
     if (inputs.length === 0) {
       setPlay(null);
-      setRun({ kind: "running", traced });
+      setRun({ kind: "running", traced, pace });
       setOutputTab(traced ? "trace" : "screen");
       setTraceStep(0);
       setSideTab("variables");
@@ -182,13 +186,13 @@ export function Ide() {
     try {
       const result = await apiFetch<RunResult>("/run", {
         method: "POST",
-        body: JSON.stringify({ code, inputs, language: languageRef.current, trace: traced || slow }),
+        body: JSON.stringify({ code, inputs, language: languageRef.current, trace: traced || pace !== undefined }),
         signal: controller.signal,
       });
       if (seq !== runSeq.current) return;
-      setRun({ kind: "done", inputs, marks, result, code, traced, slow });
+      setRun({ kind: "done", inputs, marks, result, code, traced, pace });
       const steps = result.trace?.length ?? 0;
-      setPlay(slow && steps > 0 ? Math.min(from, steps - 1) : null);
+      setPlay(pace && steps > 0 ? Math.min(from, steps - 1) : null);
     } catch (err) {
       if (seq !== runSeq.current) return;
       setRun({
@@ -199,13 +203,27 @@ export function Ide() {
     }
   }
 
-  // The slow run's next step; after the last one, the whole result (its end, the ΔΙΑΒΑΣΕ box).
-  useEffect(() => {
+  /** The played run's next step; after the last one, the whole result (its end, the ΔΙΑΒΑΣΕ box). */
+  function nextStep() {
     if (!playing || run.kind !== "done") return;
+    const last = (run.result.trace?.length ?? 0) - 1;
+    setPlay(play >= last ? null : play + 1);
+  }
+
+  // A slow run takes the next step by itself; a step run waits for Επόμενο.
+  useEffect(() => {
+    if (!playing || run.kind !== "done" || run.pace !== "slow") return;
     const last = (run.result.trace?.length ?? 0) - 1;
     const timer = setTimeout(() => setPlay(play >= last ? null : play + 1), SLOW_MS);
     return () => clearTimeout(timer);
   }, [playing, play, run]);
+
+  // Επόμενο takes the focus whenever it can be pressed (the run is back, a ΔΙΑΒΑΣΕ answered),
+  // so Enter or Space goes on.
+  const canStep = stepping && playing;
+  useEffect(() => {
+    if (canStep) nextButton.current?.focus();
+  }, [canStep]);
 
   // F9 and Ctrl/Cmd+Enter run the program, like the button. (On a Mac, F9 only reaches
   // the page with fn held, hence the second shortcut.) While an Agent proposal waits,
@@ -223,6 +241,16 @@ export function Ide() {
       const isRun = e.key === "F9" || e.code === "F9" || (modEnter && !e.shiftKey);
       // e.code: Alt changes the key's character (ƒ on a Mac).
       const isTidy = e.shiftKey && e.altKey && !mod && e.code === "KeyF";
+      // A step run: Enter goes on, unless something else has the focus (the editor, an input,
+      // another button). preventDefault keeps a focused Επόμενο from stepping twice.
+      if (canStep && e.key === "Enter" && !mod && !e.shiftKey && !e.altKey) {
+        const free = e.target === document.body || e.target === nextButton.current;
+        if (free && dialog === null && ask === null && !askSwitch) {
+          e.preventDefault();
+          if (!e.repeat) nextStep();
+          return;
+        }
+      }
       if (!isRun && !isTrace && !isSave && !isTidy) return;
       e.preventDefault();
       e.stopPropagation();
@@ -234,7 +262,7 @@ export function Ide() {
       } else if (isRun && modEnter && applyProposal.current && sideTab === "agent") {
         // Only while the proposal is in sight: on Μεταβλητές, Ctrl/Cmd+Enter runs.
         applyProposal.current();
-      } else if (!busy) void execute([], [], isTrace, undefined, slowMode && !isTrace);
+      } else if (!busy) void execute([], [], isTrace, undefined, slowMode && !isTrace ? "slow" : undefined);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -249,7 +277,7 @@ export function Ide() {
       [...run.marks, run.result.output.length],
       run.traced,
       run.code,
-      run.slow,
+      run.pace,
     );
   }
 
@@ -267,7 +295,7 @@ export function Ide() {
     const waiting = run.result.status === "needs_input" && !run.stopped;
     return waiting && run.result.input_line ? { line: run.result.input_line, note: "" } : null;
   }, [run, stale, outputTab, step, play]);
-  // A slow run shows the screen as it was at its step.
+  // A played run shows the screen as it was at its step.
   const shownRun = useMemo((): RunState => {
     if (play === null || run.kind !== "done" || !run.result.trace) return run;
     return { ...run, result: { ...run.result, output: screenAt(run.result.output, run.result.trace, play) } };
@@ -491,7 +519,7 @@ export function Ide() {
         {/* ▶ while nothing runs; ■ stops a run, also one waiting for a ΔΙΑΒΑΣΕ value. */}
         <button
           type="button"
-          onClick={stoppable ? stop : () => execute([], [], false, undefined, slowMode)}
+          onClick={stoppable ? stop : () => execute([], [], false, undefined, slowMode ? "slow" : undefined)}
           aria-label={stoppable ? "Διακοπή" : "Εκτέλεση"}
           data-tip={stoppable ? "Διακοπή της εκτέλεσης" : "Εκτέλεση (F9 ή Ctrl+Enter)"}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
@@ -508,6 +536,44 @@ export function Ide() {
         >
           <TraceIcon />
         </button>
+        {/* Βηματική εκτέλεση: one step per Επόμενο, for small programs; Διακοπή ends it. */}
+        {stepping ? (
+          <>
+            <button
+              ref={nextButton}
+              type="button"
+              onClick={nextStep}
+              disabled={!canStep}
+              aria-label="Επόμενο βήμα"
+              data-tip="Επόμενο: εκτελεί την επόμενη εντολή (Enter)"
+              className="btn-primary flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-accent px-2.5 text-sm font-semibold text-on-accent hover:brightness-110 disabled:opacity-50"
+            >
+              <StepIcon plain />
+              <span className="hidden sm:inline">Επόμενο</span>
+            </button>
+            <button
+              type="button"
+              onClick={stop}
+              aria-label="Διακοπή"
+              data-tip="Διακοπή της βηματικής εκτέλεσης"
+              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 text-sm hover:bg-panel-2"
+            >
+              <StopIcon />
+              <span className="hidden sm:inline">Διακοπή</span>
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={() => execute([], [], false, undefined, "step")}
+            disabled={busy}
+            aria-label="Βηματική εκτέλεση"
+            data-tip="Βηματική εκτέλεση: μία εντολή κάθε φορά που πατάς Επόμενο"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
+          >
+            <StepIcon />
+          </button>
+        )}
         {/* An on/off switch, not a run: with it on, ▶ runs slowly (SLOW_MS). */}
         <button
           type="button"
@@ -741,6 +807,26 @@ function TraceIcon() {
       <rect x="3" y="4" width="18" height="16" rx="2" />
       <path d="M3 9h18" style={{ stroke: "var(--run, var(--accent))", strokeWidth: 2.4 }} />
       <path d="M9 9v11M15 9v11M3 14.5h18" style={{ opacity: 0.6 }} />
+    </svg>
+  );
+}
+
+/**
+ * ▶ against a bar: one step, Βηματική εκτέλεση and Επόμενο. The bar is in the run color,
+ * or `plain` (on the accent-filled Επόμενο) in the text's.
+ */
+function StepIcon({ plain = false }: { plain?: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden>
+      <path d="M5 5v14l10-7z" fill="currentColor" strokeLinejoin="round" />
+      <path
+        d="M18.5 5v14"
+        style={{
+          stroke: plain ? "currentColor" : "var(--run, var(--accent))",
+          strokeWidth: 2.6,
+          strokeLinecap: "round",
+        }}
+      />
     </svg>
   );
 }

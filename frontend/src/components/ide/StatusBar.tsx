@@ -16,7 +16,7 @@ export function StatusBar({
 }: {
   run: RunState;
   modified: boolean;
-  /** A slow run is still playing back: its outcome isn't shown yet. */
+  /** A slow or step run is still playing back: its outcome isn't shown yet. */
   playing: boolean;
 }) {
   const { line, column } = useCursor();

@@ -18,7 +18,7 @@ const TEXT = {
     sending: "Αποστολή…",
     sent: "Το μήνυμά σου στάλθηκε. Ευχαριστούμε!",
     close: "Κλείσιμο",
-    privacy: "Κρατάμε το μήνυμα για να σου απαντήσουμε, το πολύ ένα χρόνο.",
+    reply: "Θα προσπαθήσουμε να σου απαντήσουμε το συντομότερο δυνατό.",
     tooMany: "Στάλθηκαν πολλά μηνύματα. Δοκίμασε ξανά αργότερα.",
     badEmail: "Έλεγξε το email σου.",
     blank: "Συμπλήρωσε το όνομα και το μήνυμα.",
@@ -35,7 +35,7 @@ const TEXT = {
     sending: "Sending…",
     sent: "Your message was sent. Thank you!",
     close: "Close",
-    privacy: "We keep your message to reply to it, for a year at most.",
+    reply: "We'll try to reply as soon as possible.",
     tooMany: "Too many messages were sent. Please try again later.",
     badEmail: "Please check your email address.",
     blank: "Please fill in your name and message.",
@@ -178,7 +178,7 @@ export function ContactDialog({ lang = "el", onClose }: { lang?: Lang; onClose: 
               autoComplete="off"
             />
           </label>
-          <p className="mt-2 text-xs text-muted">{t.privacy}</p>
+          <p className="mt-2 text-xs text-muted">{t.reply}</p>
           {error && (
             <p
               role="alert"
