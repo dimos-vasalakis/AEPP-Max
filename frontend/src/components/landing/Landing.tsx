@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { ContactButton } from "@/components/ContactDialog";
 import { type Copy, COPY, type Lang } from "./copy";
 import { Download } from "./Download";
 import { InstallButton } from "./InstallButton";
@@ -27,7 +28,7 @@ export function Landing({ lang }: { lang: Lang }) {
   const t = COPY[lang];
   return (
     <div lang={lang} data-theme="dark" className="min-h-dvh bg-bg text-text">
-      <Header t={t} />
+      <Header t={t} lang={lang} />
       <main>
         <Hero t={t} lang={lang} />
         <Features t={t} />
@@ -43,12 +44,12 @@ export function Landing({ lang }: { lang: Lang }) {
         <Faq t={t} />
         <FinalCta t={t} lang={lang} />
       </main>
-      <Footer t={t} />
+      <Footer t={t} lang={lang} />
     </div>
   );
 }
 
-function Header({ t }: { t: Copy }) {
+function Header({ t, lang }: { t: Copy; lang: Lang }) {
   return (
     <header className="sticky top-0 z-20 border-b border-border/70 bg-bg/80 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-4 sm:px-6">
@@ -69,6 +70,9 @@ function Header({ t }: { t: Copy }) {
           <a href="#faq" className="hover:text-text">
             {t.nav.faq}
           </a>
+          <ContactButton lang={lang} className="hover:text-text">
+            {t.nav.contact}
+          </ContactButton>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
           {/* The other language's version of this page. */}
@@ -439,7 +443,7 @@ function FinalCta({ t, lang }: { t: Copy; lang: Lang }) {
   );
 }
 
-function Footer({ t }: { t: Copy }) {
+function Footer({ t, lang }: { t: Copy; lang: Lang }) {
   return (
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-10 text-sm text-muted sm:px-6 md:flex-row md:items-start md:justify-between">
@@ -454,6 +458,9 @@ function Footer({ t }: { t: Copy }) {
           <Link href="/editor" className="hover:text-text">
             Editor
           </Link>
+          <ContactButton lang={lang} className="hover:text-text">
+            {t.nav.contact}
+          </ContactButton>
           <Link href="/privacy" hrefLang="el" className="hover:text-text">
             {t.footer.privacy}
           </Link>

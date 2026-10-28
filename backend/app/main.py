@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 from collections.abc import AsyncIterator
@@ -16,6 +17,7 @@ from sentry_sdk.integrations.logging import (
 from sentry_sdk.types import Hint, Log, Metric, SamplingContext
 from sqlalchemy.exc import DBAPIError, IntegrityError, InterfaceError, OperationalError
 
+from app.api.v1.endpoints.contact import delete_expired
 from app.api.v1.router import api_router
 from app.core.config import get_settings, is_unset
 from app.core.db import get_engine
@@ -108,7 +110,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # The SDK uploads every run (messages, code, tool output) to OpenAI's Traces
     # dashboard by default. Students' conversations stay out of it.
     set_tracing_disabled(True)
+    # In the background: a slow or unreachable database mustn't hold up startup.
+    cleanup = None if is_unset(settings.database_url) else asyncio.create_task(delete_expired())
     yield
+    if cleanup:
+        cleanup.cancel()
     if not is_unset(settings.database_url):
         await get_engine().dispose()
 
