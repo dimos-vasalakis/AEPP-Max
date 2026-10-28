@@ -23,6 +23,7 @@ __all__ = [
     "RunStatus",
     "TraceStep",
     "check",
+    "compile_source",
     "run",
 ]
 
@@ -31,7 +32,8 @@ _TOO_DEEP = ErrorInfo(
 )
 
 
-def _compile(source: str, language: Language) -> Program | Algorithm | ErrorInfo:
+def compile_source(source: str, language: Language = "glossa") -> Program | Algorithm | ErrorInfo:
+    """The checked AST, or the first syntax or static error."""
     try:
         tokens = tokenize(source, language)
         return parse(tokens) if language == "glossa" else parse_algorithms(tokens)
@@ -43,7 +45,7 @@ def _compile(source: str, language: Language) -> Program | Algorithm | ErrorInfo
 
 def check(source: str, language: Language = "glossa") -> ErrorInfo | None:
     """The first syntax or static error in the program, without running it."""
-    compiled = _compile(source, language)
+    compiled = compile_source(source, language)
     return compiled if isinstance(compiled, ErrorInfo) else None
 
 
@@ -62,7 +64,7 @@ def run(
     errors come back as status "error" with a Greek message and line number.
     CPU-bound, so async callers must use asyncio.to_thread.
     """
-    compiled = _compile(source, language)
+    compiled = compile_source(source, language)
     if isinstance(compiled, ErrorInfo):
         return RunResult(status="error", error=compiled)
     run_with = execute_algorithms if isinstance(compiled, Algorithm) else execute

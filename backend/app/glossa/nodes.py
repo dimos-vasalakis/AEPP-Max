@@ -196,6 +196,7 @@ class Variable(Node, Named):
     name: str
     type: TypeName
     dimensions: list[Expr]  # empty for a simple variable
+    declared_on: int  # the line of its type word (a list may go on after &)
 
 
 @dataclass(kw_only=True)

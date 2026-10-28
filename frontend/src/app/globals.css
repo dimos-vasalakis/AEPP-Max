@@ -24,6 +24,8 @@
   --danger: #ff6b6b;
   --purple: #b392f0;
   --active-line: #ffffff08;
+  /* A neutral selection: the red accent would read as an error mark. */
+  --selection: #264f78;
   --output-bg: var(--panel);
   --editor-font: var(--font-jetbrains), ui-monospace, monospace;
   --syn-keyword: #ff6464;
@@ -57,6 +59,7 @@
   --danger: #c4161c;
   --purple: #7c3aed;
   --active-line: #e5141b0a;
+  --selection: #add6ff;
   --output-bg: var(--panel);
   --editor-font: var(--font-jetbrains), ui-monospace, monospace;
   --syn-keyword: #d0101a;
@@ -94,7 +97,9 @@
   --warn: #8a5a00;
   --danger: #c50f1f;
   --purple: #7a1fa2;
-  --active-line: #ffffe1;
+  /* #ffffe1 on white, but see-through: the selection is drawn under the lines. */
+  --active-line: #ffff001e;
+  --trace-note-bg: #ffffe1;
   --output-bg: #ffffff;
   --run: #22a81e;
   --run-light: #7dec5f;
@@ -447,7 +452,7 @@
 [data-theme="classic"] .cm-editor .cm-traceNote {
   border: 1px solid var(--border);
   border-radius: 0;
-  background: var(--active-line);
+  background: var(--trace-note-bg);
   color: var(--text);
   font-style: normal;
 }

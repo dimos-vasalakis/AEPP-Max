@@ -8,6 +8,12 @@ from agents import set_default_openai_key, set_tracing_disabled
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sentry_sdk.integrations.logging import (
+    LoggingIntegration,
+    ignore_logger,
+    ignore_logger_for_sentry_logs,
+)
+from sentry_sdk.types import Hint, Log, Metric, SamplingContext
 from sqlalchemy.exc import DBAPIError, IntegrityError, InterfaceError, OperationalError
 
 from app.api.v1.router import api_router
@@ -16,6 +22,25 @@ from app.core.db import get_engine
 
 settings = get_settings()
 logger = logging.getLogger("uvicorn.error")
+
+
+def strip_user_agent[T: (Log, Metric)](item: T, _: Hint) -> T:
+    # The SDK puts the request's User-Agent on every log and metric, whatever
+    # data_collection says.
+    item["attributes"].pop("user_agent.original", None)
+    return item
+
+
+TRACES_RATE = 1.0 if settings.environment == "development" else 0.1
+
+
+def sample_traces(context: SamplingContext) -> float:
+    # Render's health check (render.yaml) is worth neither a trace nor a profile.
+    if (context.get("asgi_scope") or {}).get("path") == "/api/v1/health":
+        return 0.0
+    parent = context.get("parent_sampled")  # the browser's trace, when it sent one
+    return float(parent) if parent is not None else TRACES_RATE
+
 
 if settings.sentry_dsn:
     sentry_sdk.init(
@@ -35,8 +60,30 @@ if settings.sentry_dsn:
             "database_query_data": False,
             "stack_frame_variables": False,
         },
-        traces_sample_rate=1.0 if settings.environment == "development" else 0.1,
+        traces_sampler=sample_traces,
+        # Continuous profiling while a sampled trace runs (the traces rate above bounds
+        # it; it samples every thread meanwhile): which of our functions take the time,
+        # the interpreter's above all. Frames only; stack_frame_variables is off.
+        profile_session_sample_rate=1.0,
+        profile_lifecycle="trace",
+        # The SDK's default, kept on purpose: while Sentry can't keep up (rate limits, a
+        # full queue) it halves the traces rate again every 10 s, and goes back once it
+        # recovers, instead of piling up.
+        enable_backpressure_handling=True,
+        # Sentry Logs: what `sentry_sdk.logger` writes (structured: the agent's replies,
+        # its daily limit, Stripe's events) and the stdlib loggers' warnings and errors.
+        # Not INFO: uvicorn's INFO lines (a WebSocket refused) carry the client's address.
+        enable_logs=True,
+        integrations=[LoggingIntegration(sentry_logs_level=logging.WARNING)],
+        before_send_log=strip_user_agent,
+        # Metrics (sentry_sdk.metrics, on by default): counts and timings with
+        # low-cardinality attributes only, never a user id.
+        before_send_metric=strip_user_agent,
     )
+    # The SDK hooks every logger. uvicorn.access writes each request's client IP and
+    # query string: neither a log nor a breadcrumb on errors.
+    ignore_logger("uvicorn.access")
+    ignore_logger_for_sentry_logs("uvicorn.access")
 
 
 @asynccontextmanager

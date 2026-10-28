@@ -7,6 +7,8 @@ from agents import Agent, RunContextWrapper, function_tool
 from app import glossa
 from app.agent.context import AgentContext, CodeEdit
 from app.core.config import get_settings
+from app.glossa.nodes import Program
+from app.glossa.parser import PLURAL_OF
 from app.schemas.run import MAX_SOURCE_CHARS
 
 # The model reads tool output as text; this many trace steps is plenty to
@@ -77,10 +79,51 @@ def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) ->
     return ctx.context.mode == "agent"
 
 
-def _write(context: AgentContext, code: str, summary: str, error: glossa.ErrorInfo | None) -> str:
+def _split_declarations(program: Program) -> str | None:
+    """A type declared on more than one line of a unit (ΑΚΕΡΑΙΕΣ: i, j and then
+    ΑΚΕΡΑΙΕΣ: Α[10]). ΓΛΩΣΣΑ allows it, but exam answers group each type on one line."""
+    for unit in [program, *program.subprograms]:
+        lines: dict[str, set[int]] = {}
+        for var in unit.variables:
+            lines.setdefault(var.type, set()).add(var.declared_on)
+        for type_name, where in lines.items():
+            if len(where) > 1:
+                plural = PLURAL_OF[type_name]
+                numbers = ", ".join(str(line) for line in sorted(where))
+                return (
+                    f"Not written: {unit.name} declares {plural} on lines {numbers}. Declare each"
+                    f" type once, all its variables and arrays on one line ({plural}: i, j,"
+                    " Α[10]), then call write_code again."
+                )
+    return None
+
+
+def _splits(code: str, language: glossa.Language) -> bool:
+    compiled = glossa.compile_source(code, language)
+    return isinstance(compiled, Program) and _split_declarations(compiled) is not None
+
+
+def _review(code: str, language: glossa.Language, before: str = "") -> str | None:
+    """Why write_code refuses this code (it doesn't compile, or its declarations
+    would lose marks), or None. `before` is the editor's code: a student who splits
+    their own declarations keeps that style. CPU-bound, like the runs above."""
+    compiled = glossa.compile_source(code, language)
+    if isinstance(compiled, glossa.ErrorInfo):
+        where = f" (line {compiled.line})" if compiled.line else ""
+        return (
+            f"Not written, it doesn't compile{where}: {compiled.message}"
+            " Fix it and call write_code again."
+        )
+    if not isinstance(compiled, Program) or _splits(before, language):
+        return None
+    return _split_declarations(compiled)
+
+
+def _write(context: AgentContext, code: str, summary: str, refusal: str | None) -> str:
     """write_code's work, after its guardrails: nothing reaches the student's
-    editor that is empty, too long or doesn't compile (`error`, from glossa.check).
-    A refusal goes back to the model, so it can fix the code and try again."""
+    editor that is empty, too long, doesn't compile or splits its declarations
+    (`refusal`, from _review). A refusal goes back to the model, so it can fix the
+    code and try again."""
     if not code.strip():
         return "Not written: the code is empty. Send the complete program."
     if len(code) > MAX_SOURCE_CHARS:
@@ -90,12 +133,8 @@ def _write(context: AgentContext, code: str, summary: str, error: glossa.ErrorIn
             f"Not written: at most {MAX_EDITS_PER_REPLY} edits per reply. Stop editing and"
             " tell the student what you changed."
         )
-    if error is not None:
-        where = f" (line {error.line})" if error.line else ""
-        return (
-            f"Not written, it doesn't compile{where}: {error.message}"
-            " Fix it and call write_code again."
-        )
+    if refusal is not None:
+        return refusal
     context.writes += 1
     context.edits.append(CodeEdit(code=code, summary=summary.strip()[:MAX_SUMMARY_CHARS]))
     # Later tool calls without `code` now run what the editor holds.
@@ -114,11 +153,11 @@ async def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: s
         code: The complete new program (or algorithm), not a fragment, with `!` comments in Greek.
         summary: One sentence in Greek on what changes.
     """
-    # The parser is CPU-bound, like the runs above; the context changes back on the loop.
-    error = None
+    # The parser runs in a thread; the context changes back on the loop.
+    refusal = None
     if code.strip() and len(code) <= MAX_SOURCE_CHARS:
-        error = await asyncio.to_thread(glossa.check, code, ctx.context.language)
-    return _write(ctx.context, code, summary, error)
+        refusal = await asyncio.to_thread(_review, code, ctx.context.language, ctx.context.code)
+    return _write(ctx.context, code, summary, refusal)
 
 
 TOOLS = [run_program, trace_program, write_code]

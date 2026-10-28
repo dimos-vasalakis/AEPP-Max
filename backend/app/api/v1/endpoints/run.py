@@ -1,12 +1,23 @@
 import asyncio
+import time
 
 from fastapi import APIRouter
+from sentry_sdk import metrics
 
 from app import glossa
 from app.core.config import get_settings
 from app.schemas.run import CheckRequest, CheckResult, RunRequest
 
 router = APIRouter(tags=["run"])
+
+
+def timed_run(body: RunRequest, limits: glossa.RunLimits) -> tuple[glossa.RunResult, float]:
+    """The run and its milliseconds, timed in the worker: not the wait for a thread."""
+    started = time.monotonic()
+    result = glossa.run(
+        body.code, body.inputs, language=body.language, limits=limits, trace=body.trace
+    )
+    return result, (time.monotonic() - started) * 1000
 
 
 @router.post("/run", response_model=glossa.RunResult)
@@ -19,14 +30,19 @@ async def run_program(body: RunRequest) -> glossa.RunResult:
         max_trace_steps=settings.run_max_trace_steps,
         timeout_seconds=settings.run_timeout_seconds,
     )
-    return await asyncio.to_thread(
-        glossa.run,
-        body.code,
-        body.inputs,
-        language=body.language,
-        limits=limits,
-        trace=body.trace,
-    )
+    try:
+        result, elapsed = await asyncio.to_thread(timed_run, body, limits)
+    except Exception:
+        # An interpreter bug: the 500 reaches Sentry as an error too.
+        metrics.count("glossa.run", 1, attributes={"status": "crash", "language": body.language})
+        raise
+    # How runs end (ok, error, needs_input, limit) and how long the interpreter takes,
+    # to tune RunLimits and see whether students hit them. Per request: each value a
+    # ΔΙΑΒΑΣΕ asks for re-runs the program, so needs_input counts those re-runs.
+    tags = {"status": result.status, "language": body.language, "trace": body.trace}
+    metrics.count("glossa.run", 1, attributes=tags)
+    metrics.distribution("glossa.run.duration", elapsed, "millisecond", tags)
+    return result
 
 
 @router.post("/check", response_model=CheckResult)

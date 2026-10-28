@@ -18,6 +18,8 @@ from typing import Annotated
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
+from sentry_sdk import logger as sentry_logger
+from sentry_sdk import metrics
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -179,6 +181,7 @@ async def checkout(
             await sync(row)
             if is_diamond(row):
                 await db.commit()
+                metrics.count("billing.checkout", 1, attributes={"outcome": "already_diamond"})
                 raise HTTPException(status.HTTP_409_CONFLICT, "Already Diamond")
             # Only the newest Checkout can be paid: an older one left open in another tab
             # would start a second subscription.
@@ -207,9 +210,12 @@ async def checkout(
             }
         )
     except stripe.StripeError as err:
+        # The failure's kind (AuthenticationError: a bad key, as on 2026-10-28).
+        metrics.count("billing.checkout", 1, attributes={"outcome": type(err).__name__})
         logger.exception("Stripe checkout failed for user %s", user.id)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not start the payment") from err
     await db.commit()
+    metrics.count("billing.checkout", 1, attributes={"outcome": "started"})
     assert session.url is not None  # hosted Checkout always has one
     return RedirectOut(url=session.url)
 
@@ -282,6 +288,18 @@ async def webhook(request: Request, db: DbSession) -> Response:
         logger.exception("Could not read the subscriptions of %s", customer)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, "Could not read Stripe") from err
     await db.commit()
+    # Every plan change has a line: which event, and what the student has now.
+    sentry_logger.info(
+        "Stripe {event_type}: subscription is {status}",
+        event_type=event.type,
+        status=row.status,
+        attributes={
+            "user.id": str(row.user_id),
+            "stripe.event_id": event.id,
+            "stripe.customer_id": customer,
+            "billing.plan": "diamond" if is_diamond(row) else "free",
+        },
+    )
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 

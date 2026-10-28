@@ -227,3 +227,12 @@ def test_run_and_check_take_the_language(client: TestClient) -> None:
     assert check.json() == {"error": None}
     as_program = client.post("/api/v1/check", json={"code": algorithm})
     assert "«Αλγόριθμος»" in as_program.json()["error"]["message"]
+
+
+def test_health_checks_are_not_traced() -> None:
+    from app.main import TRACES_RATE, sample_traces
+
+    assert sample_traces({"asgi_scope": {"path": "/api/v1/health"}}) == 0.0  # type: ignore[typeddict-item]
+    assert sample_traces({"asgi_scope": {"path": "/api/v1/run"}}) == TRACES_RATE  # type: ignore[typeddict-item]
+    # The browser's decision wins, so a trace isn't cut in half.
+    assert sample_traces({"parent_sampled": False}) == 0.0  # type: ignore[typeddict-item]

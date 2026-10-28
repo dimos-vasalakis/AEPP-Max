@@ -1,7 +1,8 @@
 from types import SimpleNamespace
 
 from app.agent.context import AgentContext
-from app.agent.instructions import instructions
+from app.agent.instructions import EXAM, instructions
+from app.agent.tools import _review
 
 
 def prompt(context: AgentContext) -> str:
@@ -45,3 +46,8 @@ def test_both_modes_know_the_exam_conventions() -> None:
         assert "ευθεία ανταλλαγή" in text and "ΣΗΜΕΙΩΣΗ" in text
         # Static, ahead of what changes per request, so the prompt's prefix stays cached.
         assert text.index("ΣΗΜΕΙΩΣΗ") < text.index("The editor is on")
+
+
+def test_the_example_program_passes_write_code() -> None:
+    example = EXAM.split("```\n")[1]
+    assert example.startswith("ΠΡΟΓΡΑΜΜΑ") and _review(example, "glossa") is None

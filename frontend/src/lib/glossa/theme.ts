@@ -61,9 +61,10 @@ function editorTheme(dark: boolean) {
         },
         ".cm-activeLine": { backgroundColor: "var(--active-line)" },
         ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--text)" },
-        "&.cm-focused .cm-selectionBackground, .cm-selectionBackground": {
-          backgroundColor: `var(--selection, ${tint(25)})`,
-        },
+        // CodeMirror's base theme colors the focused selection with this exact
+        // selector; a less specific one only shows once the editor loses focus.
+        "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground":
+          { backgroundColor: "var(--selection)" },
         ".cm-tooltip": {
           backgroundColor: "var(--panel-2)",
           border: "1px solid var(--border)",

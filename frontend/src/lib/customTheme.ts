@@ -108,6 +108,7 @@ export function themeVars(colors: ThemeColors): Record<string, string> {
     "--danger": dark ? "#ff6b6b" : "#c4161c",
     "--purple": dark ? "#b392f0" : "#7c3aed",
     "--active-line": "color-mix(in srgb, var(--text) 5%, transparent)",
+    "--selection": dark ? "#264f78" : "#add6ff",
     "--output-bg": "var(--panel)",
     "--editor-font": "var(--font-jetbrains), ui-monospace, monospace",
     "--syn-keyword": colors.keyword,

@@ -5,6 +5,8 @@ from agents import ModelSettings, RunConfig
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from openai.types.shared import Reasoning
+from sentry_sdk import logger as sentry_logger
+from sentry_sdk import metrics
 from sqlalchemy import func, select
 
 from app.agent.context import AgentContext
@@ -57,6 +59,13 @@ async def chat(
     reserved = MESSAGE_TOKENS if limit > 0 else 0
     # Committed with the conversation below; an error before that refunds it.
     if reserved and not await reserve_message(db, user.id, limit):
+        # How often each plan's limit is hit, to tune AGENT_DAILY_TOKENS.
+        metrics.count("agent.limit_reached", 1, attributes={"plan": plan.name})
+        sentry_logger.info(
+            "Daily agent limit reached on the {plan} plan",
+            plan=plan.name,
+            attributes={"user.id": str(user.id), "agent.daily_tokens": limit},
+        )
         raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "Daily agent limit reached")
     if body.program_id is not None:
         await owned_program(db, user, body.program_id)

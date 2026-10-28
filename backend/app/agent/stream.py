@@ -9,8 +9,10 @@ Events (frontend/src/lib/api/agent.ts parses them):
   done {}                   the run finished
 """
 
+import contextlib
 import json
 import logging
+import time
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict
@@ -19,6 +21,8 @@ import anyio
 from agents import RunConfig, Runner, Usage
 from agents.memory import Session
 from openai.types.responses import ResponseTextDeltaEvent
+from sentry_sdk import logger as sentry_logger
+from sentry_sdk import metrics
 
 from app.agent.context import AgentContext
 from app.agent.tutor import get_agent
@@ -33,6 +37,42 @@ def sse(event: str, data: object) -> str:
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
+def report_reply(
+    outcome: str, context: AgentContext, usage: Usage, run_config: RunConfig | None, started: float
+) -> None:
+    """A Sentry log and metrics per reply, to see what replies cost, how long they take
+    and how they end. Counts and timings only: never the message, the code or the
+    reply (/privacy)."""
+    model = run_config.model if run_config is not None else None
+    duration_ms = round((time.monotonic() - started) * 1000)
+    # Few values each, so the metrics can be grouped by any of them.
+    tags = {
+        "outcome": outcome,
+        "mode": context.mode,
+        "gen_ai.request.model": model if isinstance(model, str) else "default",
+    }
+    metrics.count("agent.reply", 1, attributes=tags)
+    metrics.distribution("agent.reply.duration", duration_ms, "millisecond", tags)
+    metrics.distribution("agent.reply.input_tokens", usage.input_tokens, "none", tags)
+    metrics.distribution("agent.reply.output_tokens", usage.output_tokens, "none", tags)
+    sentry_logger.info(
+        "Agent reply {outcome} in {mode} mode",
+        outcome=outcome,
+        mode=context.mode,
+        attributes={
+            "gen_ai.request.model": tags["gen_ai.request.model"],
+            "gen_ai.usage.input_tokens": usage.input_tokens,
+            "gen_ai.usage.output_tokens": usage.output_tokens,
+            "gen_ai.usage.reasoning.output_tokens": usage.output_tokens_details.reasoning_tokens,
+            "agent.model_requests": usage.requests,
+            "agent.code_writes": context.writes,
+            "agent.language": context.language,
+            "agent.approve": context.approve,
+            "duration_ms": duration_ms,
+        },
+    )
+
+
 async def stream_reply(
     conversation_id: uuid.UUID,
     message: str,
@@ -42,6 +82,8 @@ async def stream_reply(
     run_config: RunConfig | None = None,
 ) -> AsyncIterator[str]:
     yield sse("conversation", {"id": str(conversation_id)})
+    started = time.monotonic()
+    outcome = "cancelled"  # unless it gets to the end: the student left or pressed Esc
     result = Runner.run_streamed(
         get_agent(),
         message,
@@ -64,14 +106,19 @@ async def stream_reply(
                         yield sse("edit", asdict(edit))
                     context.edits.clear()
         # Before the usage write below: the reply is over for the student.
+        outcome = "done"
         yield sse("done", {})
     except Exception:
+        outcome = "error"
         # The 200 and the first events are already sent, so report it in-stream.
         logger.exception("Agent run failed (conversation %s)", conversation_id)
         yield sse("error", {"message": "Ο βοηθός αντιμετώπισε πρόβλημα. Δοκίμασε ξανά."})
     finally:
         # Also runs when the client disconnects: stop paying for an unread answer.
         result.cancel()
+        # Never in the way of the usage write below (an SDK upgrade renaming a field).
+        with contextlib.suppress(Exception):
+            report_reply(outcome, context, result.context_wrapper.usage, run_config, started)
         if on_usage is not None:
             # Count what was spent, even on a disconnect: shielded, or the cancelled
             # request would cancel this write too. Bounded, so a stuck database

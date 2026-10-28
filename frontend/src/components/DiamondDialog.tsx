@@ -154,15 +154,6 @@ export function DiamondDialog({ opening, onClose }: { opening: DiamondOpening; o
                 <td className="border-t border-border px-3 py-2 font-medium">{row.diamond}</td>
               </tr>
             ))}
-            <tr>
-              <td className="border-t border-border px-3 py-2 text-muted">Tutor και Agent</td>
-              <td className="border-t border-border px-3 py-2">
-                <Mascots kind="" />
-              </td>
-              <td className="border-t border-border px-3 py-2">
-                <Mascots kind="-diamond" />
-              </td>
-            </tr>
           </tbody>
         </table>
 
@@ -252,13 +243,4 @@ function Status({
     return <p className={`${box} bg-panel-2 text-muted`}>Η πληρωμή ακυρώθηκε· δεν χρεώθηκες.</p>;
   }
   return null;
-}
-
-function Mascots({ kind }: { kind: "" | "-diamond" }) {
-  return (
-    <span className="flex items-center gap-1">
-      <Image src={`/mascot-tutor${kind}.png`} alt="" width={28} height={28} unoptimized className="h-7 w-auto" />
-      <Image src={`/mascot-agent${kind}.png`} alt="" width={28} height={28} unoptimized className="h-7 w-auto" />
-    </span>
-  );
 }

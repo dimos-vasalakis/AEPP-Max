@@ -319,7 +319,8 @@ class _Parser:
                 "Κάθε γραμμή δηλώσεων ξεκινά με τύπο: "
                 "ΑΚΕΡΑΙΕΣ, ΠΡΑΓΜΑΤΙΚΕΣ, ΧΑΡΑΚΤΗΡΕΣ ή ΛΟΓΙΚΕΣ, και μετά :"
             )
-        type_name = DECLARATION_TYPES[self.advance().value]
+        type_token = self.advance()
+        type_name = DECLARATION_TYPES[type_token.value]
         self.expect("punct", ":")
         variables = []
         while True:
@@ -330,7 +331,11 @@ class _Parser:
                 self.expect("punct", "]")
             variables.append(
                 n.Variable(
-                    **self.pos_of(name), name=name.value, type=type_name, dimensions=dimensions
+                    **self.pos_of(name),
+                    name=name.value,
+                    type=type_name,
+                    dimensions=dimensions,
+                    declared_on=type_token.line,
                 )
             )
             if not self.accept("punct", ","):
