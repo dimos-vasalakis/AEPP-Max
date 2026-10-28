@@ -65,7 +65,7 @@ type Props = {
   onChange: (value: string) => void;
   /** Πρόγραμμα or Αλγόριθμος. Ide remounts the editor when it changes (`key`). */
   language: Language;
-  /** While the agent is writing to the editor. */
+  /** While the agent is writing to the editor, or a step run plays. */
   readOnly?: boolean;
   /** Whether the active color theme is dark (lib/theme.ts). */
   dark: boolean;

@@ -297,6 +297,7 @@ export function RunEnd({
           number={number}
           onSubmit={onInput}
           waiting={run.pending === true}
+          stepped={run.pace === "step"}
         />
       )}
       {result.status === "error" && result.error && (
@@ -320,15 +321,18 @@ function InputLine({
   number,
   onSubmit,
   waiting,
+  stepped,
 }: {
   number?: number;
   onSubmit: (value: string) => void;
   /** The value was sent; the re-run hasn't come back yet. */
   waiting: boolean;
+  /** A step run, where the box appears from Enter on Επόμενο. */
+  stepped: boolean;
 }) {
   const [value, setValue] = useState("");
-  // The box appears at the end of a step run, from Enter on Επόμενο: a held or quick
-  // second Enter must not send an empty value.
+  // A held Enter never sends a value; in a step run, nor does a quick second Enter
+  // meant for Επόμενο (it would send an empty one).
   const shownAt = useRef(0);
   useEffect(() => {
     shownAt.current = performance.now();
@@ -360,7 +364,8 @@ function InputLine({
         maxLength={1000} // schemas/run.py MAX_INPUT_CHARS
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter" && (e.repeat || performance.now() - shownAt.current < 400)) {
+          const early = stepped && performance.now() - shownAt.current < 400;
+          if (e.key === "Enter" && (e.repeat || early)) {
             e.preventDefault();
           }
         }}

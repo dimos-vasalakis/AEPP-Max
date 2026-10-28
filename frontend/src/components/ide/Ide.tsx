@@ -32,6 +32,11 @@ type Ask = { kind: "open"; program: Program; message: string } | { kind: "new"; 
 /** How long the slow run (the 50 sign) stays on each step. */
 const SLOW_MS = 500;
 
+/** A played run's step after `at`; null after the last one, so the whole result shows (its end, the ΔΙΑΒΑΣΕ box). */
+function stepAfter(at: number, result: RunResult): number | null {
+  return at >= (result.trace?.length ?? 0) - 1 ? null : at + 1;
+}
+
 const UNSAVED_HERE = "Ο κώδικας που γράφεις τώρα δεν έχει αποθηκευτεί και θα χαθεί.";
 
 /** The question when a saved program has changes that weren't saved. */
@@ -203,26 +208,25 @@ export function Ide() {
     }
   }
 
-  /** The played run's next step; after the last one, the whole result (its end, the ΔΙΑΒΑΣΕ box). */
+  /** Επόμενο: the step run's next step. */
   function nextStep() {
-    if (!playing || run.kind !== "done") return;
-    const last = (run.result.trace?.length ?? 0) - 1;
-    setPlay(play >= last ? null : play + 1);
+    if (playing && run.kind === "done") setPlay(stepAfter(play, run.result));
   }
 
   // A slow run takes the next step by itself; a step run waits for Επόμενο.
   useEffect(() => {
     if (!playing || run.kind !== "done" || run.pace !== "slow") return;
-    const last = (run.result.trace?.length ?? 0) - 1;
-    const timer = setTimeout(() => setPlay(play >= last ? null : play + 1), SLOW_MS);
+    const timer = setTimeout(() => setPlay(stepAfter(play, run.result)), SLOW_MS);
     return () => clearTimeout(timer);
   }, [playing, play, run]);
 
   // Επόμενο takes the focus whenever it can be pressed (the run is back, a ΔΙΑΒΑΣΕ answered),
-  // so Enter or Space goes on.
+  // so Enter or Space goes on; not from something the student moved to meanwhile (the agent's
+  // input). The ▶| pressed and the answered ΔΙΑΒΑΣΕ box are gone by then, leaving it on body.
   const canStep = stepping && playing;
   useEffect(() => {
-    if (canStep) nextButton.current?.focus();
+    const active = document.activeElement;
+    if (canStep && (active === null || active === document.body)) nextButton.current?.focus();
   }, [canStep]);
 
   // F9 and Ctrl/Cmd+Enter run the program, like the button. (On a Mac, F9 only reaches
@@ -241,11 +245,16 @@ export function Ide() {
       const isRun = e.key === "F9" || e.code === "F9" || (modEnter && !e.shiftKey);
       // e.code: Alt changes the key's character (ƒ on a Mac).
       const isTidy = e.shiftKey && e.altKey && !mod && e.code === "KeyF";
-      // A step run: Enter goes on, unless something else has the focus (the editor, an input,
-      // another button). preventDefault keeps a focused Επόμενο from stepping twice.
+      // A step run: Enter goes on from the page, Επόμενο or the editor (read-only meanwhile),
+      // not from an input, another button or behind an open dialog (Καθαρισμός's too).
+      // preventDefault keeps a focused Επόμενο from stepping twice.
       if (canStep && e.key === "Enter" && !mod && !e.shiftKey && !e.altKey) {
-        const free = e.target === document.body || e.target === nextButton.current;
-        if (free && dialog === null && ask === null && !askSwitch) {
+        const target = e.target instanceof Element ? e.target : null;
+        const free =
+          target === document.body ||
+          target === nextButton.current ||
+          target?.closest(".cm-content") != null; // not its search or go-to-line panel
+        if (free && !document.querySelector("dialog[open]") && ask === null && !askSwitch) {
           e.preventDefault();
           if (!e.repeat) nextStep();
           return;
@@ -256,13 +265,13 @@ export function Ide() {
       e.stopPropagation();
       if (e.repeat) return;
       if (isTidy) {
-        if (!agentWriting) tidy();
+        if (!agentWriting && !stepping) tidy();
       } else if (isSave) {
         if (dialog === null && ask === null && !askSwitch && !agentWriting) save();
       } else if (isRun && modEnter && applyProposal.current && sideTab === "agent") {
         // Only while the proposal is in sight: on Μεταβλητές, Ctrl/Cmd+Enter runs.
         applyProposal.current();
-      } else if (!busy) void execute([], [], isTrace, undefined, slowMode && !isTrace ? "slow" : undefined);
+      } else if (!busy && !stepping) void execute([], [], isTrace, undefined, slowMode && !isTrace ? "slow" : undefined);
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
@@ -509,22 +518,24 @@ export function Ide() {
         <button
           type="button"
           onClick={() => tidy()}
-          disabled={!code.trim() || agentWriting}
+          disabled={!code.trim() || agentWriting || stepping}
           aria-label="Τακτοποίηση κώδικα"
           data-tip="Τακτοποίηση: εσοχές και κενά (Shift+Alt+F)"
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
         >
           <TidyIcon />
         </button>
-        {/* ▶ while nothing runs; ■ stops a run, also one waiting for a ΔΙΑΒΑΣΕ value. */}
+        {/* ▶ while nothing runs; ■ stops a run, also one waiting for a ΔΙΑΒΑΣΕ value.
+            A step run has its own Διακοπή, so ▶ just waits. */}
         <button
           type="button"
           onClick={stoppable ? stop : () => execute([], [], false, undefined, slowMode ? "slow" : undefined)}
-          aria-label={stoppable ? "Διακοπή" : "Εκτέλεση"}
-          data-tip={stoppable ? "Διακοπή της εκτέλεσης" : "Εκτέλεση (F9 ή Ctrl+Enter)"}
+          disabled={stepping}
+          aria-label={stoppable && !stepping ? "Διακοπή" : "Εκτέλεση"}
+          data-tip={stoppable && !stepping ? "Διακοπή της εκτέλεσης" : "Εκτέλεση (F9 ή Ctrl+Enter)"}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
         >
-          {stoppable ? <StopIcon /> : <RunIcon />}
+          {stoppable && !stepping ? <StopIcon /> : <RunIcon />}
         </button>
         <button
           type="button"
@@ -665,7 +676,8 @@ export function Ide() {
                 value={code}
                 onChange={updateCode}
                 language={language}
-                readOnly={agentWriting}
+                // Also during a step run: Enter there goes on, and the code must stay the one stepping.
+                readOnly={agentWriting || stepping}
                 dark={darkTheme}
                 trace={traceMark}
                 ref={editorActions}
