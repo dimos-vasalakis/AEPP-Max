@@ -93,20 +93,21 @@ def _split_declarations(program: Program) -> str | None:
                 return (
                     f"Not written: {unit.name} declares {plural} on lines {numbers}. Declare each"
                     f" type once, all its variables and arrays on one line ({plural}: i, j,"
-                    " Α[10]), then call write_code again."
+                    " Α[10]), then call write_code again. Only if the student's own message"
+                    " asked for this layout, call it with split_declarations=true instead."
                 )
     return None
 
 
-def _splits(code: str, language: glossa.Language) -> bool:
-    compiled = glossa.compile_source(code, language)
-    return isinstance(compiled, Program) and _split_declarations(compiled) is not None
+def _allows_splits(context: AgentContext, asked: bool) -> bool:
+    """Split declarations are written when the student asked, or splits their own."""
+    return asked or context.student_splits
 
 
-def _review(code: str, language: glossa.Language, before: str = "") -> str | None:
+def _review(code: str, language: glossa.Language, allow_splits: bool = False) -> str | None:
     """Why write_code refuses this code (it doesn't compile, or its declarations
-    would lose marks), or None. `before` is the editor's code: a student who splits
-    their own declarations keeps that style. CPU-bound, like the runs above."""
+    would lose marks), or None. `allow_splits`: the student splits their own
+    declarations, or asked for that. CPU-bound, like the runs above."""
     compiled = glossa.compile_source(code, language)
     if isinstance(compiled, glossa.ErrorInfo):
         where = f" (line {compiled.line})" if compiled.line else ""
@@ -114,7 +115,7 @@ def _review(code: str, language: glossa.Language, before: str = "") -> str | Non
             f"Not written, it doesn't compile{where}: {compiled.message}"
             " Fix it and call write_code again."
         )
-    if not isinstance(compiled, Program) or _splits(before, language):
+    if not isinstance(compiled, Program) or allow_splits:
         return None
     return _split_declarations(compiled)
 
@@ -145,18 +146,23 @@ def _write(context: AgentContext, code: str, summary: str, refusal: str | None) 
 
 
 @function_tool(is_enabled=_agent_mode)
-async def write_code(ctx: RunContextWrapper[AgentContext], code: str, summary: str) -> str:
+async def write_code(
+    ctx: RunContextWrapper[AgentContext], code: str, summary: str, split_declarations: bool = False
+) -> str:
     """Replace the student's code in the editor with a new version. It is refused if
     it doesn't compile; then fix the error and call it again.
 
     Args:
         code: The complete new program (or algorithm), not a fragment, with `!` comments in Greek.
         summary: One sentence in Greek on what changes.
+        split_declarations: True only if the student asked for a type declared on more than
+            one line; exam answers declare each type once.
     """
     # The parser runs in a thread; the context changes back on the loop.
     refusal = None
     if code.strip() and len(code) <= MAX_SOURCE_CHARS:
-        refusal = await asyncio.to_thread(_review, code, ctx.context.language, ctx.context.code)
+        allow = _allows_splits(ctx.context, split_declarations)
+        refusal = await asyncio.to_thread(_review, code, ctx.context.language, allow)
     return _write(ctx.context, code, summary, refusal)
 
 

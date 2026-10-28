@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 from app.agent.context import AgentContext
-from app.agent.instructions import EXAM, instructions
+from app.agent.instructions import EXAMPLE, instructions
 from app.agent.tools import _review
 
 
@@ -49,5 +49,13 @@ def test_both_modes_know_the_exam_conventions() -> None:
 
 
 def test_the_example_program_passes_write_code() -> None:
-    example = EXAM.split("```\n")[1]
+    example = EXAMPLE.split("```\n")[1]
     assert example.startswith("ΠΡΟΓΡΑΜΜΑ") and _review(example, "glossa") is None
+
+
+def test_only_the_agent_on_programs_sees_the_worked_example() -> None:
+    # The Tutor gives hints before solutions, and an Αλγόριθμος isn't written this way.
+    assert "ΠΡΟΓΡΑΜΜΑ Καταναλώσεις" in prompt(AgentContext(code="", mode="agent"))
+    assert "Καταναλώσεις" not in prompt(AgentContext(code="", mode="ask"))
+    algorithm = AgentContext(code="", mode="agent", language="pseudocode")
+    assert "Καταναλώσεις" not in prompt(algorithm)

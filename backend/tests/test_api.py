@@ -1,3 +1,6 @@
+import re
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -230,9 +233,16 @@ def test_run_and_check_take_the_language(client: TestClient) -> None:
 
 
 def test_health_checks_are_not_traced() -> None:
-    from app.main import TRACES_RATE, sample_traces
+    from app.main import CHECK_RATE, TRACES_RATE, sample_traces
 
-    assert sample_traces({"asgi_scope": {"path": "/api/v1/health"}}) == 0.0  # type: ignore[typeddict-item]
+    # The path Render pings, read from render.yaml so the two can't drift apart.
+    blueprint = (Path(__file__).parents[2] / "render.yaml").read_text()
+    health = re.search(r"healthCheckPath:\s*(\S+)", blueprint)
+    assert health is not None
+    assert sample_traces({"asgi_scope": {"path": health.group(1)}}) == 0.0  # type: ignore[typeddict-item]
     assert sample_traces({"asgi_scope": {"path": "/api/v1/run"}}) == TRACES_RATE  # type: ignore[typeddict-item]
     # The browser's decision wins, so a trace isn't cut in half.
     assert sample_traces({"parent_sampled": False}) == 0.0  # type: ignore[typeddict-item]
+    # Except for /check, sent after every pause in typing: a sampled page doesn't trace them all.
+    check = {"asgi_scope": {"path": "/api/v1/check"}, "parent_sampled": True}
+    assert sample_traces(check) == CHECK_RATE  # type: ignore[arg-type]

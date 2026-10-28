@@ -31,13 +31,22 @@ def strip_user_agent[T: (Log, Metric)](item: T, _: Hint) -> T:
     return item
 
 
+API_PREFIX = "/api/v1"
 TRACES_RATE = 1.0 if settings.environment == "development" else 0.1
+# The editor sends /check 500 ms after every pause in typing: a sampled page would
+# otherwise trace (and profile) all of them.
+CHECK_RATE = 1.0 if settings.environment == "development" else 0.01
+HEALTH_PATH = API_PREFIX + api_router.url_path_for("health")
+CHECK_PATH = API_PREFIX + api_router.url_path_for("check_program")
 
 
 def sample_traces(context: SamplingContext) -> float:
+    path = (context.get("asgi_scope") or {}).get("path")
     # Render's health check (render.yaml) is worth neither a trace nor a profile.
-    if (context.get("asgi_scope") or {}).get("path") == "/api/v1/health":
+    if path == HEALTH_PATH:
         return 0.0
+    if path == CHECK_PATH:
+        return CHECK_RATE
     parent = context.get("parent_sampled")  # the browser's trace, when it sent one
     return float(parent) if parent is not None else TRACES_RATE
 
@@ -119,7 +128,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_router, prefix="/api/v1")
+app.include_router(api_router, prefix=API_PREFIX)
 
 
 @app.exception_handler(OperationalError)

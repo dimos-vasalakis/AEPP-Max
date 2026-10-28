@@ -1,15 +1,16 @@
 from agents import RunConfig, Usage
 
-from app.agent.context import AgentContext
+from app.agent.context import AgentContext, splits_declarations
 from app.agent.stream import report_reply
-from app.agent.tools import MAX_EDITS_PER_REPLY, _review, _write
+from app.agent.tools import MAX_EDITS_PER_REPLY, _allows_splits, _review, _write
 
 GOOD = "ΠΡΟΓΡΑΜΜΑ Α\nΑΡΧΗ\n  ΓΡΑΨΕ 1 ! ένα\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ"
 BAD = "ΠΡΟΓΡΑΜΜΑ Α\nΑΡΧΗ\n  x = 1\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ"
 
 
-def write(context: AgentContext, code: str, summary: str = "Αλλαγή.") -> str:
-    return _write(context, code, summary, _review(code, context.language, context.code))
+def write(context: AgentContext, code: str, summary: str = "Αλλαγή.", asked: bool = False) -> str:
+    allow = _allows_splits(context, asked)
+    return _write(context, code, summary, _review(code, context.language, allow))
 
 
 def test_write_code_reaches_the_editor() -> None:
@@ -49,6 +50,23 @@ def test_write_code_refuses_a_type_declared_on_two_lines() -> None:
     # The student's own split declarations are their style to keep.
     student = AgentContext(code=split, mode="agent")
     assert "γράφτηκε" in write(student, split.replace("i <- 1", "i <- 2"))
+    # Also while their program has an error the agent is asked to fix.
+    broken = AgentContext(code=split.replace("i <- 1", "i = 1"), mode="agent")
+    assert broken.student_splits and "γράφτηκε" in write(broken, split)
+    # Or when they asked for that layout.
+    assert "split_declarations=true" in write(AgentContext(code="", mode="agent"), split)
+    assert "γράφτηκε" in write(AgentContext(code="", mode="agent"), split, asked=True)
+
+
+def test_split_declarations_are_counted_per_unit() -> None:
+    # A subprogram may repeat the main program's types; accents and case don't matter.
+    assert not splits_declarations(
+        "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i\nΑΡΧΗ\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+        "ΔΙΑΔΙΚΑΣΙΑ Β(x)\nΜΕΤΑΒΛΗΤΕΣ\n  ακέραιες: x\nΑΡΧΗ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+    )
+    assert splits_declarations("ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i\n  ακέραιες : Κ[3]")
+    # A comment that mentions a type isn't a declaration.
+    assert not splits_declarations("ΠΡΟΓΡΑΜΜΑ Α\n  ΑΚΕΡΑΙΕΣ: i\n  ! ΑΚΕΡΑΙΕΣ: Κ[3]")
 
 
 def test_write_code_refuses_empty_code_and_follows_the_language() -> None:
