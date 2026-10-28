@@ -79,7 +79,7 @@
  * Κλασικό (classic): modeled on the Διερμηνευτής της ΓΛΩΣΣΑΣ as students see it (alkisg.mysch.gr,
  * Επιλογές → Χρώματα κώδικα, and a student's screenshot). Courier New; bold
  * blue words, bold red symbols, green integers, olive reals, purple italic
- * strings, gray italic comments, a light yellow current line and a blue-gray
+ * strings, gray italic comments, black Latin names, a light yellow current line and a blue-gray
  * line-number strip.
  */
 [data-theme="classic"] {
@@ -140,7 +140,7 @@
   --syn-operator-word: #0000ff;
   --syn-punctuation: #ff0000;
   --syn-builtin: #0000ff;
-  --syn-latin: #808080;
+  --syn-latin: #000000;
   --syn-string: #800080;
   --syn-string-style: italic;
   --syn-comment: #808080;
@@ -300,6 +300,15 @@
 }
 [data-theme="classic"] .status-cell:last-child {
   border-right: 0;
+}
+
+/*
+ * Courier New draws small: its capitals are 57% of the font size, JetBrains Mono's
+ * 73%. Scaled by 17/14, so the same size in the lens looks as large as in the
+ * other themes (14px reads like JetBrains Mono's 14px) and the thin strokes hold up.
+ */
+[data-theme="classic"] .cm-editor .cm-scroller {
+  font-size: calc(var(--editor-font-size, 14px) * 17 / 14);
 }
 
 /* The editor's guide line at 80 columns (each line starts 6px in). */

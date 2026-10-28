@@ -215,6 +215,21 @@ export function inDeclarations(textBefore: string): boolean {
   return false;
 }
 
+/** Blocks that are whole units: they go after ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ, never inside one. */
+const UNIT_BLOCKS = new Set(["ΣΥΝΑΡΤΗΣΗ", "ΔΙΑΔΙΚΑΣΙΑ"]);
+
+/** True when the line after `textBefore` is between units: the nearest section word
+ * above it ends the program or a subprogram (ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ, …). Subprograms
+ * come after the program, so the top of the code isn't between units. */
+export function betweenUnits(textBefore: string): boolean {
+  const lines = textBefore.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const first = normalizeWord(FIRST_WORD.exec(lines[i])?.[1] ?? "");
+    if (SECTIONS.has(first)) return first.startsWith("ΤΕΛΟΣ_");
+  }
+  return false;
+}
+
 /** What may follow a value, by the statement it's in. */
 function continuations(first: string): string[] {
   const operators = ["ΚΑΙ", "DIV", "MOD"]; // Η (or) is left out: one letter
@@ -305,6 +320,8 @@ export function completionOptions(
   names: string[],
   lineFirstWord = "",
   language: Language = "glossa",
+  /** Offer ΣΥΝΑΡΤΗΣΗ and ΔΙΑΔΙΚΑΣΙΑ (only between units, `betweenUnits`). */
+  units = true,
 ): Completion[] {
   const prefix = normalizeWord(typed);
   const matches = (o: Completion) => normalizeWord(o.label).startsWith(prefix);
@@ -319,7 +336,7 @@ export function completionOptions(
   switch (place) {
     case "line-start":
       return [
-        ...blockOptions[language].filter(matches),
+        ...blockOptions[language].filter((o) => matches(o) && (units || !UNIT_BLOCKS.has(o.label))),
         ...lineStartOptions[language].filter(useful),
         ...nameOptions.filter(useful),
       ];
@@ -350,9 +367,12 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
   if (inCommentOrString(before)) return null;
   const language = context.state.facet(editorLanguage);
   let place = placeOf(before, language);
+  let units = true;
   // In ΜΕΤΑΒΛΗΤΕΣ only a type starts a line; the statements belong after ΑΡΧΗ.
   if (place === "line-start" && language === "glossa") {
-    if (inDeclarations(context.state.doc.sliceString(0, line.from))) place = "declaration";
+    const above = context.state.doc.sliceString(0, line.from);
+    if (inDeclarations(above)) place = "declaration";
+    units = betweenUnits(above);
   }
   const options = completionOptions(
     word.text,
@@ -360,6 +380,7 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
     namesIn(context.state.doc.toString(), word.from, language),
     FIRST_WORD.exec(before)?.[1],
     language,
+    units,
   );
   return options.length ? { from: word.from, options, filter: false } : null;
 }
@@ -367,6 +388,45 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
 /** Whether the cursor is in the blanks of an inserted block. */
 function inBlock(state: EditorState): boolean {
   return hasNextSnippetField(state) || hasPrevSnippetField(state);
+}
+
+/**
+ * → at the end of a blank goes on to the next one (ΓΙΑ i▯ ΑΠΟ ▯: one press, not
+ * five), and ← at its start back to the one before. Anywhere else in the blank the
+ * arrows just move the cursor. The blank ends where one more step would leave it.
+ */
+export function arrowToBlank(dir: 1 | -1) {
+  return (view: EditorView): boolean => {
+    const { state } = view;
+    if (!(dir > 0 ? hasNextSnippetField(state) : hasPrevSnippetField(state))) return false;
+    if (state.selection.ranges.some((r) => !r.empty)) return false;
+    const stepped = EditorSelection.create(
+      state.selection.ranges.map((r) =>
+        EditorSelection.cursor(Math.max(0, Math.min(state.doc.length, r.head + dir))),
+      ),
+      state.selection.mainIndex,
+    );
+    if (inBlock(state.update({ selection: stepped }).state)) return false;
+    // The field commands select the whole blank, as Tab should; an arrow only moves the
+    // cursor (to the start of the next blank, the end of the one before), so what's
+    // there isn't typed over. As a "select", like any arrow key, so counter.ts still
+    // turns a Greek counter just typed into the Latin letter.
+    return (dir > 0 ? nextSnippetField : prevSnippetField)({
+      state,
+      dispatch: (tr) =>
+        view.dispatch(
+          state.update({
+            selection: EditorSelection.create(
+              tr.selection!.ranges.map((r) => EditorSelection.cursor(dir > 0 ? r.from : r.to)),
+              tr.selection!.mainIndex,
+            ),
+            effects: tr.effects,
+            scrollIntoView: true,
+            userEvent: "select",
+          }),
+        ),
+    });
+  };
 }
 
 /**
@@ -390,7 +450,7 @@ const oneCursorAfterBlock = EditorState.transactionFilter.of((tr) => {
 
 /**
  * Tab or Enter accepts a suggestion; otherwise, inside an inserted block, Tab
- * jumps to the next blank (i → αρχή → τέλος → body); otherwise Tab indents and
+ * (or → at a blank's end) jumps to the next blank (i → αρχή → τέλος → body); otherwise Tab indents and
  * Enter starts a new line (indent.ts). Ctrl-Space opens the list.
  */
 export const glossaAutocomplete = [
@@ -404,6 +464,8 @@ export const glossaAutocomplete = [
         shift: prevSnippetField,
       },
       { key: "Enter", run: (view: EditorView) => acceptCompletion(view) || enterInLinkedBlank(view) },
+      { key: "ArrowRight", run: arrowToBlank(1) },
+      { key: "ArrowLeft", run: arrowToBlank(-1) },
       { key: "ArrowDown", run: moveCompletionSelection(true) },
       { key: "ArrowUp", run: moveCompletionSelection(false) },
       { key: "PageDown", run: moveCompletionSelection(true, "page") },

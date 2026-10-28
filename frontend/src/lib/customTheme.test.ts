@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { BASE_COLORS, customThemesCss, isDarkColors, parseCustomThemes } from "./customTheme";
+import {
+  BASE_COLORS,
+  customThemesCss,
+  isDarkColors,
+  parseCustomThemes,
+  parseThemeCode,
+  themeCode,
+} from "./customTheme";
 
 describe("custom themes", () => {
   it("tells dark from light by the background", () => {
@@ -28,5 +35,26 @@ describe("custom themes", () => {
     expect(css).toContain('[data-theme="custom-abc123"]{');
     expect(css).toContain("--bg:#ffffff");
     expect(css).toContain("color-scheme:light");
+  });
+});
+
+describe("theme codes", () => {
+  it("carry a theme's name and colors there and back", () => {
+    const theme = { name: "Νυχτερινό 🌙", colors: { ...BASE_COLORS.light, accent: "#ABCDEF" } };
+    const code = themeCode(theme);
+    expect(code).toMatch(/^AEPP1\.[0-9a-f]{72}\.[A-Za-z0-9_-]+$/);
+    expect(parseThemeCode(`  ${code}\n`)).toEqual({ name: theme.name, colors: { ...theme.colors, accent: "#abcdef" } });
+  });
+
+  it("reject anything else", () => {
+    const code = themeCode({ name: "α", colors: BASE_COLORS.dark });
+    expect(parseThemeCode(code.slice(0, 40))).toBeNull();
+    expect(parseThemeCode(code.replace(/^AEPP1/, "AEPP2"))).toBeNull();
+    expect(parseThemeCode(code.replace(/\.[^.]*$/, ".}{;"))).toBeNull();
+    expect(parseThemeCode("γεια")).toBeNull();
+  });
+
+  it("give a nameless code the default name", () => {
+    expect(parseThemeCode(themeCode({ name: "", colors: BASE_COLORS.dark }))?.name).toBe("Δικό μου θέμα");
   });
 });

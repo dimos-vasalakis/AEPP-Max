@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import type { CustomTheme } from "@/lib/customTheme";
+import { type CustomTheme, newCustomId, parseThemeCode, themeCode } from "@/lib/customTheme";
+import { DIAMOND, usePlan } from "@/lib/plan";
 import { type ThemeId, THEMES } from "@/lib/theme";
-import { deleteCustomTheme, setTheme, useCustomThemes, useTheme } from "@/lib/useTheme";
+import { deleteCustomTheme, saveCustomTheme, setTheme, useCustomThemes, useTheme } from "@/lib/useTheme";
 import { ThemeEditor } from "./ThemeEditor";
 import { ThemePreview } from "./ThemePreview";
 
@@ -92,6 +93,7 @@ export function ExtensionsMenu() {
                     name={theme.name}
                     description="Δικό σου θέμα"
                     active={theme.id === active}
+                    code={themeCode(theme)}
                     onEdit={() => setEditing(theme)}
                     onDelete={() => deleteCustomTheme(theme.id)}
                   />
@@ -104,6 +106,7 @@ export function ExtensionsMenu() {
               >
                 + Φτιάξε δικό σου θέμα
               </button>
+              <ThemeImport />
             </>
           )}
         </div>
@@ -117,6 +120,7 @@ function ThemeRow({
   name,
   description,
   active,
+  code,
   onEdit,
   onDelete,
 }: {
@@ -124,9 +128,26 @@ function ThemeRow({
   name: string;
   description: string;
   active: boolean;
+  /** The share code (custom themes only). */
+  code?: string;
   onEdit?: () => void;
   onDelete?: () => void;
 }) {
+  // "copied" for a moment after copying; "shown" when the clipboard is blocked, so
+  // the code shows in a box to copy by hand.
+  const [share, setShare] = useState<"copied" | "shown" | null>(null);
+
+  async function copyCode() {
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      setShare("copied");
+      setTimeout(() => setShare((s) => (s === "copied" ? null : s)), 1500);
+    } catch {
+      setShare("shown");
+    }
+  }
+
   return (
     <li className={`flex gap-3 rounded-md border p-2 ${active ? "border-accent" : "border-border"}`}>
       <ThemePreview id={id} />
@@ -150,14 +171,96 @@ function ThemeRow({
               Επεξεργασία
             </button>
           )}
+          {code && (
+            <button
+              type="button"
+              onClick={copyCode}
+              className="text-xs text-muted hover:text-text"
+            >
+              {share === "copied" ? "✓ Αντιγράφηκε" : "Κοινοποίηση"}
+            </button>
+          )}
           {onDelete && (
             <button type="button" onClick={onDelete} className="text-xs text-muted hover:text-danger">
               Διαγραφή
             </button>
           )}
         </div>
+        {code && share === "shown" && (
+          <input
+            readOnly
+            value={code}
+            aria-label="Κώδικας θέματος"
+            onFocus={(e) => e.currentTarget.select()}
+            autoFocus
+            className="mt-2 w-full rounded border border-border bg-bg px-2 py-1 font-mono text-[11px] text-text outline-none focus:border-accent"
+          />
+        )}
       </div>
     </li>
+  );
+}
+
+/**
+ * Pasting a theme's code (Κοινοποίηση) adds it to the user's themes and turns it on at
+ * once. A code already among them only turns it on; a new one needs room in the plan.
+ */
+function ThemeImport() {
+  const custom = useCustomThemes();
+  const limit = usePlan().max_themes;
+  const [code, setCode] = useState("");
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  function take(value: string) {
+    setCode(value);
+    if (!value.trim()) {
+      setMessage(null);
+      return;
+    }
+    const shared = parseThemeCode(value);
+    if (!shared) {
+      // Not while a code is still being typed by hand: «AEP», «AEPP1.0b1d…».
+      const start = value.trim().slice(0, 6).toUpperCase();
+      const typing = "AEPP1.".startsWith(start) && value.trim().length < 79;
+      setMessage(typing ? null : { ok: false, text: "Αυτός δεν είναι κώδικας θέματος." });
+      return;
+    }
+    const same = custom.find((t) => themeCode(t) === themeCode(shared));
+    if (same) {
+      setTheme(same.id);
+      setMessage({ ok: true, text: `Το «${same.name}» το έχεις ήδη: ενεργοποιήθηκε.` });
+    } else if (custom.length >= limit) {
+      const more = limit < DIAMOND.max_themes ? ` (${DIAMOND.max_themes} με το Diamond 💎)` : "";
+      setMessage({ ok: false, text: `Έφτασες το όριο των ${limit} θεμάτων${more}.` });
+      return;
+    } else {
+      const theme: CustomTheme = { id: newCustomId(), ...shared };
+      saveCustomTheme(theme);
+      setTheme(theme.id);
+      setMessage({ ok: true, text: `Προστέθηκε και ενεργοποιήθηκε το «${theme.name}».` });
+    }
+    setCode("");
+  }
+
+  return (
+    <div className="mt-3">
+      <label className="block text-xs text-muted">
+        Έχεις κώδικα θέματος από φίλο; Επικόλλησέ τον εδώ:
+        <input
+          value={code}
+          onChange={(e) => take(e.target.value)}
+          placeholder="AEPP1.…"
+          spellCheck={false}
+          autoComplete="off"
+          className="mt-1 w-full rounded-md border border-border bg-bg px-2 py-1.5 font-mono text-xs text-text outline-none focus:border-accent"
+        />
+      </label>
+      {message && (
+        <p role="status" className={`mt-1 text-xs ${message.ok ? "text-ok" : "text-danger"}`}>
+          {message.text}
+        </p>
+      )}
+    </div>
   );
 }
 

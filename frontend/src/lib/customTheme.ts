@@ -154,3 +154,40 @@ export function parseCustomThemes(raw: unknown): CustomTheme[] {
   }
   return themes;
 }
+
+// Share codes: a custom theme as one line to copy and paste, «AEPP1.» + the 12 colors
+// (6 hex digits each, in COLOR_FIELDS' order) + «.» + the name in base64url (UTF-8).
+const CODE_PREFIX = "AEPP1.";
+const CODE = /^AEPP1\.([0-9a-f]{72})\.([A-Za-z0-9_-]*)$/i;
+
+function toBase64Url(text: string): string {
+  const bytes = new TextEncoder().encode(text);
+  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function fromBase64Url(text: string): string {
+  const binary = atob(text.replace(/-/g, "+").replace(/_/g, "/"));
+  return new TextDecoder("utf-8", { fatal: true }).decode(Uint8Array.from(binary, (c) => c.charCodeAt(0)));
+}
+
+/** The code that shares `theme`'s name and colors. */
+export function themeCode(theme: Pick<CustomTheme, "name" | "colors">): string {
+  const hex = COLOR_FIELDS.map(({ key }) => theme.colors[key].slice(1).toLowerCase()).join("");
+  return `${CODE_PREFIX}${hex}.${toBase64Url(theme.name)}`;
+}
+
+/** The name and colors in a pasted code, or null when it isn't one. */
+export function parseThemeCode(code: string): Pick<CustomTheme, "name" | "colors"> | null {
+  const match = CODE.exec(code.trim());
+  if (!match) return null;
+  let name: string;
+  try {
+    name = fromBase64Url(match[2]);
+  } catch {
+    return null;
+  }
+  const colors = Object.fromEntries(
+    COLOR_FIELDS.map(({ key }, i) => [key, `#${match[1].slice(i * 6, i * 6 + 6).toLowerCase()}`]),
+  ) as ThemeColors;
+  return { name: name.trim().slice(0, 40) || "Δικό μου θέμα", colors };
+}

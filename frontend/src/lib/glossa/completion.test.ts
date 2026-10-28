@@ -2,6 +2,8 @@ import { snippet } from "@codemirror/autocomplete";
 import { EditorSelection, EditorState, type Transaction } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import {
+  arrowToBlank,
+  betweenUnits,
   completionOptions,
   glossaAutocomplete,
   inCommentOrString,
@@ -10,6 +12,10 @@ import {
   type Place,
   placeOf,
 } from "./completion";
+import { glossaAutocase } from "./autocase";
+import { glossaCounter } from "./counter";
+import { glossaIndent } from "./indent";
+import { glossa } from "./language";
 
 const labels = (typed: string, place: Place, names: string[] = [], first = "") =>
   completionOptions(typed, place, names, first).map((o) => o.label);
@@ -111,6 +117,24 @@ describe("inDeclarations", () => {
   });
 });
 
+describe("subprogram blocks", () => {
+  it("are offered only between units, after the program", () => {
+    expect(betweenUnits("ΠΡΟΓΡΑΜΜΑ α\nΑΡΧΗ\n  x <- 1\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n")).toBe(true);
+    expect(betweenUnits("ΠΡΟΓΡΑΜΜΑ α\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\nΔΙΑΔΙΚΑΣΙΑ Π(α)\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ\n\n")).toBe(true);
+    expect(betweenUnits("ΠΡΟΓΡΑΜΜΑ α\nΑΡΧΗ\n  x <- 1\n")).toBe(false);
+    expect(betweenUnits("ΠΡΟΓΡΑΜΜΑ α\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\nΣΥΝΑΡΤΗΣΗ Φ(α): ΑΚΕΡΑΙΑ\nΑΡΧΗ\n")).toBe(false);
+    expect(betweenUnits("")).toBe(false);
+  });
+
+  it("are left out inside a unit", () => {
+    const blocks = (units: boolean) =>
+      completionOptions("δ", "line-start", [], "", "glossa", units).map((o) => o.label);
+    expect(blocks(true)).toContain("ΔΙΑΔΙΚΑΣΙΑ");
+    expect(blocks(false)).not.toContain("ΔΙΑΔΙΚΑΣΙΑ");
+    expect(blocks(false)).toContain("ΔΙΑΒΑΣΕ");
+  });
+});
+
 describe("namesIn", () => {
   it("collects names once, skipping keywords and the word being typed", () => {
     const text = "ΑΚΕΡΑΙΕΣ: Σύνολο, i\nΣΥΝΟΛΟ <- i + Τ_Ρ(4)\nσυ";
@@ -167,5 +191,73 @@ describe("a name typed in two linked blanks", () => {
     const moved = EditorSelection.create(editor.state.selection.ranges.map((r) => EditorSelection.cursor(r.head - 2)));
     editor.dispatch(editor.state.update({ selection: moved, userEvent: "select" }));
     expect(editor.state.selection.ranges).toHaveLength(1);
+  });
+});
+
+describe("arrow keys in a block's blanks", () => {
+  function inserted(template: string) {
+    // An arrow, not a method: the snippet commands call `dispatch` on its own.
+    const editor = {
+      state: EditorState.create({ doc: "", extensions: [glossaAutocomplete] }),
+      dispatch: (tr: Transaction) => {
+        editor.state = tr.state;
+      },
+    };
+    snippet(template)(editor as never, null as never, 0, 0);
+    return editor;
+  }
+  const type = (editor: ReturnType<typeof inserted>, text: string) =>
+    editor.dispatch(editor.state.update(editor.state.replaceSelection(text)));
+  const cursor = (editor: ReturnType<typeof inserted>) => editor.state.selection.main.head;
+
+  it("→ at a blank's end jumps to the next blank, ← at its start back", () => {
+    const editor = inserted("ΓΙΑ ${} ΑΠΟ ${} ΜΕΧΡΙ ${}\n\t${}\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ");
+    type(editor, "i");
+    expect(arrowToBlank(1)(editor as never)).toBe(true);
+    expect(cursor(editor)).toBe("ΓΙΑ i ΑΠΟ ".length);
+    type(editor, "10");
+    expect(arrowToBlank(-1)(editor as never)).toBe(false); // mid-blank: an ordinary ←
+    editor.dispatch(editor.state.update({ selection: { anchor: "ΓΙΑ i ΑΠΟ ".length } }));
+    expect(arrowToBlank(-1)(editor as never)).toBe(true);
+    expect(cursor(editor)).toBe("ΓΙΑ i".length);
+    // A cursor, not the blank selected: typing adds to «i» instead of replacing it.
+    expect(editor.state.selection.main.empty).toBe(true);
+    expect(arrowToBlank(1)(editor as never)).toBe(true);
+    expect(editor.state.selection.main.empty).toBe(true);
+    type(editor, "2");
+    expect(editor.state.doc.line(1).text).toBe("ΓΙΑ i ΑΠΟ 210 ΜΕΧΡΙ ");
+  });
+
+  it("still turns a Greek counter typed in a blank into the Latin one", () => {
+    const doc = "ΠΡΟΓΡΑΜΜΑ α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i\nΑΡΧΗ\n  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 3\n";
+    const editor = {
+      state: EditorState.create({
+        doc,
+        selection: { anchor: doc.length },
+        extensions: [glossa, glossaIndent, glossaCounter, glossaAutocase, glossaAutocomplete],
+      }),
+      dispatch: (tr: Transaction) => {
+        editor.state = tr.state;
+      },
+    };
+    snippet("ΓΙΑ ${} ΑΠΟ ${} ΜΕΧΡΙ ${}\n\t${}\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ")(editor as never, null as never, doc.length, doc.length);
+    const type = (ch: string) => {
+      const head = editor.state.selection.main.head;
+      editor.dispatch(
+        editor.state.update({ changes: { from: head, insert: ch }, selection: { anchor: head + 1 }, userEvent: "input.type" }),
+      );
+    };
+    type("j");
+    expect(arrowToBlank(1)(editor as never)).toBe(true);
+    type("ι"); // the outer loop's i, typed with the keyboard on Greek
+    expect(arrowToBlank(1)(editor as never)).toBe(true);
+    expect(editor.state.doc.toString()).toContain("ΓΙΑ j ΑΠΟ i ΜΕΧΡΙ");
+  });
+
+  it("moves the cursor as usual inside a blank", () => {
+    const editor = inserted("ΓΙΑ ${} ΑΠΟ ${} ΜΕΧΡΙ ${}\n\t${}\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ");
+    type(editor, "ab");
+    editor.dispatch(editor.state.update({ selection: { anchor: "ΓΙΑ a".length } }));
+    expect(arrowToBlank(1)(editor as never)).toBe(false);
   });
 });
