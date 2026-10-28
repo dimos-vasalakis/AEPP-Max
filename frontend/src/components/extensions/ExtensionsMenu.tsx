@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { ConfirmDialog } from "@/components/Confirm";
 import { type CustomTheme, newCustomId, parseThemeCode, themeCode } from "@/lib/customTheme";
 import { DIAMOND, usePlan } from "@/lib/plan";
 import { type ThemeId, THEMES } from "@/lib/theme";
@@ -15,6 +16,8 @@ export function ExtensionsMenu() {
   const custom = useCustomThemes();
   // null: the theme list; "new" or a theme: the editor.
   const [editing, setEditing] = useState<CustomTheme | "new" | null>(null);
+  // The theme whose Διαγραφή waits for a yes.
+  const [deleting, setDeleting] = useState<CustomTheme | null>(null);
   const root = useRef<HTMLDivElement>(null);
   const panelId = useId();
 
@@ -26,7 +29,8 @@ export function ExtensionsMenu() {
       setEditing(null);
     };
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      // Esc in the question cancels only the question (the dialog closes itself).
+      if (e.key !== "Escape" || deleting) return;
       setOpen(false);
       setEditing(null);
     };
@@ -36,7 +40,7 @@ export function ExtensionsMenu() {
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open]);
+  }, [open, deleting]);
 
   return (
     <div ref={root} className="relative">
@@ -95,7 +99,7 @@ export function ExtensionsMenu() {
                     active={theme.id === active}
                     code={themeCode(theme)}
                     onEdit={() => setEditing(theme)}
-                    onDelete={() => deleteCustomTheme(theme.id)}
+                    onDelete={() => setDeleting(theme)}
                   />
                 ))}
               </ul>
@@ -108,6 +112,21 @@ export function ExtensionsMenu() {
               </button>
               <ThemeImport />
             </>
+          )}
+          {/* Inside the panel, so a click on it doesn't count as a click outside. */}
+          {deleting && (
+            <ConfirmDialog
+              title="Διαγραφή θέματος;"
+              confirmLabel="Διαγραφή"
+              onConfirm={() => {
+                deleteCustomTheme(deleting.id);
+                setDeleting(null);
+              }}
+              onCancel={() => setDeleting(null)}
+            >
+              Το θέμα «{deleting.name}» θα διαγραφεί από αυτόν τον browser. Αν δεν έχεις κρατήσει
+              τον κώδικά του (Κοινοποίηση), δεν θα μπορείς να το επαναφέρεις.
+            </ConfirmDialog>
           )}
         </div>
       )}

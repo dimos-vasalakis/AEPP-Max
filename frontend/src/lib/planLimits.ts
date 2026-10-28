@@ -2,7 +2,9 @@
 // client side, re-exports them. They mirror backend/app/core/plans.py, which
 // enforces them, so change both together.
 
-export const DIAMOND_PRICE = "$5 / μήνα";
+/** Diamond's monthly price; the landing page's English version adds its own «/ month». */
+export const DIAMOND_AMOUNT = "$5";
+export const DIAMOND_PRICE = `${DIAMOND_AMOUNT} / μήνα`;
 
 export const FREE_LIMITS = {
   daily_tokens: 20_000,

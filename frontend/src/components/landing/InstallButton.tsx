@@ -2,19 +2,26 @@
 
 import { useState } from "react";
 import { install, useInstallWay } from "@/lib/install";
+import type { Lang } from "./copy";
+
+const LABELS = {
+  el: { installed: "✓ Η εφαρμογή είναι εγκατεστημένη", install: "Εγκατάσταση εφαρμογής" },
+  en: { installed: "✓ The app is installed", install: "Install the app" },
+};
 
 /**
  * The landing page's «Εγκατάσταση εφαρμογής»: the browser's own install dialog
  * where there is one (Chrome, Edge), and otherwise a jump to the page's
  * instructions for this browser (#download).
  */
-export function InstallButton({ className }: { className: string }) {
+export function InstallButton({ className, lang }: { className: string; lang: Lang }) {
+  const label = LABELS[lang];
   const way = useInstallWay();
   const [declined, setDeclined] = useState(false);
   if (way === "installed") {
     return (
       <span className={`${className} cursor-default opacity-80`} aria-disabled>
-        ✓ Η εφαρμογή είναι εγκατεστημένη
+        {label.installed}
       </span>
     );
   }
@@ -26,7 +33,7 @@ export function InstallButton({ className }: { className: string }) {
         className={className}
       >
         <DownloadIcon />
-        Εγκατάσταση εφαρμογής
+        {label.install}
       </button>
     );
   }
@@ -34,7 +41,7 @@ export function InstallButton({ className }: { className: string }) {
   return (
     <a href="#download" className={className}>
       <DownloadIcon />
-      Εγκατάσταση εφαρμογής
+      {label.install}
     </a>
   );
 }
