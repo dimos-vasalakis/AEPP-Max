@@ -9,7 +9,8 @@ export const MIN_EDITOR = 120;
 const KEY_STEP = 24;
 
 /**
- * The top edge of the output screen: drag it (mouse or touch) to make the output
+ * The top edge of the output screen, a line in the theme's accent between the editor
+ * and the output (thicker under the pointer): drag it (mouse or touch) to make the output
  * taller or shorter, or focus it and use ↑/↓. Double-click or Enter goes back to
  * the default height. `column` is the editor-plus-output grid, whose bottom is the
  * output's bottom.
@@ -66,7 +67,7 @@ export function OutputResizer({ column }: { column: RefObject<HTMLDivElement | n
     >
       <span
         aria-hidden
-        className={`pointer-events-none absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 bg-accent transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${dragging ? "opacity-100" : "opacity-0"}`}
+        className={`pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 bg-accent transition-[height] group-hover:h-1 group-focus-visible:h-1 ${dragging ? "h-1" : "h-0.5"}`}
       />
     </div>
   );

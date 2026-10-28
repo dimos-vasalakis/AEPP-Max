@@ -24,7 +24,7 @@ import { normalizeWord } from "./vocabulary";
 // and the like move back to line up with the line that opened their block as
 // soon as they're finished (space or Enter).
 
-const FIRST_WORD = /^\s*([\p{L}_][\p{L}\p{N}_]*)/u;
+const FIRST_WORD = /^\s*([\p{L}_][\p{L}\p{M}\p{N}_]*)/u;
 
 const STRUCTURES = ["ΑΝ", "ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΓΙΑ", "ΟΣΟ", "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ", "ΕΠΙΛΕΞΕ", "ΠΕΡΙΠΤΩΣΗ"];
 

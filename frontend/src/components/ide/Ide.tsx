@@ -16,7 +16,7 @@ import { useUser } from "@/lib/supabase/useUser";
 import { useOutputHeight } from "@/lib/useOutputHeight";
 import { useProgramFiles } from "@/lib/useProgramFiles";
 import { useThemeInfo } from "@/lib/useTheme";
-import { CodeEditor } from "./CodeEditor";
+import { CodeEditor, type EditorActions } from "./CodeEditor";
 import { FileBar } from "./FileBar";
 import { type OutputTab, OutputPanel, type RunState } from "./OutputPanel";
 import { MIN_EDITOR, OutputResizer } from "./OutputResizer";
@@ -96,6 +96,18 @@ export function Ide() {
     applyProposal.current = apply;
   }, []);
 
+  // The editor's Τακτοποίηση (lib/glossa/format.ts).
+  const editorActions = useRef<EditorActions | null>(null);
+
+  /**
+   * Τακτοποίηση: indentation and spaces, as one undo step. Every run does it first. Not
+   * while an Agent proposal waits: it applies only to the code it was proposed against.
+   */
+  function tidy(): string {
+    if (applyProposal.current) return codeRef.current;
+    return editorActions.current?.format() ?? codeRef.current;
+  }
+
   // Stable identity: CodeEditor must not get a new onChange on every render.
   const updateCode = useCallback((value: string) => {
     codeRef.current = value;
@@ -150,7 +162,8 @@ export function Ide() {
     source?: string,
     slow = false,
   ) {
-    const code = source ?? codeRef.current;
+    // A new run tidies the code first; a ΔΙΑΒΑΣΕ re-run passes the code it asked for.
+    const code = source ?? tidy();
     const seq = ++runSeq.current;
     request.current?.abort();
     const controller = new AbortController();
@@ -197,8 +210,8 @@ export function Ide() {
   // F9 and Ctrl/Cmd+Enter run the program, like the button. (On a Mac, F9 only reaches
   // the page with fn held, hence the second shortcut.) While an Agent proposal waits,
   // Ctrl/Cmd+Enter applies it instead. F10 and Ctrl/Cmd+Shift+Enter build the πίνακας
-  // τιμών; Ctrl/Cmd+S saves. Capture phase, so the editor doesn't swallow the key
-  // first. Re-attached each render to see the latest state.
+  // τιμών; Ctrl/Cmd+S saves; Shift+Alt+F tidies the code. Capture phase, so the editor
+  // doesn't swallow the key first. Re-attached each render to see the latest state.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.ctrlKey || e.metaKey;
@@ -208,11 +221,15 @@ export function Ide() {
         mod && !e.shiftKey && !e.altKey && (e.key.toLowerCase() === "s" || e.code === "KeyS");
       const isTrace = e.key === "F10" || e.code === "F10" || (modEnter && e.shiftKey);
       const isRun = e.key === "F9" || e.code === "F9" || (modEnter && !e.shiftKey);
-      if (!isRun && !isTrace && !isSave) return;
+      // e.code: Alt changes the key's character (ƒ on a Mac).
+      const isTidy = e.shiftKey && e.altKey && !mod && e.code === "KeyF";
+      if (!isRun && !isTrace && !isSave && !isTidy) return;
       e.preventDefault();
       e.stopPropagation();
       if (e.repeat) return;
-      if (isSave) {
+      if (isTidy) {
+        if (!agentWriting) tidy();
+      } else if (isSave) {
         if (dialog === null && ask === null && !askSwitch && !agentWriting) save();
       } else if (isRun && modEnter && applyProposal.current && sideTab === "agent") {
         // Only while the proposal is in sight: on Μεταβλητές, Ctrl/Cmd+Enter runs.
@@ -460,6 +477,17 @@ export function Ide() {
             </>
           )}
         </NavPopover>
+        {/* Τακτοποίηση without running (every run does it first). */}
+        <button
+          type="button"
+          onClick={() => tidy()}
+          disabled={!code.trim() || agentWriting}
+          aria-label="Τακτοποίηση κώδικα"
+          data-tip="Τακτοποίηση: εσοχές και κενά (Shift+Alt+F)"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 disabled:opacity-50"
+        >
+          <TidyIcon />
+        </button>
         {/* ▶ while nothing runs; ■ stops a run, also one waiting for a ΔΙΑΒΑΣΕ value. */}
         <button
           type="button"
@@ -574,6 +602,7 @@ export function Ide() {
                 readOnly={agentWriting}
                 dark={darkTheme}
                 trace={traceMark}
+                ref={editorActions}
               />
             </div>
           </main>
@@ -672,6 +701,26 @@ function BlankPageIcon() {
       />
       <path d="M14 3v5h5" style={{ fill: "var(--accent)", fillOpacity: 0.55 }} />
       <path d="M9 13h6M9 17h4" style={{ stroke: "var(--accent)" }} />
+    </svg>
+  );
+}
+
+/** Lines stepping in, the indented ones in the accent: Τακτοποίηση. */
+function TidyIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M4 5h12M4 19h12" />
+      <path d="M9 10h11M9 14h8" style={{ stroke: "var(--accent)" }} />
+      <path d="m4 10 2.5 2L4 14" style={{ stroke: "var(--accent)" }} />
     </svg>
   );
 }

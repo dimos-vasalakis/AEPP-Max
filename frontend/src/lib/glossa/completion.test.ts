@@ -5,6 +5,7 @@ import {
   arrowToBlank,
   betweenUnits,
   completionOptions,
+  enterInHeaderBlank,
   glossaAutocomplete,
   inCommentOrString,
   inDeclarations,
@@ -252,6 +253,24 @@ describe("arrow keys in a block's blanks", () => {
     type("ι"); // the outer loop's i, typed with the keyboard on Greek
     expect(arrowToBlank(1)(editor as never)).toBe(true);
     expect(editor.state.doc.toString()).toContain("ΓΙΑ j ΑΠΟ i ΜΕΧΡΙ");
+  });
+
+  it("Enter in a block's first line goes on to the next blank, not a new line", () => {
+    const editor = inserted("ΓΙΑ ${} ΑΠΟ ${} ΜΕΧΡΙ ${}\n\t${}\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ");
+    for (const text of ["i", "1", "10"]) {
+      type(editor, text);
+      expect(enterInHeaderBlank(editor as never)).toBe(true);
+    }
+    type(editor, "ΓΡΑΨΕ i");
+    expect(editor.state.doc.toString()).toBe("ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10\n  ΓΡΑΨΕ i\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ");
+  });
+
+  it("Enter in a body blank starts a new line as usual", () => {
+    const editor = inserted("ΑΝ ${} ΤΟΤΕ\n\t${}\nΑΛΛΙΩΣ\n\t${}\nΤΕΛΟΣ_ΑΝ");
+    type(editor, "x > 0");
+    expect(enterInHeaderBlank(editor as never)).toBe(true);
+    type(editor, "ΓΡΑΨΕ x");
+    expect(enterInHeaderBlank(editor as never)).toBe(false);
   });
 
   it("moves the cursor as usual inside a blank", () => {

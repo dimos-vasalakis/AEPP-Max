@@ -407,34 +407,55 @@ export function arrowToBlank(dir: 1 | -1) {
       state.selection.mainIndex,
     );
     if (inBlock(state.update({ selection: stepped }).state)) return false;
-    // The field commands select the whole blank, as Tab should; an arrow only moves the
-    // cursor (to the start of the next blank, the end of the one before), so what's
-    // there isn't typed over. As a "select", like any arrow key, so counter.ts still
-    // turns a Greek counter just typed into the Latin letter.
-    return (dir > 0 ? nextSnippetField : prevSnippetField)({
-      state,
-      dispatch: (tr) =>
-        view.dispatch(
-          state.update({
-            selection: EditorSelection.create(
-              tr.selection!.ranges.map((r) => EditorSelection.cursor(dir > 0 ? r.from : r.to)),
-              tr.selection!.mainIndex,
-            ),
-            effects: tr.effects,
-            scrollIntoView: true,
-            userEvent: "select",
-          }),
-        ),
-    });
+    return jumpToBlank(view, dir);
   };
 }
 
 /**
- * Enter in a blank that is typed in two places at once («Αλγόριθμος ▯ … Τέλος ▯»):
- * on to the next blank, as Tab does, instead of a new line in both places.
+ * On to the next blank (or back to the one before) with a cursor, as an arrow key
+ * moves: the field commands select the whole blank, as Tab should, so what's there
+ * would be typed over. The cursor goes to the start of the next blank, the end of
+ * the one before. As a "select", like any arrow key, so counter.ts still turns a
+ * Greek counter just typed into the Latin letter.
  */
-function enterInLinkedBlank(view: EditorView): boolean {
-  return view.state.selection.ranges.length > 1 && inBlock(view.state) && nextSnippetField(view);
+function jumpToBlank(view: EditorView, dir: 1 | -1): boolean {
+  const { state } = view;
+  return (dir > 0 ? nextSnippetField : prevSnippetField)({
+    state,
+    dispatch: (tr) =>
+      view.dispatch(
+        state.update({
+          selection: EditorSelection.create(
+            tr.selection!.ranges.map((r) => EditorSelection.cursor(dir > 0 ? r.from : r.to)),
+            tr.selection!.mainIndex,
+          ),
+          effects: tr.effects,
+          scrollIntoView: true,
+          userEvent: "select",
+        }),
+      ),
+  });
+}
+
+/**
+ * Enter in a blank of a block's first line («ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 10▯», «ΑΝ ▯ ΤΟΤΕ»,
+ * «Αλγόριθμος ▯» typed in two places): on to the next blank, the body, as Tab
+ * does. A new line there would break the line in two, inside the blank. In a
+ * blank alone on its line (a body), Enter starts a new line as usual.
+ */
+export function enterInHeaderBlank(view: EditorView): boolean {
+  const { state } = view;
+  if (state.readOnly || !hasNextSnippetField(state)) return false;
+  const head = state.selection.main.head;
+  const line = state.doc.lineAt(head);
+  // The blank's extent on this line: as far as the cursor can go and stay in it.
+  const inside = (pos: number) => inBlock(state.update({ selection: EditorSelection.cursor(pos) }).state);
+  let from = head;
+  while (from > line.from && inside(from - 1)) from--;
+  let to = head;
+  while (to < line.to && inside(to + 1)) to++;
+  const alone = !line.text.slice(0, from - line.from).trim() && !line.text.slice(to - line.from).trim();
+  return !alone && jumpToBlank(view, 1);
 }
 
 /**
@@ -450,8 +471,9 @@ const oneCursorAfterBlock = EditorState.transactionFilter.of((tr) => {
 
 /**
  * Tab or Enter accepts a suggestion; otherwise, inside an inserted block, Tab
- * (or → at a blank's end) jumps to the next blank (i → αρχή → τέλος → body); otherwise Tab indents and
- * Enter starts a new line (indent.ts). Ctrl-Space opens the list.
+ * (→ at a blank's end, Enter on a block's first line) jumps to the next blank
+ * (i → αρχή → τέλος → body); otherwise Tab indents and Enter starts a new line
+ * (indent.ts). Ctrl-Space opens the list.
  */
 export const glossaAutocomplete = [
   autocompletion({ override: [glossaCompletions], defaultKeymap: false, icons: false }),
@@ -463,7 +485,7 @@ export const glossaAutocomplete = [
         run: (view: EditorView) => acceptCompletion(view) || nextSnippetField(view),
         shift: prevSnippetField,
       },
-      { key: "Enter", run: (view: EditorView) => acceptCompletion(view) || enterInLinkedBlank(view) },
+      { key: "Enter", run: (view: EditorView) => acceptCompletion(view) || enterInHeaderBlank(view) },
       { key: "ArrowRight", run: arrowToBlank(1) },
       { key: "ArrowLeft", run: arrowToBlank(-1) },
       { key: "ArrowDown", run: moveCompletionSelection(true) },

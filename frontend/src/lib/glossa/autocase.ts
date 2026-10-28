@@ -75,7 +75,7 @@ function latinMeantGreek(key: string, lineText: string, from: number, to: number
 }
 
 /** ψευδογλώσσα's symbols as the textbook prints them (the lexer reads both spellings alike). */
-const SYMBOLS: Record<string, string> = { "<-": "←", "<=": "≤", ">=": "≥", "<>": "≠" };
+export const SYMBOLS: Record<string, string> = { "<-": "←", "<=": "≤", ">=": "≥", "<>": "≠" };
 
 /**
  * In ψευδογλώσσα, the two-character symbol ending at `offset` («<-», «<=», «>=»,

@@ -3,13 +3,14 @@
 import type { Extension, StateEffect } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import CodeMirror, { type ReactCodeMirrorRef } from "@uiw/react-codemirror";
-import { useEffect, useRef } from "react";
+import { type Ref, useEffect, useImperativeHandle, useRef } from "react";
 import { trackCursor } from "@/lib/cursor";
 import { glossaAutocase } from "@/lib/glossa/autocase";
 import { glossaAutocomplete } from "@/lib/glossa/completion";
 import { glossaCounter } from "@/lib/glossa/counter";
 import { editorLanguage } from "@/lib/glossa/editorLanguage";
 import { glossaEndName } from "@/lib/glossa/endName";
+import { formatChanges } from "@/lib/glossa/format";
 import { glossaIndent } from "@/lib/glossa/indent";
 import { glossa, pseudocode } from "@/lib/glossa/language";
 import { glossaLinter } from "@/lib/glossa/lint";
@@ -49,6 +50,12 @@ const BASIC_SETUP = {
   foldKeymap: false,
 };
 
+/** What the IDE asks of the editor. */
+export type EditorActions = {
+  /** Τακτοποίηση (lib/glossa/format.ts), one undo step; returns the code, tidied or not (read-only). */
+  format: () => string;
+};
+
 // @uiw/react-codemirror reconfigures the whole editor whenever `extensions`,
 // `theme`, `basicSetup` or `onChange` change identity, which also cancels an
 // inserted block's Tab stops. Keep them stable: module constants and a callback
@@ -64,12 +71,29 @@ type Props = {
   dark: boolean;
   /** The πίνακας τιμών's current step, or the ΔΙΑΒΑΣΕ waiting for a value: its line is marked and scrolled into view. */
   trace?: TraceMark;
+  /** The editor's actions, while it is mounted. */
+  ref?: Ref<EditorActions>;
 };
 
-export function CodeEditor({ value, onChange, language, readOnly, dark, trace = null }: Props) {
+export function CodeEditor({ value, onChange, language, readOnly, dark, trace = null, ref }: Props) {
   const editor = useRef<ReactCodeMirrorRef>(null);
   const line = trace?.line;
   const note = trace?.note;
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      format() {
+        const view = editor.current?.view;
+        if (!view) return value;
+        // Changed only where it differs, so the cursor stays where it was.
+        const changes = view.state.readOnly ? [] : formatChanges(view.state, language);
+        if (changes.length) view.dispatch({ changes, userEvent: "format", scrollIntoView: true });
+        return view.state.doc.toString();
+      },
+    }),
+    [language, value],
+  );
 
   // An effect, not an extension prop: changing extensions would reconfigure the editor.
   useEffect(() => {
