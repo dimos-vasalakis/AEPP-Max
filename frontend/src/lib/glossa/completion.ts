@@ -320,7 +320,7 @@ export function inCommentOrString(lineBefore: string): boolean {
 
 /**
  * Names the student already used in code, spelled as they first wrote them.
- * Words in comments and strings aren't names. `skipFrom` is where the word
+ * Words in comments and strings aren't names, and neither is the program's own name. `skipFrom` is where the word
  * being typed starts.
  */
 export function namesIn(text: string, skipFrom: number, language: Language = "glossa"): string[] {
@@ -328,8 +328,11 @@ export function namesIn(text: string, skipFrom: number, language: Language = "gl
   const seen = new Map<string, string>();
   let offset = 0;
   for (const line of text.split("\n")) {
-    for (const word of codeWords(line)) {
-      if (offset + word.from === skipFrom) continue;
+    const words = codeWords(line);
+    // The program's name (ΠΡΟΓΡΑΜΜΑ Demos) can't be used in the code: never offered.
+    const programName = normalizeWord(words[0]?.text ?? "") === "ΠΡΟΓΡΑΜΜΑ" ? words[1] : undefined;
+    for (const word of words) {
+      if (word === programName || offset + word.from === skipFrom) continue;
       const key = normalizeWord(word.text);
       if (!reserved.has(key) && !seen.has(key)) seen.set(key, word.text);
     }

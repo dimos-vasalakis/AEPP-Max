@@ -163,6 +163,10 @@ describe("subprogram blocks", () => {
 });
 
 describe("namesIn", () => {
+  it("leaves out the program's own name", () => {
+    expect(namesIn("ΠΡΟΓΡΑΜΜΑ Demos\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x\nΑΡΧΗ\n  \n", 999)).toEqual(["x"]);
+  });
+
   it("collects names once, skipping keywords and the word being typed", () => {
     const text = "ΑΚΕΡΑΙΕΣ: Σύνολο, i\nΣΥΝΟΛΟ <- i + Τ_Ρ(4)\nσυ";
     expect(namesIn(text, text.lastIndexOf("συ"))).toEqual(["Σύνολο", "i"]);
