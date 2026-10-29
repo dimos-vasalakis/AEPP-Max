@@ -9,6 +9,7 @@ import {
   glossaAutocomplete,
   inCommentOrString,
   inDeclarations,
+  inBody,
   inHeader,
   namesIn,
   type Place,
@@ -105,6 +106,20 @@ describe("completionOptions", () => {
   it("offers ΑΛΛΙΩΣ after ΠΕΡΙΠΤΩΣΗ, and return types after a function's header", () => {
     expect(labels("αλ", "case")).toEqual(["ΑΛΛΙΩΣ", "ΑΛΗΘΗΣ"]);
     expect(labels("α", "return-type")).toEqual(["ΑΚΕΡΑΙΑ"]);
+  });
+});
+
+describe("inBody", () => {
+  it("is true after ΑΡΧΗ until the unit ends", () => {
+    expect(inBody("ΠΡΟΓΡΑΜΜΑ α\nΑΡΧΗ\n  ΓΡΑΨΕ 1\n")).toBe(true);
+    expect(inBody("ΠΡΟΓΡΑΜΜΑ α\nΜΕΤΑΒΛΗΤΕΣ\n")).toBe(false);
+    expect(inBody("ΠΡΟΓΡΑΜΜΑ α\nΑΡΧΗ\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n")).toBe(false);
+  });
+  it("leaves ΣΤΑΘΕΡΕΣ and ΜΕΤΑΒΛΗΤΕΣ out of the suggestions", () => {
+    const labels = (declarations: boolean) =>
+      completionOptions("Μ", "line-start", [], "", "glossa", true, declarations).map((o) => o.label);
+    expect(labels(true)).toContain("ΜΕΤΑΒΛΗΤΕΣ");
+    expect(labels(false)).not.toContain("ΜΕΤΑΒΛΗΤΕΣ");
   });
 });
 

@@ -227,6 +227,19 @@ export function inHeader(textBefore: string): boolean {
   return false;
 }
 
+/** True when the line after `textBefore` is in a unit's body: the nearest section word
+ * above it is ΑΡΧΗ. Declarations are over there. */
+export function inBody(textBefore: string): boolean {
+  const lines = textBefore.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const first = normalizeWord(FIRST_WORD.exec(lines[i])?.[1] ?? "");
+    if (SECTIONS.has(first)) return first === "ΑΡΧΗ";
+  }
+  return false;
+}
+
+const DECLARATION_SECTIONS = new Set(["ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ"]);
+
 /** Blocks that are whole units: they go after ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ, never inside one. */
 const UNIT_BLOCKS = new Set(["ΣΥΝΑΡΤΗΣΗ", "ΔΙΑΔΙΚΑΣΙΑ"]);
 
@@ -334,6 +347,8 @@ export function completionOptions(
   language: Language = "glossa",
   /** Offer ΣΥΝΑΡΤΗΣΗ and ΔΙΑΔΙΚΑΣΙΑ (only between units, `betweenUnits`). */
   units = true,
+  /** Offer ΣΤΑΘΕΡΕΣ and ΜΕΤΑΒΛΗΤΕΣ (not in a body, `inBody`). */
+  declarations = true,
 ): Completion[] {
   const prefix = normalizeWord(typed);
   const matches = (o: Completion) => normalizeWord(o.label).startsWith(prefix);
@@ -349,7 +364,9 @@ export function completionOptions(
     case "line-start":
       return [
         ...blockOptions[language].filter((o) => matches(o) && (units || !UNIT_BLOCKS.has(o.label))),
-        ...lineStartOptions[language].filter(useful),
+        ...lineStartOptions[language].filter(
+          (o) => useful(o) && (declarations || !DECLARATION_SECTIONS.has(normalizeWord(o.label))),
+        ),
         ...nameOptions.filter(useful),
       ];
     case "declaration":
@@ -382,12 +399,14 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
   const language = context.state.facet(editorLanguage);
   let place = placeOf(before, language);
   let units = true;
+  let declarations = true;
   // In ΜΕΤΑΒΛΗΤΕΣ only a type starts a line; the statements belong after ΑΡΧΗ.
   if (place === "line-start" && language === "glossa") {
     const above = context.state.doc.sliceString(0, line.from);
     if (inDeclarations(above)) place = "declaration";
     else if (inHeader(above)) place = "header";
     units = betweenUnits(above);
+    declarations = !inBody(above);
   }
   const options = completionOptions(
     word.text,
@@ -396,6 +415,7 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
     FIRST_WORD.exec(before)?.[1],
     language,
     units,
+    declarations,
   );
   return options.length ? { from: word.from, options, filter: false } : null;
 }
