@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { ConfirmDialog } from "@/components/Confirm";
 import { DiamondDialog, type DiamondOpening } from "@/components/DiamondDialog";
 import { NavPopover } from "@/components/NavPopover";
 import { displayName, SettingsDialog } from "@/components/SettingsDialog";
@@ -26,6 +27,7 @@ export function UserMenu() {
   const plan = usePlan();
   // Outside the popover, which closes (and unmounts its panel) as the dialog opens.
   const [settings, setSettings] = useState(false);
+  const [askSignOut, setAskSignOut] = useState(false);
   const [diamond, setDiamond] = useState<DiamondOpening | null>(returnFromCheckout);
   // The ?diamond= is read once; a reload shouldn't open it again.
   useEffect(() => {
@@ -81,7 +83,10 @@ export function UserMenu() {
             </button>
             <button
               type="button"
-              onClick={() => createClient().auth.signOut()}
+              onClick={() => {
+                close();
+                setAskSignOut(true);
+              }}
               className="mt-2 w-full rounded-md bg-panel-2 px-3 py-1.5 text-left hover:text-text"
             >
               Αποσύνδεση
@@ -93,6 +98,19 @@ export function UserMenu() {
         )}
       </NavPopover>
       {settings && <SettingsDialog user={user} onClose={() => setSettings(false)} />}
+      {askSignOut && (
+        <ConfirmDialog
+          title="Αποσύνδεση;"
+          confirmLabel="Αποσύνδεση"
+          onConfirm={() => {
+            setAskSignOut(false);
+            createClient().auth.signOut();
+          }}
+          onCancel={() => setAskSignOut(false)}
+        >
+          Θα βγεις από τον λογαριασμό σου σε αυτόν τον browser.
+        </ConfirmDialog>
+      )}
       {diamond && <DiamondDialog opening={diamond} onClose={() => setDiamond(null)} />}
     </>
   );

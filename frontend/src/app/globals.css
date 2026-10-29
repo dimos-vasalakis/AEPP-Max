@@ -735,3 +735,9 @@ body {
     opacity: 1;
   }
 }
+
+/* A filled-in blank of an inserted block (ΠΡΟΓΡΑΜΜΑ test) keeps no grey box once the
+ * cursor moves on; the empty blanks still show as bars (.cm-snippetFieldPosition). */
+.cm-editor .cm-snippetField {
+  background-color: transparent !important;
+}
