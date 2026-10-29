@@ -11,6 +11,7 @@ import { codeWords } from "./words";
 // («αλλιώς_αν» → «ΑΛΛΙΩΣ_ΑΝ»). In ψευδογλώσσα the words take the textbook's
 // spelling instead («τελος_αν» → «Τέλος_αν»). A word typed with the keyboard
 // still on English becomes the Greek one («grace» or «grapse» → «ΓΡΑΨΕ», latin.ts).
+// «-- » (two dashes, then a space) becomes the arrow in both languages.
 // ψευδογλώσσα's «<-», «<=», «>=» and «<>» become ← ≤ ≥ ≠ as they're typed.
 // Names, strings and comments are left alone, Latin names included («arxi»
 // stays a name once declared or used elsewhere).
@@ -88,6 +89,17 @@ export function symbolFix(lineText: string, offset: number, language: Language):
   return { from: offset - 2, to: offset, insert: symbol };
 }
 
+/**
+ * «--» followed by a space typed at `offset` (the space's position in the line)
+ * becomes the assignment arrow: «<-» in ΓΛΩΣΣΑ, «←» in ψευδογλώσσα. Not in strings or
+ * comments, and not part of a longer run of dashes.
+ */
+export function dashFix(lineText: string, offset: number, language: Language): Fix | null {
+  if (offset < 2 || lineText.slice(offset - 2, offset) !== "--") return null;
+  if (lineText[offset - 3] === "-" || inCommentOrString(lineText.slice(0, offset - 2))) return null;
+  return { from: offset - 2, to: offset, insert: language === "pseudocode" ? "←" : "<-" };
+}
+
 function capitalizeOnSeparator(tr: Transaction): Transaction | readonly TransactionSpec[] {
   // Typing, and Enter (which is plain "input"); not pastes, completions or undo.
   const typed = tr.isUserEvent("input.type") || tr.annotation(Transaction.userEvent) === "input";
@@ -103,6 +115,7 @@ function capitalizeOnSeparator(tr: Transaction): Transaction | readonly Transact
     const language = tr.startState.facet(editorLanguage);
     const lineFix =
       keywordFix(line.text, fromB - line.from, language, tr.newDoc, line.from) ??
+      (text === " " ? dashFix(line.text, fromB - line.from, language) : null) ??
       (text.length === 1 ? symbolFix(line.text, fromB - line.from + 1, language) : null);
     if (lineFix) {
       fix = { from: line.from + lineFix.from, to: line.from + lineFix.to, insert: lineFix.insert };

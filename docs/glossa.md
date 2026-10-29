@@ -197,7 +197,7 @@ js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `Δ�
 | ΚΑΙ / Ή | Both sides are always evaluated, so `ΟΣΟ i <= 10 ΚΑΙ Α[i] <> 0` fails at `i = 11`, as the textbook warns. |
 | DIV / MOD | Floored (the Διερμηνευτής's default, Knuth's definition): `-7 DIV 2 = -4`, `-7 MOD 2 = 1`. **Verify.** |
 | `=` / `<>` on ΛΟΓΙΚΗ | Allowed; `<`, `>` on ΛΟΓΙΚΗ are errors. |
-| `ΓΙΑ` | Bounds and step evaluated once; the counter is updated as `counter + step` each round, so after the loop it holds the first value past the bound. `ΜΕ_ΒΗΜΑ 0` is an error. Real counters and steps work. A ΓΙΑ inside another ΓΙΑ cannot use the same counter (error at the inner one). |
+| `ΓΙΑ` | Bounds and step evaluated once; the counter is updated as `counter + step` each round, so after the loop it holds the first value past the bound. `ΜΕ_ΒΗΜΑ 0` is an error. Real counters and steps work. A ΓΙΑ inside another ΓΙΑ cannot use the same counter (a runtime error at the inner one, when it starts). |
 | Input | An integer variable takes only an integer; a real one also accepts a decimal comma (`2,5`); a ΛΟΓΙΚΗ one accepts ΑΛΗΘΗΣ/ΨΕΥΔΗΣ in any case or accents; ΧΑΡΑΚΤΗΡΕΣ take the text as typed. A wrong value ends the run with an error. |
 | Strings with `+` | An error (no concatenation), as the textbook says. |
 | Limits | Call depth 200, arrays up to 1,000,000 cells, integers up to 10^100: past them, a runtime error instead of a hung worker. |

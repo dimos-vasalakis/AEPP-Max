@@ -198,6 +198,7 @@ class TestControlFlow:
         )
         result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i"))
         assert result.status == "error" and result.error is not None
+        assert result.error.kind == "runtime"
         assert result.error.line == 6
         assert "μετρητής" in result.error.message
 

@@ -94,6 +94,7 @@ class _Frame:
     depth: int = 0  # how deep in calls (0: the program)
     call: int = 0  # which call (0: the program), as TraceStep.call
     copied: dict[str, str] = field(default_factory=dict)  # as TraceStep.copied
+    counters: list[str] = field(default_factory=list)  # keys of the ΓΙΑ loops running now
 
 
 # Where an argument came from, so a procedure can copy its parameter back.
@@ -661,7 +662,20 @@ class _Machine:
         step = 1 if loop.step is None else self.number(loop.step, frame)
         if step == 0:
             raise _error(loop.step or loop, "Το βήμα της ΓΙΑ δεν μπορεί να είναι μηδέν.")
+        if loop.counter.key in frame.counters:
+            raise _error(
+                loop.counter,
+                f"Το {loop.counter.name} είναι ήδη μετρητής ενός ΓΙΑ που περιέχει αυτό: "
+                "χρησιμοποίησε άλλη μεταβλητή.",
+            )
         self.store(loop.counter, start, frame)
+        frame.counters.append(loop.counter.key)
+        try:
+            self.loop_rounds(loop, end, step, frame)
+        finally:
+            frame.counters.pop()
+
+    def loop_rounds(self, loop: n.For, end: Value, step: Value, frame: _Frame) -> None:
         first = True
         while True:
             if not first:

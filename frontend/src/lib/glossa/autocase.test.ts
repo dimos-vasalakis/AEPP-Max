@@ -115,6 +115,14 @@ describe("ψευδογλώσσα's symbols", () => {
     expect(typeAlgorithm("Αν x <", ">")).toBe("Αν x ≠");
   });
 
+  it("«--» and a space become the arrow", () => {
+    expect(type("x --", " ")).toBe("x <- ");
+    expect(typeAlgorithm("x --", " ")).toBe("x ← ");
+    expect(type("x ---", " ")).toBe("x --- ");
+    expect(type("Γράψε '--", " ")).toBe("Γράψε '-- ");
+    expect(type("x ", "--", "input.paste")).toBe("x --");
+  });
+
   it("stay as typed in ΓΛΩΣΣΑ, strings, comments and pastes", () => {
     expect(type("x <", "-")).toBe("x <-");
     expect(typeAlgorithm("Γράψε '<", "=")).toBe("Γράψε '<=");

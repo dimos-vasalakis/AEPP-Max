@@ -60,7 +60,6 @@ class _UnitChecker:
         self.unit = unit
         self.scope: dict[str, _Symbol] = {}
         self.assigns_own_name = False
-        self.counters: list[str] = []
 
     @property
     def function(self) -> n.Function | None:
@@ -200,18 +199,10 @@ class _UnitChecker:
                 self.expr(condition)
             case n.For(counter=counter, start=start, end=end, step=step, body=body):
                 self.target(counter)
-                if counter.key in self.counters:
-                    raise _error(
-                        counter,
-                        f"Το {counter.name} είναι ήδη μετρητής ενός ΓΙΑ που περιέχει αυτό: "
-                        "χρησιμοποίησε άλλη μεταβλητή.",
-                    )
                 for expr in (start, end, step):
                     if expr is not None:
                         self.expr(expr)
-                self.counters.append(counter.key)
                 self.statements(body)
-                self.counters.pop()
             case n.CallProcedure():
                 self.call_procedure(stmt)
 
