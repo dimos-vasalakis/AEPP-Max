@@ -103,6 +103,7 @@ class _AlgorithmChecker:
     def __init__(self, checker: _Checker, algorithm: n.Algorithm):
         self.checker = checker
         self.algorithm = algorithm
+        self.counters: list[str] = []
 
     @property
     def arrays(self) -> dict[str, int]:
@@ -175,10 +176,18 @@ class _AlgorithmChecker:
                 self.expr(condition)
             case n.For(counter=counter, start=start, end=end, step=step, body=body):
                 self.target(counter)
+                if counter.key in self.counters:
+                    raise _error(
+                        counter,
+                        f"Το {counter.name} είναι ήδη μετρητής ενός ΓΙΑ που περιέχει αυτό: "
+                        "χρησιμοποίησε άλλη μεταβλητή.",
+                    )
                 for expr in (start, end, step):
                     if expr is not None:
                         self.expr(expr)
+                self.counters.append(counter.key)
                 self.statements(body)
+                self.counters.pop()
             case n.CallProcedure():
                 self.call_statement(stmt)
 

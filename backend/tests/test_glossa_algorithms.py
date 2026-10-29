@@ -116,6 +116,14 @@ i ← 1
 Τέλος Παράδειγμα_11"""
         assert output(source) == ["2550"]
 
+    def test_nested_for_cannot_reuse_the_counter(self) -> None:
+        source = (
+            "Αλγόριθμος Δοκιμή\nΓια i από 1 μέχρι 3\n  Για i από 1 μέχρι 2\n"
+            "    Εκτύπωσε i\n  Τέλος_επανάληψης\nΤέλος_επανάληψης\nΤέλος Δοκιμή"
+        )
+        message, line = error(source)
+        assert line == 3 and "μετρητής" in message
+
     def test_russian_multiplication_reads_data_and_shows_results(self) -> None:
         source = """Αλγόριθμος Πολλαπλασιασμός_αλά_ρωσικά
 Δεδομένα // M1, M2 //

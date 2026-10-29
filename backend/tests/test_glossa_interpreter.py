@@ -191,6 +191,20 @@ class TestControlFlow:
         body = "  ΓΙΑ i ΑΠΟ 10 ΜΕΧΡΙ 1 ΜΕ_ΒΗΜΑ -3\n    ΓΡΑΨΕ i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ i"
         assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i") == ["10", "7", "4", "1", "-2"]
 
+    def test_nested_for_cannot_reuse_the_counter(self) -> None:
+        body = (
+            "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 3\n    ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 2\n      ΓΡΑΨΕ i\n"
+            "    ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        )
+        result = run(program(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i"))
+        assert result.status == "error" and result.error is not None
+        assert result.error.line == 6
+        assert "μετρητής" in result.error.message
+
+    def test_sequential_for_can_reuse_the_counter(self) -> None:
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 2\n    ΓΡΑΨΕ i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n" * 2
+        assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i") == ["1", "2", "1", "2"]
+
     def test_for_that_never_runs(self) -> None:
         body = "  ΓΙΑ i ΑΠΟ 5 ΜΕΧΡΙ 1\n    ΓΡΑΨΕ i\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ i"
         assert output(body, "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: i") == ["5"]
