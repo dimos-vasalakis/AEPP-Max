@@ -9,6 +9,7 @@ import {
   glossaAutocomplete,
   inCommentOrString,
   inDeclarations,
+  inHeader,
   namesIn,
   type Place,
   placeOf,
@@ -104,6 +105,16 @@ describe("completionOptions", () => {
   it("offers ΑΛΛΙΩΣ after ΠΕΡΙΠΤΩΣΗ, and return types after a function's header", () => {
     expect(labels("αλ", "case")).toEqual(["ΑΛΛΙΩΣ", "ΑΛΗΘΗΣ"]);
     expect(labels("α", "return-type")).toEqual(["ΑΚΕΡΑΙΑ"]);
+  });
+});
+
+describe("inHeader", () => {
+  it("is true between ΠΡΟΓΡΑΜΜΑ and ΑΡΧΗ, outside ΜΕΤΑΒΛΗΤΕΣ", () => {
+    expect(inHeader("ΠΡΟΓΡΑΜΜΑ α\n")).toBe(true);
+    expect(inHeader("ΠΡΟΓΡΑΜΜΑ α\nΣΤΑΘΕΡΕΣ\n  Π = 3\n")).toBe(true);
+    expect(inHeader("ΠΡΟΓΡΑΜΜΑ α\nΜΕΤΑΒΛΗΤΕΣ\n")).toBe(false);
+    expect(inHeader("ΠΡΟΓΡΑΜΜΑ α\nΑΡΧΗ\n")).toBe(false);
+    expect(inHeader("")).toBe(false);
   });
 });
 

@@ -149,6 +149,7 @@ const LINE_START: Record<Language, string[]> = {
 export type Place =
   | "line-start" // a statement or section: ΓΡΑΨΕ, ΑΝ …, a name to assign to
   | "declaration" // a line in ΜΕΤΑΒΛΗΤΕΣ: only the four types
+  | "header" // between ΠΡΟΓΡΑΜΜΑ and ΑΡΧΗ: only the sections (ΣΤΑΘΕΡΕΣ, ΜΕΤΑΒΛΗΤΕΣ, ΑΡΧΗ)
   | "value" // a value is expected: after <-, ΓΡΑΨΕ, ΑΝ, (, an operator, …
   | "after-value" // right after a value: ΤΟΤΕ, ΑΠΟ, ΜΕΧΡΙ, ΚΑΙ, MOD, …
   | "name" // only a variable fits: after ΓΙΑ, ΔΙΑΒΑΣΕ, in a declaration
@@ -211,6 +212,17 @@ export function inDeclarations(textBefore: string): boolean {
   for (let i = lines.length - 1; i >= 0; i--) {
     const first = normalizeWord(FIRST_WORD.exec(lines[i])?.[1] ?? "");
     if (SECTIONS.has(first)) return first === "ΜΕΤΑΒΛΗΤΕΣ";
+  }
+  return false;
+}
+
+/** True when the line after `textBefore` is in a unit's header: the nearest section word
+ * above it opens the unit or its ΣΤΑΘΕΡΕΣ, so no statement can come before ΑΡΧΗ. */
+export function inHeader(textBefore: string): boolean {
+  const lines = textBefore.split("\n");
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const first = normalizeWord(FIRST_WORD.exec(lines[i])?.[1] ?? "");
+    if (SECTIONS.has(first)) return ["ΠΡΟΓΡΑΜΜΑ", "ΣΥΝΑΡΤΗΣΗ", "ΔΙΑΔΙΚΑΣΙΑ", "ΣΤΑΘΕΡΕΣ"].includes(first);
   }
   return false;
 }
@@ -342,6 +354,8 @@ export function completionOptions(
       ];
     case "declaration":
       return declarationOptions.filter(useful);
+    case "header":
+      return keywords(["ΣΤΑΘΕΡΕΣ", "ΜΕΤΑΒΛΗΤΕΣ", "ΑΡΧΗ"]).filter(useful);
     case "value":
       return [nameOptions, functionOptions, valueWordOptions(language)].flat().filter(useful);
     case "case":
@@ -372,6 +386,7 @@ function glossaCompletions(context: CompletionContext): CompletionResult | null 
   if (place === "line-start" && language === "glossa") {
     const above = context.state.doc.sliceString(0, line.from);
     if (inDeclarations(above)) place = "declaration";
+    else if (inHeader(above)) place = "header";
     units = betweenUnits(above);
   }
   const options = completionOptions(
