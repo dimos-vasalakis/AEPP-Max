@@ -1,6 +1,6 @@
-import { type Diagnostic, linter, setDiagnosticsEffect } from "@codemirror/lint";
+import { type Diagnostic, forEachDiagnostic, linter, setDiagnostics, setDiagnosticsEffect } from "@codemirror/lint";
 import { RangeSet, type Text, StateField } from "@codemirror/state";
-import { GutterMarker, lineNumberMarkers } from "@codemirror/view";
+import { GutterMarker, ViewPlugin, type ViewUpdate, lineNumberMarkers } from "@codemirror/view";
 import { apiFetch } from "@/lib/api/client";
 import { editorLanguage } from "./editorLanguage";
 import type { ErrorInfo } from "./types";
@@ -46,12 +46,37 @@ const errorLineNumbers = StateField.define<RangeSet<GutterMarker>>({
 });
 
 /**
+ * A mark on text the student is editing goes away at once, not when the next check
+ * answers: typed at the edge of a mark (a name after ΠΡΟΓΡΑΜΜΑ), the text would
+ * otherwise be drawn as part of the old error until the backend replies.
+ */
+const dropEditedMarks = ViewPlugin.fromClass(
+  class {
+    update(update: ViewUpdate) {
+      if (!update.docChanged) return;
+      const touched: [number, number][] = [];
+      update.changes.iterChangedRanges((_fa, _ta, from, to) => touched.push([from, to]));
+      const keep: Diagnostic[] = [];
+      let dropped = false;
+      forEachDiagnostic(update.state, (d, from, to) => {
+        if (touched.some(([a, b]) => a <= to && b >= from)) dropped = true;
+        else keep.push({ ...d, from, to });
+      });
+      if (!dropped) return;
+      const view = update.view;
+      queueMicrotask(() => view.dispatch(setDiagnostics(view.state, keep)));
+    }
+  },
+);
+
+/**
  * Marks syntax errors while the student types. Half a second after they stop,
  * the code goes to the backend's parser (POST /check), the same one /run uses,
  * so the editor and Εκτέλεση never disagree. No AI is involved.
  */
 export const glossaLinter = [
   errorLineNumbers,
+  dropEditedMarks,
   linter(
     async (view) => {
       const doc = view.state.doc;

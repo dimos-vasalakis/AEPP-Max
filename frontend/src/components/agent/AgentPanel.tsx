@@ -795,7 +795,7 @@ function Welcome({ mode, approve, plan }: { mode: AgentMode; approve: boolean; p
           width={64}
           height={64}
           unoptimized
-          className="h-16 w-auto"
+          className={plan === "diamond" && m.kind === "tutor" ? "h-[4.5rem] w-auto" : "h-16 w-auto"}
         />
       </span>
       <div className="min-w-0 space-y-1">
