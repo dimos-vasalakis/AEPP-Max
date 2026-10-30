@@ -44,6 +44,15 @@ ADJECTIVE = {
     "ΧΑΡΑΚΤΗΡΑΣ": "αλφαριθμητική",
     "ΛΟΓΙΚΗ": "λογική",
 }
+# An array's values: "Ο πίνακας Α έχει πραγματικές τιμές".
+PLURAL_ADJECTIVE = {
+    "ΑΚΕΡΑΙΑ": "ακέραιες",
+    "ΠΡΑΓΜΑΤΙΚΗ": "πραγματικές",
+    "ΧΑΡΑΚΤΗΡΑΣ": "αλφαριθμητικές",
+    "ΛΟΓΙΚΗ": "λογικές",
+}
+# Why a procedure's argument of another type is refused (bind).
+SAME_TYPE = " Σε ΚΑΛΕΣΕ πρέπει να έχουν τον ίδιο τύπο."
 INTEGER_INPUT = re.compile(r"[+-]?\d+")
 REAL_INPUT = re.compile(r"[+-]?(\d+(\.\d*)?|\.\d+)")
 
@@ -430,8 +439,9 @@ class _Machine:
         frame = self.frame(sub)
         try:
             refs: list[tuple[n.Param, _Ref | None]] = []
+            procedure = isinstance(sub, n.Procedure)
             for param, arg in zip(sub.params, args, strict=True):
-                refs.append((param, self.bind(param, arg, frame, caller)))
+                refs.append((param, self.bind(param, arg, frame, caller, procedure)))
             self.run_body(sub, frame)
 
             if isinstance(sub, n.Function):
@@ -497,8 +507,13 @@ class _Machine:
                     line=caller.line, scope=caller.scope, depth=caller.depth, call=caller.call
                 )
 
-    def bind(self, param: n.Param, arg: n.Expr, frame: _Frame, caller: _Frame) -> _Ref | None:
-        """Give `param` the argument's value; return where the argument lives, if a variable."""
+    def bind(
+        self, param: n.Param, arg: n.Expr, frame: _Frame, caller: _Frame, procedure: bool
+    ) -> _Ref | None:
+        """Give `param` the argument's value; return where the argument lives, if a variable.
+        A procedure's variable, element or array argument must have the parameter's type
+        (docs/glossa.md): it is copied back, so ΑΚΕΡΑΙΑ x into a ΠΡΑΓΜΑΤΙΚΗ parameter would
+        otherwise fail on return, with a real value the procedure never gave it."""
         slot = frame.values[param.key]
         if isinstance(slot, _Array):
             source = caller.values.get(arg.key) if isinstance(arg, n.Name) else None
@@ -509,11 +524,16 @@ class _Machine:
                     arg,
                     f"Ο πίνακας {source.name} δεν έχει τις διαστάσεις της παραμέτρου {param.name}.",
                 )
-            if _fit(slot.type, _sample(source.type)) is None:
+            if (
+                source.type != slot.type
+                if procedure
+                else _fit(slot.type, _sample(source.type)) is None
+            ):
                 raise _error(
                     arg,
-                    f"Ο πίνακας {source.name} είναι {ADJECTIVE[source.type]}, "
-                    f"ενώ η παράμετρος {param.name} είναι {ADJECTIVE[slot.type]}.",
+                    f"Ο πίνακας {source.name} έχει {PLURAL_ADJECTIVE[source.type]} τιμές, "
+                    f"ενώ η παράμετρος {param.name} {PLURAL_ADJECTIVE[slot.type]}."
+                    + (SAME_TYPE if procedure else ""),
                 )
             self.charge(len(source.cells))
             frame.copied[slot.name] = source.name
@@ -525,16 +545,29 @@ class _Machine:
             raise _error(
                 arg, f"Ο {arg.name} είναι πίνακας, ενώ η παράμετρος {param.name} δεν είναι."
             )
+        wanted = frame.types[param.key]
+        # What a procedure would copy back to, said as the type mismatch's message names it.
+        mismatch: str | None = None
         if isinstance(arg, n.Name) and arg.key in caller.values:
             # A variable may go in without a value: the procedure may be the one giving it.
             ref = (caller, arg.key)
             value = caller.values[arg.key]
+            declared = caller.types.get(arg.key)
+            if declared is not None and declared != wanted:
+                mismatch = f"η μεταβλητή {arg.name} είναι {ADJECTIVE[declared]}"
         elif isinstance(arg, n.Index):
             array, flat = self.element(arg, caller)
             ref = (array, flat)
             value = array.cells[flat]
+            if array.type != wanted:
+                mismatch = f"ο πίνακας {array.name} έχει {PLURAL_ADJECTIVE[array.type]} τιμές"
         else:
             value = self.eval(arg, caller)
+        if procedure and mismatch is not None:
+            raise _error(
+                arg,
+                f"Η παράμετρος {param.name} είναι {ADJECTIVE[wanted]}, ενώ {mismatch}." + SAME_TYPE,
+            )
         if value is not UNSET:
             fitted = _fit(frame.types[param.key], value)  # type: ignore[arg-type]
             if fitted is None:
@@ -801,7 +834,7 @@ class _Machine:
             raise _error(
                 node,
                 f"Δεν μπορεί να εκχωρηθεί {ADJECTIVE[type_of(value)]} τιμή "
-                f"στη {ADJECTIVE[type_name]} μεταβλητή {name}.",
+                f"σε {ADJECTIVE[type_name]} μεταβλητή {name}.",
             )
         return fitted
 

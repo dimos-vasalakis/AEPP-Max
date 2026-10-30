@@ -5,15 +5,18 @@ checks the limit, so parallel requests can't all slip past one stale total, and
 a reply stopped before the model finishes still costs something (the SDK only
 counts a response once it completes). After the run, what it used beyond that
 (input + output, as the SDK counts them) is added. Days are Athens time.
-A student can still go over: by what the replies already admitted use beyond
-their up-front charge.
+
+A student has one reply running at a time (`start_reply`), and a reply stops
+before its next model call once it has used what was left of the day (`Budget`).
+So a student goes over by at most one model call's tokens.
 """
 
 import logging
+import time
 import uuid
 from datetime import datetime
 
-from agents import Usage
+from agents import Agent, RunContextWrapper, RunHooks, TResponseInputItem, Usage
 from sqlalchemy import Date, cast, func, select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,10 +50,10 @@ async def read_usage(db: AsyncSession, user_id: uuid.UUID) -> tuple[int, int, da
     return tokens, messages, resets_at
 
 
-async def reserve_message(db: AsyncSession, user_id: uuid.UUID, limit: int) -> bool:
-    """Charge a message up front if today's total is still under `limit`.
-    Atomic: the upsert locks the row, so concurrent messages see each other's
-    charges. The caller's commit makes it count."""
+async def reserve_message(db: AsyncSession, user_id: uuid.UUID, limit: int) -> int | None:
+    """Charge a message up front if today's total is still under `limit`, and return
+    the new total (None: over the limit). Atomic: the upsert locks the row, so
+    concurrent messages see each other's charges. The caller's commit makes it count."""
     stmt = insert(AgentUsage).values(user_id=user_id, day=TODAY, tokens=MESSAGE_TOKENS, messages=1)
     stmt = stmt.on_conflict_do_update(
         index_elements=[AgentUsage.user_id, AgentUsage.day],
@@ -60,7 +63,7 @@ async def reserve_message(db: AsyncSession, user_id: uuid.UUID, limit: int) -> b
         },
         where=AgentUsage.tokens < limit,
     ).returning(AgentUsage.tokens)
-    return (await db.execute(stmt)).first() is not None
+    return await db.scalar(stmt)
 
 
 async def record_usage(user_id: uuid.UUID, reserved: int, usage: Usage) -> None:
@@ -80,3 +83,54 @@ async def record_usage(user_id: uuid.UUID, reserved: int, usage: Usage) -> None:
             await db.commit()
     except Exception:
         logger.exception("Could not record agent usage for user %s", user_id)
+
+
+# Students with a reply running, and since when. In memory: Render runs one process.
+_replying: dict[uuid.UUID, float] = {}
+# A backstop: stream_reply frees the slot however its stream ends, but if a slot is
+# ever left behind, after this long it stops counting. No reply runs that long.
+REPLY_SLOT_SECONDS = 600
+
+
+def replying(user_id: uuid.UUID) -> bool:
+    started = _replying.get(user_id)
+    return started is not None and time.monotonic() - started < REPLY_SLOT_SECONDS
+
+
+def start_reply(user_id: uuid.UUID) -> float | None:
+    """Take the student's one reply slot: its token for `end_reply`, or None if a
+    reply of theirs is still running (another tab, a script). One at a time, or
+    parallel messages would each spend up to the day's limit before any is recorded."""
+    if replying(user_id):
+        return None
+    _replying[user_id] = token = time.monotonic()
+    return token
+
+
+def end_reply(user_id: uuid.UUID, token: float) -> None:
+    # Only its own slot: a stale one may have been taken over since.
+    if _replying.get(user_id) == token:
+        del _replying[user_id]
+
+
+class OverBudget(Exception):
+    """The reply has used what was left of the student's day."""
+
+
+class Budget(RunHooks):
+    """Stops a reply before its next model call once it has used `tokens`. A reply can
+    make up to agent_max_turns calls, each re-sending the code and the history, so one
+    reply could otherwise spend many times the daily limit."""
+
+    def __init__(self, tokens: int) -> None:
+        self.tokens = tokens
+
+    async def on_llm_start(
+        self,
+        context: RunContextWrapper,
+        agent: Agent,
+        system_prompt: str | None,
+        input_items: list[TResponseInputItem],
+    ) -> None:
+        if context.usage.input_tokens + context.usage.output_tokens >= self.tokens:
+            raise OverBudget

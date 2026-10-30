@@ -202,8 +202,7 @@ export function Ide() {
       if (seq !== runSeq.current) return;
       setRun({
         kind: "failed",
-        message:
-          err instanceof ApiError ? err.message : "Δεν ήταν δυνατή η σύνδεση με τον διερμηνευτή.",
+        message: runFailure(err),
       });
     }
   }
@@ -923,4 +922,12 @@ function RunIcon() {
       />
     </svg>
   );
+}
+
+/** Why /run didn't answer (endpoints/run.py, core/interpreter_pool.py, core/body_limit.py). */
+function runFailure(err: unknown): string {
+  if (!(err instanceof ApiError)) return "Δεν ήταν δυνατή η σύνδεση με τον διερμηνευτή.";
+  if (err.status === 503) return "Ο διερμηνευτής είναι πολύ απασχολημένος αυτή τη στιγμή. Δοκίμασε ξανά σε λίγα δευτερόλεπτα.";
+  if (err.status === 413) return "Το πρόγραμμα ή οι τιμές εισόδου είναι πολύ μεγάλα για εκτέλεση.";
+  return err.message;
 }

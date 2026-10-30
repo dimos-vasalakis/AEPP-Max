@@ -1,11 +1,11 @@
-import asyncio
 import time
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from sentry_sdk import metrics
 
 from app import glossa
 from app.core.config import get_settings
+from app.core.interpreter_pool import in_interpreter
 from app.schemas.run import CheckRequest, CheckResult, RunRequest
 
 router = APIRouter(tags=["run"])
@@ -31,7 +31,9 @@ async def run_program(body: RunRequest) -> glossa.RunResult:
         timeout_seconds=settings.run_timeout_seconds,
     )
     try:
-        result, elapsed = await asyncio.to_thread(timed_run, body, limits)
+        result, elapsed = await in_interpreter(timed_run, body, limits)
+    except HTTPException:
+        raise  # the interpreter is busy (core/interpreter_pool.py): not a crash
     except Exception:
         # An interpreter bug: the 500 reaches Sentry as an error too.
         metrics.count("glossa.run", 1, attributes={"status": "crash", "language": body.language})
@@ -48,4 +50,4 @@ async def run_program(body: RunRequest) -> glossa.RunResult:
 @router.post("/check", response_model=CheckResult)
 async def check_program(body: CheckRequest) -> CheckResult:
     """The first syntax/static error, for the editor's live error marking (no AI)."""
-    return CheckResult(error=await asyncio.to_thread(glossa.check, body.code, body.language))
+    return CheckResult(error=await in_interpreter(glossa.check, body.code, body.language))

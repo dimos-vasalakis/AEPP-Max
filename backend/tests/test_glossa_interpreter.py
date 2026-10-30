@@ -138,7 +138,7 @@ class TestVariables:
         declarations = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x\n  ΠΡΑΓΜΑΤΙΚΕΣ: y"
         assert output("  y <- 3\n  ΓΡΑΨΕ y / 2", declarations) == ["1.5"]
         assert error("  x <- 7 / 2", declarations) == (
-            "Δεν μπορεί να εκχωρηθεί πραγματική τιμή στη ακέραια μεταβλητή x.",
+            "Δεν μπορεί να εκχωρηθεί πραγματική τιμή σε ακέραια μεταβλητή x.",
             6,
         )
 
@@ -715,3 +715,119 @@ class TestArrayMemory:
         result = run(program("  ΚΑΛΕΣΕ Δ(Α)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Α[100000]", sub))
         assert result.status == "ok"
         assert result.steps >= 300  # Α, Β, the copy in and back: 100 steps each
+
+
+def test_an_array_of_the_wrong_type_names_its_values() -> None:
+    procedure = (
+        "ΔΙΑΔΙΚΑΣΙΑ Τύπωσε(Β)\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Β[3]\nΑΡΧΗ\n  ΓΡΑΨΕ Β[1]\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+    )
+    source = program(
+        "  Α[1] <- 1.5\n  ΚΑΛΕΣΕ Τύπωσε(Α)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΠΡΑΓΜΑΤΙΚΕΣ: Α[3]", procedure
+    )
+    result = run(source)
+    assert result.status == "error" and result.error is not None
+    assert result.error.message == (
+        "Ο πίνακας Α έχει πραγματικές τιμές, ενώ η παράμετρος Β ακέραιες. "
+        "Σε ΚΑΛΕΣΕ πρέπει να έχουν τον ίδιο τύπο."
+    )
+
+
+# A procedure's argument that is copied back (a variable, an element, an array) must have
+# the parameter's type (docs/glossa.md): refused at the ΚΑΛΕΣΕ, before the procedure runs.
+SHOW_REAL = "ΔΙΑΔΙΚΑΣΙΑ Τύπωσε(Β)\nΜΕΤΑΒΛΗΤΕΣ\n  ΠΡΑΓΜΑΤΙΚΕΣ: Β\nΑΡΧΗ\n  ΓΡΑΨΕ Β\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+
+
+@pytest.mark.parametrize(
+    ("body", "declarations", "message"),
+    [
+        (
+            "  x <- 3\n  ΚΑΛΕΣΕ Τύπωσε(x)",
+            "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x",
+            "Η παράμετρος Β είναι πραγματική, ενώ η μεταβλητή x είναι ακέραια. "
+            "Σε ΚΑΛΕΣΕ πρέπει να έχουν τον ίδιο τύπο.",
+        ),
+        (  # even without a value yet: the procedure might have been the one to give it
+            "  ΚΑΛΕΣΕ Τύπωσε(x)",
+            "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x",
+            "Η παράμετρος Β είναι πραγματική, ενώ η μεταβλητή x είναι ακέραια. "
+            "Σε ΚΑΛΕΣΕ πρέπει να έχουν τον ίδιο τύπο.",
+        ),
+        (
+            "  Α[2] <- 3\n  ΚΑΛΕΣΕ Τύπωσε(Α[2])",
+            "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Α[3]",
+            "Η παράμετρος Β είναι πραγματική, ενώ ο πίνακας Α έχει ακέραιες τιμές. "
+            "Σε ΚΑΛΕΣΕ πρέπει να έχουν τον ίδιο τύπο.",
+        ),
+    ],
+)
+def test_a_procedure_argument_of_another_type_is_refused_at_the_call(
+    body: str, declarations: str, message: str
+) -> None:
+    result = run(program(body, declarations, SHOW_REAL))
+    assert result.status == "error" and result.error is not None
+    assert result.error.message == message
+    assert result.output == []  # the procedure never ran
+
+
+def test_an_integer_array_into_a_real_array_parameter_is_refused() -> None:
+    procedure = (
+        "ΔΙΑΔΙΚΑΣΙΑ Τύπωσε(Β)\nΜΕΤΑΒΛΗΤΕΣ\n  ΠΡΑΓΜΑΤΙΚΕΣ: Β[3]\nΑΡΧΗ\n"
+        "  ΓΡΑΨΕ Β[1]\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+    )
+    source = program("  Α[1] <- 1\n  ΚΑΛΕΣΕ Τύπωσε(Α)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: Α[3]", procedure)
+    result = run(source)
+    assert result.status == "error" and result.error is not None
+    assert result.error.message.startswith("Ο πίνακας Α έχει ακέραιες τιμές, ενώ η παράμετρος Β")
+    assert result.output == []
+
+
+def test_values_that_are_not_copied_back_may_be_integers_for_a_real_parameter() -> None:
+    # An expression or a constant into a procedure, anything into a function: copies only.
+    function = (
+        "ΣΥΝΑΡΤΗΣΗ Μισό(α): ΠΡΑΓΜΑΤΙΚΗ\nΜΕΤΑΒΛΗΤΕΣ\n  ΠΡΑΓΜΑΤΙΚΕΣ: α\nΑΡΧΗ\n"
+        "  Μισό <- α / 2\nΤΕΛΟΣ_ΣΥΝΑΡΤΗΣΗΣ"
+    )
+    source = program(
+        "  x <- 3\n  ΚΑΛΕΣΕ Τύπωσε(x + 1)\n  ΚΑΛΕΣΕ Τύπωσε(7)\n  ΓΡΑΨΕ Μισό(x)",
+        "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x",
+        f"{SHOW_REAL}\n{function}",
+    )
+    result = run(source)
+    assert result.status == "ok", result.error
+    assert result.output == ["4", "7", "1.5"]
+
+
+def test_the_type_rule_also_holds_inside_a_subprogram() -> None:
+    # A procedure passing its own ΑΚΕΡΑΙΑ parameter on to a ΠΡΑΓΜΑΤΙΚΗ one.
+    outer = (
+        "ΔΙΑΔΙΚΑΣΙΑ Πέρνα(κ)\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: κ\nΑΡΧΗ\n"
+        "  ΚΑΛΕΣΕ Τύπωσε(κ)\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+    )
+    source = program(
+        "  x <- 3\n  ΚΑΛΕΣΕ Πέρνα(x)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x", f"{outer}\n{SHOW_REAL}"
+    )
+    result = run(source)
+    assert result.status == "error" and result.error is not None
+    assert result.error.message.startswith(
+        "Η παράμετρος Β είναι πραγματική, ενώ η μεταβλητή κ είναι ακέραια."
+    )
+    assert result.output == []
+
+
+def test_a_named_constant_is_copied_in_like_a_number() -> None:
+    source = program("  ΚΑΛΕΣΕ Τύπωσε(Ν)", "ΣΤΑΘΕΡΕΣ\n  Ν = 3", SHOW_REAL)
+    result = run(source)
+    assert result.status == "ok", result.error
+    assert result.output == ["3"]
+
+
+def test_a_string_variable_into_a_boolean_parameter_is_refused() -> None:
+    procedure = "ΔΙΑΔΙΚΑΣΙΑ Δείξε(Λ)\nΜΕΤΑΒΛΗΤΕΣ\n  ΛΟΓΙΚΕΣ: Λ\nΑΡΧΗ\n  ΓΡΑΨΕ Λ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ"
+    source = program("  s <- 'ναι'\n  ΚΑΛΕΣΕ Δείξε(s)", "ΜΕΤΑΒΛΗΤΕΣ\n  ΧΑΡΑΚΤΗΡΕΣ: s", procedure)
+    result = run(source)
+    assert result.status == "error" and result.error is not None
+    assert result.error.message == (
+        "Η παράμετρος Λ είναι λογική, ενώ η μεταβλητή s είναι αλφαριθμητική. "
+        "Σε ΚΑΛΕΣΕ πρέπει να έχουν τον ίδιο τύπο."
+    )
+    assert (result.error.line, result.error.column) == (6, 16)  # the s in Δείξε(s)

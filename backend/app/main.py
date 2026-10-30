@@ -19,6 +19,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError, InterfaceError, Operation
 
 from app.api.v1.endpoints.contact import delete_expired
 from app.api.v1.router import api_router
+from app.core.body_limit import BodyLimit
 from app.core.config import get_settings, is_unset
 from app.core.db import get_engine
 
@@ -123,9 +124,12 @@ app = FastAPI(
     title=settings.app_name,
     lifespan=lifespan,
     docs_url="/docs" if settings.environment != "production" else None,
+    openapi_url="/openapi.json" if settings.environment != "production" else None,
     redoc_url=None,
 )
 
+# Inside CORS (added after it is outside), so a 413 keeps its CORS headers.
+app.add_middleware(BodyLimit)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,

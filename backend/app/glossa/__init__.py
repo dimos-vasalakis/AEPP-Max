@@ -62,7 +62,7 @@ def run(
 
     Never raises for mistakes in the student's program: syntax and runtime
     errors come back as status "error" with a Greek message and line number.
-    CPU-bound, so async callers must use asyncio.to_thread.
+    CPU-bound, so async callers must use core/interpreter_pool.py (in_interpreter).
     """
     compiled = compile_source(source, language)
     if isinstance(compiled, ErrorInfo):

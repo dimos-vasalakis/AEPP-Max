@@ -20,7 +20,7 @@ export default function PrivacyPage() {
         </Link>
         <header>
           <h1 className="text-2xl font-semibold">Πολιτική απορρήτου</h1>
-          <p className="mt-1 text-muted">Τελευταία ενημέρωση: 28 Οκτωβρίου 2026</p>
+          <p className="mt-1 text-muted">Τελευταία ενημέρωση: 30 Οκτωβρίου 2026</p>
         </header>
 
         <p>
@@ -145,6 +145,12 @@ export default function PrivacyPage() {
             <li>
               <b>Supabase</b>: η βάση δεδομένων και η σύνδεση (λογαριασμοί, προγράμματα,
               συζητήσεις, μηνύματα επικοινωνίας).
+            </li>
+            <li>
+              <b>Resend</b>: στέλνει τα email με τον σύνδεσμο εγγραφής και σύνδεσης. Παίρνει μόνο το
+              email σου (και το όνομά σου στο email εγγραφής, αν το έδωσες) και κρατά για λίγο
+              αρχείο των email που έστειλε. Τα email στέλνονται από την Ευρώπη (Ιρλανδία)· η
+              Resend είναι αμερικανική εταιρεία.
             </li>
             <li>
               <b>Vercel</b> και <b>Render</b>: φιλοξενούν την ιστοσελίδα και τον διακομιστή. Όπως

@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     run_max_output_lines: int = 2_000
     run_max_trace_steps: int = 5_000
     run_timeout_seconds: float = 3.0
+    # Programs running at once, and requests waiting for one of them, before /run and
+    # /check answer 503 (core/interpreter_pool.py).
+    run_workers: int = 2
+    run_queue: int = 16
 
 
 def is_unset(url: str) -> bool:

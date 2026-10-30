@@ -247,7 +247,7 @@ async def portal(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No subscription")
     try:
         session = await stripe_client().v1.billing_portal.sessions.create_async(
-            {"customer": row.stripe_customer_id, "return_url": f"{site(request)}/"}
+            {"customer": row.stripe_customer_id, "return_url": f"{site(request)}/editor"}
         )
     except stripe.StripeError as err:
         logger.exception("Stripe portal failed for user %s", user.id)

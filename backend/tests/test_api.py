@@ -1,4 +1,8 @@
+import asyncio
+import json
 import re
+import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -142,7 +146,7 @@ def test_agent_refuses_past_the_daily_limit(
         return True
 
     async def over_limit(*_):
-        return False
+        return None
 
     monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
     monkeypatch.setattr(agent, "has_migration", migrated)
@@ -246,3 +250,152 @@ def test_health_checks_are_not_traced() -> None:
     # Except for /check, sent after every pause in typing: a sampled page doesn't trace them all.
     check = {"asgi_scope": {"path": "/api/v1/check"}, "parent_sampled": True}
     assert sample_traces(check) == CHECK_RATE  # type: ignore[arg-type]
+
+
+def test_an_oversized_body_is_refused_before_it_is_read(client: TestClient) -> None:
+    from app.core.body_limit import MAX_BODY_BYTES
+
+    res = client.post(
+        "/api/v1/run",
+        content=b"{}",
+        headers={"content-type": "application/json", "content-length": str(MAX_BODY_BYTES + 1)},
+    )
+    assert res.status_code == 413
+
+
+def test_a_chunked_body_is_counted_as_it_arrives(client: TestClient) -> None:
+    from app.core.body_limit import MAX_BODY_BYTES
+
+    def chunks() -> Iterator[bytes]:  # no Content-Length: sent chunked
+        yield b'{"code": "'
+        for _ in range(MAX_BODY_BYTES // 65_536 + 1):
+            yield b"a" * 65_536
+        yield b'"}'
+
+    res = client.post("/api/v1/run", content=chunks(), headers={"content-type": "application/json"})
+    assert res.status_code == 413
+
+
+def test_a_busy_interpreter_answers_503(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core import interpreter_pool
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    full = settings.run_workers + settings.run_queue
+    monkeypatch.setattr(interpreter_pool, "_admitted", full)
+    res = client.post("/api/v1/check", json={"code": ""})
+    assert res.status_code == 503
+    assert res.headers["retry-after"] == "2"
+
+
+def test_agent_runs_one_reply_at_a_time(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.agent import usage
+    from app.api.v1.endpoints import agent
+    from app.core.config import get_settings
+    from app.core.db import get_db
+
+    async def no_db():
+        yield None
+
+    async def migrated(*_):
+        return True
+
+    async def never_charged(*_):
+        raise AssertionError("a refused message is not charged")
+
+    student = uuid.uuid4()
+    monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
+    monkeypatch.setattr(agent, "has_migration", migrated)
+    monkeypatch.setattr(agent, "plan_for", free_plan)
+    monkeypatch.setattr(agent, "reserve_message", never_charged)
+    monkeypatch.setitem(client.app.dependency_overrides, get_db, no_db)
+    slot = usage.start_reply(student)
+    assert slot is not None and usage.start_reply(student) is None
+    try:
+        res = client.post(
+            "/api/v1/agent/chat",
+            json={"message": "Γεια", "code": ""},
+            headers=auth_header(student),
+        )
+        assert res.status_code == 409
+    finally:
+        usage.end_reply(student, slot)
+    assert not usage.replying(student)
+
+
+def test_a_stale_reply_slot_stops_counting(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.agent import usage
+
+    student = uuid.uuid4()
+    old = usage.start_reply(student)
+    assert old is not None
+    monkeypatch.setitem(usage._replying, student, old - usage.REPLY_SLOT_SECONDS)
+    new = usage.start_reply(student)
+    assert new is not None
+    usage.end_reply(student, old - usage.REPLY_SLOT_SECONDS)  # the old stream ends late
+    assert usage.replying(student)  # it doesn't free the new reply's slot
+    usage.end_reply(student, new)
+
+
+def test_a_reply_stops_before_a_model_call_past_the_budget() -> None:
+    from agents import RunConfig
+    from agents.models.interface import Model
+
+    from app.agent.context import AgentContext
+    from app.agent.stream import LIMIT_MESSAGE, stream_reply
+
+    class NoModel(Model):  # never reached: the budget stops the reply first
+        async def get_response(self, *_, **__):
+            raise AssertionError("the model was called")
+
+        async def stream_response(self, *_, **__):
+            raise AssertionError("the model was called")
+            yield
+
+    used = []
+
+    async def on_usage(u):
+        used.append(u.input_tokens + u.output_tokens)
+
+    async def reply() -> list[str]:
+        replies = stream_reply(
+            uuid.uuid4(),
+            "Γεια",
+            AgentContext(code="", mode="ask"),
+            session=None,  # type: ignore[arg-type]
+            on_usage=on_usage,
+            run_config=RunConfig(model=NoModel(), tracing_disabled=True),
+            budget=0,
+        )
+        return [event async for event in replies]
+
+    events = asyncio.run(reply())
+    assert (
+        events[-1]
+        == f"event: error\ndata: {json.dumps({'message': LIMIT_MESSAGE}, ensure_ascii=False)}\n\n"
+    )
+    assert used == [0]  # what it spent is still recorded
+
+
+def test_a_stream_closed_at_its_first_event_still_frees_the_slot() -> None:
+    from app.agent.context import AgentContext
+    from app.agent.stream import stream_reply
+
+    finished = []
+
+    async def on_usage(u):
+        finished.append(u.input_tokens + u.output_tokens)
+
+    async def close_early() -> None:
+        replies = stream_reply(
+            uuid.uuid4(), "Γεια", AgentContext(code="", mode="ask"), None, on_usage=on_usage
+        )
+        assert (await anext(replies)).startswith("event: conversation")
+        await replies.aclose()  # the client left while the first event was being sent
+
+    asyncio.run(close_early())
+    assert finished == [0]  # on_usage ran: in the endpoint it frees the reply slot

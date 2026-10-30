@@ -402,6 +402,8 @@ export function AgentPanel({
       } else {
         if (!accepted) usedAgent.current = usedBefore; // never reached the agent: nothing ran
         appendText(failureText(err, plan.plan === "free" && plan.can_buy));
+        // Another reply was still running: give the message back, to send once it ends.
+        if (err instanceof ApiError && err.status === 409) setDraft((d) => d || message);
         // Refused for the plan (effort, limit): the plan here may be out of date.
         if (err instanceof ApiError && (err.status === 403 || err.status === 429)) {
           void refreshPlan(user.id);
@@ -743,6 +745,7 @@ export function AgentPanel({
 const FAILURES: Record<number, string> = {
   401: "Η σύνδεσή σου δεν ισχύει πια. Αποσυνδέσου και συνδέσου ξανά (ή κάνε Εγγραφή, αν διέγραψες τον λογαριασμό).",
   403: "Αυτό το effort δεν είναι στο πλάνο σου. Γράψε /effort για να διαλέξεις άλλο.",
+  409: "Ο βοηθός κλείνει ακόμα την προηγούμενη απάντηση (μόλις τη διέκοψες, ή τρέχει σε άλλη καρτέλα). Στείλε ξανά σε λίγα δευτερόλεπτα.",
   429: "Έφτασες το όριο του agent για σήμερα. Θα είναι ξανά διαθέσιμος από τα μεσάνυχτα. Μέχρι τότε, ο editor και η εκτέλεση δουλεύουν κανονικά.",
   503: "Ο βοηθός δεν είναι διαθέσιμος αυτή τη στιγμή.",
 };

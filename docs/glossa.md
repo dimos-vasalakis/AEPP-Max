@@ -132,11 +132,14 @@ Precedence, from highest to lowest:
 - A subprogram sees only its parameters and its own declarations; there are no global variables.
 - A function returns a value of type `ΑΚΕΡΑΙΑ` / `ΠΡΑΓΜΑΤΙΚΗ` / `ΧΑΡΑΚΤΗΡΑΣ` / `ΛΟΓΙΚΗ` by assigning to its own name. It is called inside expressions: `μ <- Μέγιστο(x, y)`.
 - A procedure is called with `ΚΑΛΕΣΕ Αντιμετάθεση(x, y)`. Changes it makes to its parameters are copied back to the caller's variables when it ends. That is how procedures return results.
+- Actual and formal parameters have the same type (textbook ch. 10; settled with the project owner). A procedure's argument that is copied back, meaning a variable, an array element or an array, must be declared with the parameter's type, or the `ΚΑΛΕΣΕ` is a runtime error before the procedure runs: «Η παράμετρος Β είναι πραγματική, ενώ η μεταβλητή x είναι ακέραια. Σε ΚΑΛΕΣΕ πρέπει να έχουν τον ίδιο τύπο.» Values that are only copied in, meaning an expression or a constant passed to a procedure and any argument of a function, may be integers for a `ΠΡΑΓΜΑΤΙΚΗ` parameter. Tests: `test_a_procedure_argument_of_another_type_is_refused_at_the_call` and the two after it.
 - Recursion is allowed. Limit its depth and report runaway recursion as a runtime error.
 - **Verify:**
   - whether the main program's constants are visible in subprograms;
   - whether a function needs at least one parameter (js-glossa requires one);
   - whether functions may use `ΔΙΑΒΑΣΕ`/`ΓΡΑΨΕ` or change their parameters;
+  - whether an integer expression, constant or function argument for a `ΠΡΑΓΜΑΤΙΚΗ` parameter is also refused (today it is accepted, see above);
+  - whether `(x)` passed to a procedure is the variable `x` (copied back, as today: the parser drops the brackets) or an expression;
   - what happens when a procedure changes a parameter whose argument was an expression or a constant, or when the same variable is passed twice.
 
 ## Built-in functions

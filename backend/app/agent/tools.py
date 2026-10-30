@@ -1,4 +1,3 @@
-import asyncio
 import json
 from dataclasses import asdict
 
@@ -7,6 +6,7 @@ from agents import Agent, RunContextWrapper, function_tool
 from app import glossa
 from app.agent.context import AgentContext, CodeEdit
 from app.core.config import get_settings
+from app.core.interpreter_pool import in_interpreter
 from app.glossa.nodes import Program
 from app.glossa.parser import PLURAL_OF
 from app.schemas.run import MAX_SOURCE_CHARS
@@ -54,7 +54,7 @@ async def run_program(
         code: The complete program or algorithm to run. Omit it to run the student's editor.
     """
     source = ctx.context.code if code is None else code
-    return await asyncio.to_thread(_run, source, inputs, False, ctx.context.language)
+    return await in_interpreter(_run, source, inputs, False, ctx.context.language, queue=False)
 
 
 @function_tool
@@ -72,7 +72,7 @@ async def trace_program(
         code: The complete program or algorithm to run. Omit it to trace the student's editor.
     """
     source = ctx.context.code if code is None else code
-    return await asyncio.to_thread(_run, source, inputs, True, ctx.context.language)
+    return await in_interpreter(_run, source, inputs, True, ctx.context.language, queue=False)
 
 
 def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) -> bool:
@@ -162,7 +162,7 @@ async def write_code(
     refusal = None
     if code.strip() and len(code) <= MAX_SOURCE_CHARS:
         allow = _allows_splits(ctx.context, split_declarations)
-        refusal = await asyncio.to_thread(_review, code, ctx.context.language, allow)
+        refusal = await in_interpreter(_review, code, ctx.context.language, allow, queue=False)
     return _write(ctx.context, code, summary, refusal)
 
 

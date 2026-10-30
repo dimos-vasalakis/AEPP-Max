@@ -1,7 +1,6 @@
-from functools import partial
 from typing import Annotated
 
-from agents import ModelSettings, RunConfig
+from agents import ModelSettings, RunConfig, Usage
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from openai.types.shared import Reasoning
@@ -12,7 +11,15 @@ from sqlalchemy import func, select
 from app.agent.context import AgentContext
 from app.agent.session import conversation_session
 from app.agent.stream import stream_reply
-from app.agent.usage import MESSAGE_TOKENS, read_usage, record_usage, reserve_message
+from app.agent.usage import (
+    MESSAGE_TOKENS,
+    end_reply,
+    read_usage,
+    record_usage,
+    replying,
+    reserve_message,
+    start_reply,
+)
 from app.api.v1.endpoints.programs import owned_program
 from app.core.config import get_settings, is_unset
 from app.core.db import DbSession, has_migration
@@ -55,10 +62,14 @@ async def chat(
     plan = await plan_for(db, user.id)
     if body.effort is not None and body.effort not in plan.efforts:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Effort not in your plan")
+    # Before the charge, so a message sent while another reply runs costs nothing.
+    if replying(user.id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "A reply is already running")
     limit = plan.daily_tokens
     reserved = MESSAGE_TOKENS if limit > 0 else 0
     # Committed with the conversation below; an error before that refunds it.
-    if reserved and not await reserve_message(db, user.id, limit):
+    total = await reserve_message(db, user.id, limit) if reserved else None
+    if reserved and total is None:
         # How often each plan's limit is hit, to tune AGENT_DAILY_TOKENS.
         metrics.count("agent.limit_reached", 1, attributes={"plan": plan.name})
         sentry_logger.info(
@@ -97,14 +108,28 @@ async def chat(
         else None,
         tracing_disabled=True,  # as main.py: students' messages never go to OpenAI's Traces
     )
+    # Taken only now, so nothing above has to give it back. Two messages that both
+    # passed `replying` above (sent at the same instant) are both charged; one runs.
+    slot = start_reply(user.id)
+    if slot is None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "A reply is already running")
+
+    async def finish(usage: Usage) -> None:
+        try:
+            await record_usage(user.id, reserved, usage)
+        finally:
+            end_reply(user.id, slot)
+
     return StreamingResponse(
         stream_reply(
             conversation.id,
             body.message,
             context,
             conversation_session(conversation.id),
-            on_usage=partial(record_usage, user.id, reserved),
+            on_usage=finish,
             run_config=run_config,
+            # What was left of the day before this message's charge.
+            budget=None if total is None else limit - total + reserved,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
