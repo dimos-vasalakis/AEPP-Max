@@ -929,5 +929,8 @@ function runFailure(err: unknown): string {
   if (!(err instanceof ApiError)) return "Δεν ήταν δυνατή η σύνδεση με τον διερμηνευτή.";
   if (err.status === 503) return "Ο διερμηνευτής είναι πολύ απασχολημένος αυτή τη στιγμή. Δοκίμασε ξανά σε λίγα δευτερόλεπτα.";
   if (err.status === 413) return "Το πρόγραμμα ή οι τιμές εισόδου είναι πολύ μεγάλα για εκτέλεση.";
+  // schemas/run.py's limits (code length, number of inputs): FastAPI's detail is JSON
+  // that quotes the whole program.
+  if (err.status === 422) return "Το πρόγραμμα ή οι τιμές εισόδου είναι πολύ μεγάλα για εκτέλεση.";
   return err.message;
 }

@@ -582,11 +582,19 @@ class _Parser:
         return self.power()
 
     def power(self) -> n.Expr:
+        """Left-associative (docs/glossa.md): 2 ^ 3 ^ 2 is (2 ^ 3) ^ 2."""
         left = self.primary()
         while self.at("operator", "^"):
             op = self.advance()
-            left = n.Binary(**self.pos_of(op), op="^", left=left, right=self.unary())
+            left = n.Binary(**self.pos_of(op), op="^", left=left, right=self.exponent())
         return left
+
+    def exponent(self) -> n.Expr:
+        """What follows ^: a signed primary (2 ^ -1), not the rest of a ^ chain."""
+        if self.at("operator", "-") or self.at("operator", "+"):
+            op = self.advance()
+            return n.Unary(**self.pos_of(op), op=op.value, operand=self.exponent())
+        return self.primary()
 
     def primary(self) -> n.Expr:
         token = self.tok

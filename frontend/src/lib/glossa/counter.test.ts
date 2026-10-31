@@ -31,6 +31,23 @@ describe("forCounter", () => {
 });
 
 describe("renameInUnit", () => {
+  it("leaves the operator Η and the built-in Ε alone for a counter «η» or «ε»", () => {
+    const doc = Text.of([
+      "ΠΡΟΓΡΑΜΜΑ Α",
+      "ΜΕΤΑΒΛΗΤΕΣ",
+      "  ΑΚΕΡΑΙΕΣ: η, ε",
+      "ΑΡΧΗ",
+      "  ΓΙΑ η ΑΠΟ 1 ΜΕΧΡΙ 3",
+      "    ΑΝ η > 1 Η η < 3 ΤΟΤΕ ΓΡΑΨΕ η",
+      "  ΓΙΑ ε ΑΠΟ 1 ΜΕΧΡΙ 3",
+      "    ΓΡΑΨΕ ε, Ε(1), ε (2)",
+    ]);
+    const rename = (n: number, name: string, to: string) =>
+      EditorState.create({ doc }).update({ changes: renameInUnit(doc, n, name, to) }).state.doc.line(n + 1).text;
+    expect(rename(5, "η", "h")).toBe("    ΑΝ h > 1 Η h < 3 ΤΟΤΕ ΓΡΑΨΕ h");
+    expect(rename(7, "ε", "e")).toBe("    ΓΡΑΨΕ e, Ε(1), ε (2)");
+  });
+
   it("renames the declaration and every use, not strings or comments", () => {
     const doc = Text.of([
       "ΠΡΟΓΡΑΜΜΑ Α",
@@ -110,6 +127,14 @@ describe("typing a ΓΙΑ", () => {
 
   it("keeps «η» a name, not the operator Η", () => {
     expect(typing(top).type("για η απο 1")).toBe(`${top}ΓΙΑ h ΑΠΟ 1`);
+  });
+
+  it("renames a declared «η», which autocase capitalized as the operator", () => {
+    const t = typing("ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ");
+    t.type("ακεραιεσ: η, χ");
+    expect(t.type("\nαρχη\nγια η απο 1 μεχρι 3 ")).toBe(
+      "ΠΡΟΓΡΑΜΜΑ Α\nΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: h, χ\nΑΡΧΗ\nΓΙΑ h ΑΠΟ 1 ΜΕΧΡΙ 3 ",
+    );
   });
 
   it("leaves longer Greek counters as they are", () => {

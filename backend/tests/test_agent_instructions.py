@@ -21,6 +21,16 @@ def test_agent_says_whether_edits_wait_for_approval() -> None:
     assert "goes straight" not in approve
 
 
+def test_a_proposal_is_not_shown_as_the_editor() -> None:
+    context = AgentContext(code="ΓΡΑΨΕ 1", mode="agent", approve=True)
+    assert "The student's editor right now:" in prompt(context)
+    # As write_code leaves it, after stream.py has sent (and cleared) the edit.
+    context.writes, context.code = 1, "ΓΡΑΨΕ 2"
+    assert "Your latest proposal, not approved yet" in prompt(context)
+    context.approve = False
+    assert "The student's editor right now:" in prompt(context)
+
+
 def test_the_prompt_follows_the_editor_language() -> None:
     glossa = prompt(AgentContext(code="", mode="ask"))
     pseudocode = prompt(AgentContext(code="", mode="ask", language="pseudocode"))

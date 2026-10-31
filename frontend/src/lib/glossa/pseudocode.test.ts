@@ -1,11 +1,11 @@
 // The editor on Αλγόριθμος (ψευδογλώσσα): what differs from ΓΛΩΣΣΑ.
-import { StringStream } from "@codemirror/language";
+import { indentUnit, StringStream } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { describe, expect, it } from "vitest";
 import { glossaAutocase, keywordFix } from "./autocase";
 import { completionOptions, namesIn, placeOf } from "./completion";
 import { editorLanguage } from "./editorLanguage";
-import { indentFor } from "./indent";
+import { glossaIndent, indentFor } from "./indent";
 import { pseudocodeParser } from "./language";
 
 describe("autocase in ψευδογλώσσα", () => {
@@ -50,6 +50,45 @@ describe("indentation in ψευδογλώσσα", () => {
 
   it("lines up an end with the block that a one-line Αν sits inside", () => {
     expect(at("Τέλος_αν", "Αν a τότε\n  Αν b τότε x ← 1")).toBe(0);
+  });
+
+  it("lines up an end with a one-line Αν that goes on", () => {
+    // The αλλιώς is as far in as the Αν, so it is the Αν's (algorithm_parser.if_goes_on).
+    expect(at("Τέλος_αν", "Αν a τότε\n  Αν x > 5 τότε y ← 1\n  αλλιώς\n    y ← 2")).toBe(2);
+    // Less indented, it belongs to the Αν further out.
+    expect(at("Τέλος_αν", "Αν a τότε\n  Αν x > 5 τότε y ← 1\nαλλιώς\n  y ← 2")).toBe(0);
+  });
+
+  it("leaves an αλλιώς typed right after a one-line Αν where the student put it", () => {
+    const typed = (doc: string, text: string) => {
+      let state = EditorState.create({
+        doc,
+        selection: { anchor: doc.length },
+        extensions: [editorLanguage.of("pseudocode"), glossaIndent, glossaAutocase, indentUnit.of("  ")],
+      });
+      for (const ch of text) {
+        const head = state.selection.main.head;
+        state = state.update({
+          changes: { from: head, insert: ch },
+          selection: { anchor: head + 1 },
+          userEvent: "input.type",
+        }).state;
+      }
+      return state.doc.toString();
+    };
+    expect(typed("Αν a τότε\n  Αν x > 5 τότε y ← 1\n  ", "αλλιώς ")).toBe(
+      "Αν a τότε\n  Αν x > 5 τότε y ← 1\n  αλλιώς ",
+    );
+    // Not after a block's first line: there it still moves into place.
+    expect(typed("Αν a τότε\n  y ← 1\n  ", "αλλιώς ")).toBe("Αν a τότε\n  y ← 1\nαλλιώς ");
+    // A Τέλος_αν closes the outer Αν: the one-line Αν needs none.
+    expect(typed("Αν a τότε\n  Αν b τότε x ← 1\n  ", "τέλος_αν ")).toBe(
+      "Αν a τότε\n  Αν b τότε x ← 1\nΤέλος_αν ",
+    );
+    // With no outer Αν, it stays, and closes the one-line Αν.
+    expect(typed("Για i από 1 μέχρι 3\n  Αν b τότε x ← 1\n  ", "τέλος_αν ")).toBe(
+      "Για i από 1 μέχρι 3\n  Αν b τότε x ← 1\n  Τέλος_αν ",
+    );
   });
 });
 

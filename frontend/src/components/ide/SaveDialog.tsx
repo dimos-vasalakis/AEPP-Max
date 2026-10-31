@@ -31,6 +31,13 @@ export function SaveDialog({ signedIn, language, suggested, onSave, onSignIn, on
     if (el && !el.open) el.showModal();
   }, []);
 
+  // Leaving with the dialog open would keep it modal on the hidden page (Next keeps
+  // it in <Activity>), leaving the login page inert.
+  function leave() {
+    onSignIn();
+    dialog.current?.close();
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     const name = title.trim();
@@ -71,14 +78,14 @@ export function SaveDialog({ signedIn, language, suggested, onSave, onSignIn, on
             </button>
             <Link
               href="/login?mode=signup"
-              onClick={onSignIn}
+              onClick={leave}
               className="rounded-md bg-panel-2 px-3 py-1.5 hover:text-text"
             >
               Εγγραφή
             </Link>
             <Link
               href="/login"
-              onClick={onSignIn}
+              onClick={leave}
               className="rounded-md btn-primary bg-accent px-3 py-1.5 font-medium text-on-accent hover:brightness-110"
             >
               Σύνδεση

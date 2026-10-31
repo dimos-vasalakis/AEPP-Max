@@ -6,6 +6,7 @@ import {
   Transaction,
   type TransactionSpec,
 } from "@codemirror/state";
+import { DECLARATION } from "./autocase";
 import { normalizeWord, RESERVED } from "./vocabulary";
 import { codeWords } from "./words";
 
@@ -53,15 +54,25 @@ function unitAround(doc: Text, n: number): [number, number] {
   return [first, last];
 }
 
-/** Where `name` is used in lines `first`…`last`. */
+/**
+ * Where `name` is used in lines `first`…`last`. A counter «η» or «ε» is also the
+ * operator Η or the built-in Ε(): then only words spelled exactly as it and not
+ * called count as its uses, and its declaration, which autocase has capitalized.
+ */
 function usesOf(doc: Text, first: number, last: number, name: string): { from: number; to: number }[] {
   const key = normalizeWord(name);
+  const reserved = RESERVED.has(key);
   const uses: { from: number; to: number }[] = [];
   for (let k = first; k <= last; k++) {
     const line = doc.line(k);
     for (const word of codeWords(line.text)) {
+      if (normalizeWord(word.text) !== key) continue;
+      const end = word.from + word.text.length;
+      const declared = DECLARATION.test(normalizeWord(line.text.slice(0, word.from)));
+      const called = /^\s*\(/.test(line.text.slice(end));
+      if (reserved && !declared && (word.text !== name || called)) continue;
       const from = line.from + word.from;
-      if (normalizeWord(word.text) === key) uses.push({ from, to: from + word.text.length });
+      uses.push({ from, to: from + word.text.length });
     }
   }
   return uses;

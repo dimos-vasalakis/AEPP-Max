@@ -68,9 +68,12 @@ if settings.sentry_dsn:
             "http_headers": {"request": {"mode": "off"}},
             "http_bodies": [],
             "url_query_params": {"mode": "off"},
+            "graphql": {"document": False, "variables": False},
             "gen_ai": {"inputs": False, "outputs": False},
             "database_query_data": False,
+            "queues": False,
             "stack_frame_variables": False,
+            "frame_context_lines": True,  # the SDK's default: lines of our source, not theirs
         },
         traces_sampler=sample_traces,
         # Continuous profiling while a sampled trace runs (the traces rate above bounds

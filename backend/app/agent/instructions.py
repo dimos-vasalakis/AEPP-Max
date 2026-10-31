@@ -192,7 +192,7 @@ DIRECT = "it goes straight into their editor."
 APPROVAL = (
     "it is shown to the student as a proposal and reaches their editor only if"
     " they approve it (Ctrl+Enter), so say it is waiting for their approval. The"
-    " editor below holds only the changes they have approved so far."
+    " editor holds only the changes they have approved so far."
 )
 
 
@@ -206,5 +206,14 @@ def instructions(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) -
         if ctx.context.language == "glossa":
             mode += "\n" + EXAMPLE
     code = ctx.context.code.strip() or "(κενός)"
+    # write_code sets `code` to its edit, which with approval is only a proposal yet.
+    # `writes`, not `edits`: stream.py empties `edits` once it has sent them.
+    if ctx.context.approve and ctx.context.writes:
+        where = (
+            "Your latest proposal, not approved yet (the student's editor still holds"
+            " the code they sent; tools called without `code` run this proposal):"
+        )
+    else:
+        where = "The student's editor right now:"
     base = BASE.format(exam=EXAM, notation=NOTATION[ctx.context.language])
-    return f"{base}\n{mode}\nThe student's editor right now:\n```\n{code}\n```\n"
+    return f"{base}\n{mode}\n{where}\n```\n{code}\n```\n"

@@ -7,12 +7,13 @@ from app.agent.context import AgentMode
 from app.core.plans import Effort
 from app.glossa import Language
 from app.schemas.run import MAX_SOURCE_CHARS
+from app.schemas.text import StoredText
 
 
 class ChatRequest(BaseModel):
     conversation_id: uuid.UUID | None = None  # None starts a new conversation
     program_id: uuid.UUID | None = None  # the saved program being edited, if any
-    message: str = Field(min_length=1, max_length=4_000)
+    message: StoredText = Field(min_length=1, max_length=4_000)  # the title comes from it
     code: str = Field(max_length=MAX_SOURCE_CHARS)  # the editor's current content
     language: Language = "glossa"  # the editor's: Πρόγραμμα or Αλγόριθμος
     mode: AgentMode = "ask"

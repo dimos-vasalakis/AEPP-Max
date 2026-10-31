@@ -101,20 +101,41 @@ function placesItself(word: string | null, language: Language): boolean {
   return word !== null && (word in ALIGNED || TOP_LEVEL[language].has(word));
 }
 
+/** Words that make a one-line Αν go on (algorithm_parser.py's _IF_GOES_ON). */
+const IF_GOES_ON = new Set(["ΑΛΛΙΩΣ_ΑΝ", "ΑΛΛΙΩΣ", "ΤΕΛΟΣ_ΑΝ"]);
+
+/** A ψευδογλώσσα line «Αν … τότε εντολή»: whether an αλλιώς after it belongs to it is up to layout. */
+function oneLineIf(line: string, language: Language): boolean {
+  return language === "pseudocode" && firstWord(line) === "ΑΝ" && !opens(line, "ΑΝ", language);
+}
+
 /** The nearest line above that opens `block` and isn't already closed. */
-function openerOf(block: Block, above: string[], language: Language): string | null {
+function openerOf(block: Block, above: string[], language: Language, tabSize: number): string | null {
   let depth = 0;
-  for (const line of above) {
+  for (const [i, line] of above.entries()) {
     const word = firstWord(line);
     if (word === null) continue;
     if (TOP_LEVEL[language].has(word)) return null; // don't look past the start of the section
     if (word === block.end) depth += 1;
-    else if (block.opens.includes(word) && opens(line, word, language)) {
+    else if (block.opens.includes(word) && (opens(line, word, language) || goesOn(above, i, tabSize))) {
       if (depth === 0) return line;
       depth -= 1;
     }
   }
   return null;
+}
+
+/**
+ * Whether the one-line Αν at `above[i]` goes on, as algorithm_parser.py's if_goes_on
+ * reads it: the code line after it starts with αλλιώς_αν, αλλιώς or Τέλος_αν, indented
+ * at least as far as the Αν. Then it is a block like any other.
+ */
+function goesOn(above: string[], i: number, tabSize: number): boolean {
+  if (!oneLineIf(above[i], "pseudocode")) return false;
+  const next = above.slice(0, i).findLast((line) => code(line).trim());
+  if (next === undefined) return false;
+  const columnOf = (line: string) => countColumn(/^\s*/.exec(line)![0], tabSize);
+  return IF_GOES_ON.has(firstWord(next) ?? "") && columnOf(next) >= columnOf(above[i]);
 }
 
 /**
@@ -134,7 +155,7 @@ export function indentFor(
 
   const aligned = word === null ? undefined : ALIGNED[word];
   if (aligned) {
-    const opener = openerOf(aligned[0], above, language);
+    const opener = openerOf(aligned[0], above, language, tabSize);
     if (opener !== null) return columnOf(opener) + aligned[1] * unit;
   }
 
@@ -170,12 +191,33 @@ const service = indentService.of((cx, pos) =>
 /** Moves the line at `pos` to its column if its first word places itself; null if it's already there. */
 function reindent(state: EditorState, pos: number): ChangeSpec | null {
   const line = state.doc.lineAt(pos);
-  if (!placesItself(firstWord(line.text), state.facet(editorLanguage))) return null;
+  const language = state.facet(editorLanguage);
+  const word = firstWord(line.text);
+  if (!placesItself(word, language)) return null;
+  // Right after a one-line Αν, the student's indentation says which Αν an αλλιώς
+  // belongs to (as format.ts's frozenLines): moving it would change the program. A
+  // Τέλος_αν there moves to an outer Αν it can close (the one-line Αν needs none);
+  // with none, it stays: as far in as the one-line Αν, it closes that one.
+  if (IF_GOES_ON.has(word!) && oneLineIf(previousCode(state, line.number), language)) {
+    if (word !== "ΤΕΛΟΣ_ΑΝ") return null;
+    const above: string[] = [];
+    for (let n = line.number - 1; n >= 1; n--) above.push(state.doc.line(n).text);
+    if (openerOf(IF, above, language, state.tabSize) === null) return null;
+  }
   const column = getIndentation(state, line.from);
   if (column === null) return null;
   const current = /^\s*/.exec(line.text)![0];
   const wanted = indentString(state, column);
   return current === wanted ? null : { from: line.from, to: line.from + current.length, insert: wanted };
+}
+
+/** The nearest line above line `number` with code on it; "" if there is none. */
+function previousCode(state: EditorState, number: number): string {
+  for (let n = number - 1; n >= 1; n--) {
+    const text = state.doc.line(n).text;
+    if (code(text).trim()) return text;
+  }
+  return "";
 }
 
 const WORD_THEN_SEPARATOR = /^\s*[\p{L}_][\p{L}\p{N}_]*[^\p{L}\p{N}_]$/u;

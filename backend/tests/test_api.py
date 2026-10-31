@@ -9,7 +9,9 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
-from app.schemas.program import ProgramCreate
+from app.models import Conversation
+from app.schemas.agent import ChatRequest
+from app.schemas.program import ProgramCreate, ProgramUpdate
 from tests.conftest import auth_header
 
 
@@ -40,6 +42,16 @@ def test_a_saved_program_is_glossa_or_pseudocode() -> None:
         ProgramCreate(title="Άσκηση", language="python")  # type: ignore[arg-type]
     with pytest.raises(ValidationError):
         ProgramCreate(title="")
+
+
+def test_stored_text_rejects_nul() -> None:
+    # Postgres text can't hold NUL: a 422, not an unhandled DataError at the insert.
+    with pytest.raises(ValidationError):
+        ProgramCreate(title="Άσκηση", code="ΓΡΑΨΕ 1\x00")
+    with pytest.raises(ValidationError):
+        ProgramUpdate(title="\x00")
+    with pytest.raises(ValidationError):
+        ChatRequest(message="Γεια\x00", code="")
 
 
 def test_agent_requires_auth(client: TestClient) -> None:
@@ -178,6 +190,74 @@ def test_agent_needs_its_migration(client: TestClient, monkeypatch: pytest.Monke
         "/api/v1/agent/chat", json={"message": "Γεια", "code": ""}, headers=auth_header()
     )
     assert res.status_code == 503
+
+
+@pytest.mark.parametrize(
+    ("stored", "restarts"), [("other-model", True), (None, False), ("same", False)]
+)
+def test_agent_starts_a_new_conversation_when_the_model_changed(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, stored: str | None, restarts: bool
+) -> None:
+    """The plan changed while the IDE stayed open: the new model may not read the old
+    one's encrypted reasoning. A conversation from before 0010 (no model) carries on."""
+    from app.api.v1.endpoints import agent
+    from app.core.config import get_settings
+    from app.core.db import get_db
+    from app.core.plans import get_plan
+
+    plan = get_plan("free")
+    old = Conversation(id=uuid.uuid4(), user_id=uuid.uuid4(), title="Γεια")
+    old.model = plan.model if stored == "same" else stored
+
+    class Db:
+        added: list[object] = []
+
+        async def scalar(self, *_):
+            return old
+
+        def add(self, obj):
+            self.added.append(obj)
+
+        async def commit(self):
+            pass
+
+    db = Db()
+
+    async def use_db():
+        yield db
+
+    async def migrated(*_):
+        return True
+
+    async def charged(*_):
+        return 1_000
+
+    async def plan_for(*_):
+        return plan
+
+    streamed: list[object] = []
+
+    async def stream_reply(conversation_id, *_, **__):
+        streamed.append(conversation_id)
+        yield "event: done\ndata: {}\n\n"
+
+    monkeypatch.setattr(get_settings(), "openai_api_key", "sk-test")
+    monkeypatch.setattr(agent, "has_migration", migrated)
+    monkeypatch.setattr(agent, "plan_for", plan_for)
+    monkeypatch.setattr(agent, "reserve_message", charged)
+    monkeypatch.setattr(agent, "stream_reply", stream_reply)
+    monkeypatch.setattr(agent, "conversation_session", lambda _: None)
+    monkeypatch.setitem(client.app.dependency_overrides, get_db, use_db)
+    body = {"conversation_id": str(old.id), "message": "Συνέχεια", "code": ""}
+    assert client.post("/api/v1/agent/chat", json=body, headers=auth_header()).status_code == 200
+    if restarts:
+        [new] = db.added
+        assert isinstance(new, Conversation) and new.model == plan.model
+        assert new.title == "Συνέχεια"
+        assert streamed == [new.id]
+    else:
+        assert db.added == []
+        assert streamed == [old.id]
 
 
 def test_negative_daily_limit_is_refused() -> None:

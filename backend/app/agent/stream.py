@@ -1,7 +1,8 @@
 """Turns an agent run into Server-Sent Events for the IDE.
 
 Events (frontend/src/lib/api/agent.ts parses them):
-  conversation {id}         first event, so the client can continue the thread
+  conversation {id}         first event, so the client can continue the thread (a
+                            new id: the server started a new one, endpoints/agent.py)
   text {delta}              streamed answer text
   tool {name}               the agent called a tool (shown as activity)
   edit {code, summary}      write_code's new program, written into the editor

@@ -4,7 +4,7 @@ import { editorLanguage } from "./editorLanguage";
 import { greekKeyword } from "./latin";
 import type { Language } from "./types";
 import { DECLARATION_TYPES, normalizeWord, reservedIn, spell } from "./vocabulary";
-import { codeWords } from "./words";
+import { codeWords, lastWord } from "./words";
 
 // Writes ΓΛΩΣΣΑ words in capitals as soon as they're finished: typing «γραψε»
 // and then a space, Enter or punctuation leaves «ΓΡΑΨΕ». Accents go too
@@ -16,10 +16,9 @@ import { codeWords } from "./words";
 // Names, strings and comments are left alone, Latin names included («arxi»
 // stays a name once declared or used elsewhere).
 
-const WORD_BEFORE = /[\p{L}_][\p{L}\p{N}_]*$/u;
 const WORD_CHAR = /^[\p{L}\p{N}_]/u;
 
-const DECLARATION = new RegExp(`^\\s*(${DECLARATION_TYPES.join("|")})\\s*:`, "u");
+export const DECLARATION = new RegExp(`^\\s*(${DECLARATION_TYPES.join("|")})\\s*:`, "u");
 
 export type Fix = { from: number; to: number; insert: string };
 
@@ -48,20 +47,20 @@ export function keywordFix(
   doc?: Text,
   lineFrom = 0,
 ): Fix | null {
-  const match = WORD_BEFORE.exec(lineText.slice(0, offset));
-  if (!match || WORD_CHAR.test(lineText.slice(offset))) return null;
-  const from = offset - match[0].length;
+  const word = lastWord(lineText.slice(0, offset));
+  if (word === undefined || WORD_CHAR.test(lineText.slice(offset))) return null;
+  const from = offset - word.length;
   if (inCommentOrString(lineText.slice(0, from))) return null;
   // A ΓΙΑ's counter is a name even when it's «η» or «ε» (counter.ts makes it h, e).
   if (/^\s*ΓΙΑ\s+$/u.test(normalizeWord(lineText.slice(0, from)))) return null;
-  let key: string | null = normalizeWord(match[0]);
+  let key: string | null = normalizeWord(word);
   if (!reservedIn(language).has(key)) {
-    key = greekKeyword(match[0], language);
+    key = greekKeyword(word, language);
     if (key === null || !latinMeantGreek(key, lineText, from, offset)) return null;
-    if (doc && nameElsewhere(doc, match[0], lineFrom + from)) return null;
+    if (doc && nameElsewhere(doc, word, lineFrom + from)) return null;
   }
   const canonical = spell(key, language);
-  return canonical === match[0] ? null : { from, to: offset, insert: canonical };
+  return canonical === word ? null : { from, to: offset, insert: canonical };
 }
 
 /**

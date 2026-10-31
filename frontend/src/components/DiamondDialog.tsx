@@ -161,6 +161,8 @@ export function DiamondDialog({ opening, onClose }: { opening: DiamondOpening; o
           {user === null ? (
             <Link
               href="/login?mode=signup"
+              // As SettingsDialog's link: a dialog left open stays modal on the hidden page.
+              onClick={() => dialog.current?.close()}
               className="block rounded-md btn-primary bg-accent px-3 py-2 text-center font-semibold text-on-accent hover:brightness-110"
             >
               Κάνε εγγραφή για το Diamond
@@ -191,7 +193,11 @@ export function DiamondDialog({ opening, onClose }: { opening: DiamondOpening; o
           <p className="mt-3 text-xs text-muted">
             Η πληρωμή γίνεται με ασφάλεια στη Stripe· εμείς δεν βλέπουμε την κάρτα σου. Ακυρώνεις
             όποτε θέλεις, και το Diamond μένει μέχρι το τέλος του μήνα που πλήρωσες. Δες την{" "}
-            <Link href="/privacy" className="text-accent hover:underline">
+            <Link
+              href="/privacy"
+              onClick={() => dialog.current?.close()}
+              className="text-accent hover:underline"
+            >
               πολιτική απορρήτου
             </Link>
             .

@@ -7,6 +7,7 @@ from openai.types.shared import Reasoning
 from sentry_sdk import logger as sentry_logger
 from sentry_sdk import metrics
 from sqlalchemy import func, select
+from sqlalchemy.orm import undefer
 
 from app.agent.context import AgentContext
 from app.agent.session import conversation_session
@@ -81,20 +82,32 @@ async def chat(
     if body.program_id is not None:
         await owned_program(db, user, body.program_id)
 
-    if body.conversation_id is None:
+    # Before 0010 the column isn't there: conversations then don't know their model.
+    knows_model = await has_migration(db, "0010")
+    conversation = None
+    if body.conversation_id is not None:
+        query = select(Conversation).where(
+            Conversation.id == body.conversation_id, Conversation.user_id == user.id
+        )
+        if knows_model:
+            query = query.options(undefer(Conversation.model))
+        conversation = await db.scalar(query)
+        if conversation is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
+        # The plan changed (or the plan's model did) while the IDE stayed open: the new
+        # model may not read the old one's encrypted reasoning, so a new conversation.
+        # The client sees its new id in the first event.
+        if knows_model and conversation.model not in (None, plan.model):
+            conversation = None
+        else:
+            conversation.updated_at = func.now()
+    if conversation is None:
         conversation = Conversation(
             user_id=user.id, program_id=body.program_id, title=body.message[:80]
         )
+        if knows_model:
+            conversation.model = plan.model
         db.add(conversation)
-    else:
-        conversation = await db.scalar(
-            select(Conversation).where(
-                Conversation.id == body.conversation_id, Conversation.user_id == user.id
-            )
-        )
-        if conversation is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conversation not found")
-        conversation.updated_at = func.now()
     await db.commit()
 
     context = AgentContext(

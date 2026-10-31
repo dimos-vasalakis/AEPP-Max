@@ -82,7 +82,9 @@ export function ContactDialog({ lang = "el", onClose }: { lang?: Lang; onClose: 
     e.preventDefault();
     if (state !== "idle") return;
     // `required` lets spaces through; the server strips them and would refuse.
-    const body = { name: name.trim(), email: email.trim(), message: message.trim(), website };
+    // NUL can't be stored (the backend's StoredText answers 422), and nobody means one.
+    const clean = (text: string) => text.replaceAll("\0", "").trim();
+    const body = { name: clean(name), email: email.trim(), message: clean(message), website };
     if (!body.name || !body.message) {
       setError(t.blank);
       return;

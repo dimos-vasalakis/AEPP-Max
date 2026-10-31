@@ -38,15 +38,15 @@ AEPP Max runs the same programs as the Διερμηνευτής της ΓΛΩΣ�
 
 **The πίνακας τιμών, step by step.** The exam asks students to trace a program by hand. One button builds the trace table: a row per executed line, a column per variable, each condition's value and what ΓΡΑΨΕ printed. Rows appear one at a time, so students predict each before they see it, while the editor highlights the line. Students can then check their paper table against it.
 
-**Your programs, everywhere.** With an account, Ctrl/Cmd+S saves the code, then it saves itself as you type. «Τα προγράμματά μου» opens, renames, copies and deletes them from any device.
+**Your programs, everywhere.** With an account, Ctrl/Cmd+S or Αποθήκευση saves the code; it never saves on its own, as students asked. «Τα προγράμματά μου» opens, renames, copies and deletes them from any device.
 
-**Made for the screen you have.** Three built-in themes, including **Κλασικό**, with the colors students know from the school lab. Make your own theme from 11 colors in the Επεκτάσεις panel.
+**Made for the screen you have.** Three built-in themes, including **Κλασικό**, with the colors students know from the school lab. Make your own theme from 12 colors in the Επεκτάσεις panel.
 
 **One interpreter everywhere.** It lives on the backend, so the editor, the agent's tools and, later, exercise checking all give the same answer and can't be tampered with from the client.
 
 ## Status
 
-Working: the full interpreter, the editor, running programs with input, the step-by-step πίνακας τιμών, saving and opening programs (with autosave), the agent (Tutor and Agent modes, approval, slash commands, a daily limit per student), themes, an in-app guide (ⓘ) and sign-in.
+Working: the full interpreter, the editor, running programs with input, the step-by-step πίνακας τιμών, saving and opening programs, the agent (Tutor and Agent modes, approval, slash commands, a daily limit per student), themes, an in-app guide (ⓘ) and sign-in.
 
 Not built yet: a list of past agent conversations, and markdown in agent replies.
 
@@ -58,6 +58,23 @@ Not built yet: a list of past agent conversations, and markdown in agent replies
 | Backend | FastAPI, ΓΛΩΣΣΑ interpreter (pure Python) | Render |
 | Agent | OpenAI Agents SDK | (backend) |
 | DB & Auth | Supabase (Postgres + Auth), Alembic migrations | Supabase |
+
+## How the interpreter works
+
+The interpreter is written by hand in pure Python, with no parser generator and no web or database imports (`backend/app/glossa/`). A program goes through four stages:
+
+1. **Lexer** (`lexer.py`) turns the source into tokens. Keywords and names are compared after normalizing them (uppercase, no accents, `ς` → `Σ`), so `γραψε`, `Γράψε` and `ΓΡΑΨΕ` are the same word.
+2. **Parser** (`parser.py`) is recursive descent, one function per grammar rule, and builds an AST of dataclasses (`nodes.py`: `Assign`, `If`, `For`, `Call`, `Procedure`, …), each node with its line and columns. Writing it by hand is what lets the first error come out in Greek, with a hint for the common mistakes.
+3. **Checker** (`checker.py`) walks the AST before anything runs: undeclared or duplicate names, assignments to constants, array dimensions, calls. Errors in code that never runs are still reported.
+4. **Interpreter** (`interpreter.py`) walks the checked AST and executes each node directly.
+
+Ψευδογλώσσα algorithms use the same pipeline, through subclasses (`algorithm_*.py`).
+
+**An interpreter, not a compiler.** Nothing is translated into another language, neither Python nor bytecode. Walking the tree is what makes the step-by-step πίνακας τιμών possible, a row per executed statement. It also keeps runtime errors in Greek on the right line. And it is safe: the interpreter counts its own steps, time, output, call depth and memory, so a student's program can never hang the server or reach anything outside it. Student programs are small, so speed doesn't matter.
+
+**Values and memory.** ΑΚΕΡΑΙΑ, ΠΡΑΓΜΑΤΙΚΗ, ΧΑΡΑΚΤΗΡΑΣ and ΛΟΓΙΚΗ are Python `int`, `float`, `str` and `bool`; a variable starts as a special `UNSET` value. Each call pushes a frame on the interpreter's call stack (a list of frames) holding its variables, and arrays are flat lists inside the frame. Parameters are copies: a procedure copies them back to the caller when it returns, as the textbook says, so frames never share memory. The Μεταβλητές tab shows this stack.
+
+**No garbage collector.** ΓΛΩΣΣΑ has no pointers and no dynamic allocation, so every value lives exactly as long as its call. When a call returns, its frame is dropped and Python frees it. What the interpreter does keep is a count of live array cells (`MAX_LIVE_CELLS`, freed on return) and a limit of 200 nested calls, so deep recursion with large arrays stops with an error instead of filling memory.
 
 ## Getting started
 

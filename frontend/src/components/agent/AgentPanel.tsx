@@ -240,8 +240,13 @@ export function AgentPanel({
     }
   }
   // …and a reply still streaming for the last account stops: no edit of theirs lands.
-  // A layout effect, so no event of the reply is handled after this render.
+  // A layout effect, so no event of the reply is handled after this render. Only on a
+  // real change: Next re-runs effects when the student comes back to /editor from
+  // another page (<Activity>), which must not stop the reply.
+  const replyUser = useRef(user?.id);
   useLayoutEffect(() => {
+    if (replyUser.current === user?.id) return;
+    replyUser.current = user?.id;
     abort.current?.abort();
   }, [user?.id]);
 
@@ -356,6 +361,12 @@ export function AgentPanel({
       for await (const event of streamChat(request, controller.signal)) {
         if (event.type === "conversation") {
           accepted = true;
+          // A new one for an old one: the agent's model changed (endpoints/agent.py: the
+          // plan, or the server's setting), so it no longer remembers the chat above.
+          if (request.conversation_id !== null && event.id !== request.conversation_id) {
+            const text = "Άλλαξε το μοντέλο του agent, οπότε ξεκίνησε νέα συζήτηση: ο agent δεν θυμάται τα παραπάνω.";
+            setMessages((ms) => [...ms.slice(0, -2), { role: "note", text }, ...ms.slice(-2)]);
+          }
           setConversationId(event.id);
         }
         else if (event.type === "text") appendText(event.delta);

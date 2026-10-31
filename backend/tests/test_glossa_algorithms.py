@@ -4,7 +4,7 @@ change away from what students are taught."""
 
 import pytest
 
-from app.glossa import RunResult, check, run
+from app.glossa import RunLimits, RunResult, check, run
 
 
 def go(source: str, inputs: list[str] | None = None, trace: bool = False) -> RunResult:
@@ -313,6 +313,24 @@ class TestValues:
     def test_swap_finds_both_places_first(self) -> None:
         body = "Π[1] ← 2\nΠ[2] ← 5\ni ← 1\nΑντιμετάθεσε i, Π[i]\nΕμφάνισε i, ' ', Π[1], ' ', Π[2]"
         assert output(algorithm(body)) == ["2 1 5"]
+
+    @pytest.mark.parametrize("change", ['i ← "α"', "i ← αληθής", "Διάβασε i"])
+    def test_a_for_counter_that_stops_being_a_number(self, change: str) -> None:
+        source = algorithm(f"Για i από 1 μέχρι 3\n  {change}\nΤέλος_επανάληψης")
+        message, line = error(source, ["λέξη"])
+        assert message.startswith("Ο μετρητής i χρειάζεται αριθμό, όχι ")
+        assert line == 2
+
+    def test_every_call_is_a_step(self) -> None:
+        # Χ's body is empty, so only the calls themselves can count against the limit.
+        nested = "Χ(" * 100 + "1" + ")" * 100
+        source = (
+            f"Αλγόριθμος Τ\nΕμφάνισε {nested}\nΤέλος Τ\n"
+            "Αλγόριθμος Χ\nΔεδομένα // a //\nΑποτελέσματα // a //\nΤέλος Χ\n"
+        )
+        assert go(source).output == ["1"]
+        result = run(source, language="pseudocode", limits=RunLimits(max_steps=50))
+        assert result.status == "limit"
 
     def test_a_huge_typed_integer_is_an_error(self) -> None:
         assert "πολύ μεγάλος" in error(algorithm("Διάβασε x"), ["9" * 5000])[0]

@@ -172,7 +172,13 @@ export function ProgramsDialog({
         </div>
 
         {signedIn === false ? (
-          <SignedOut onSignIn={onSignIn} />
+          <SignedOut
+            onSignIn={() => {
+              // As SaveDialog's leave(): a dialog left open stays modal on the hidden page.
+              onSignIn();
+              dialog.current?.close();
+            }}
+          />
         ) : (
           <>
             <div className="flex items-center gap-2 px-5 pt-4">

@@ -68,14 +68,19 @@ async def reserve_message(db: AsyncSession, user_id: uuid.UUID, limit: int) -> i
 
 async def record_usage(user_id: uuid.UUID, reserved: int, usage: Usage) -> None:
     """Add what a run used beyond its up-front charge. Runs after the reply, in its
-    own session (the request's is gone by then); a failure is logged, not raised."""
-    extra = usage.input_tokens + usage.output_tokens - reserved
-    if extra <= 0:
+    own session (the request's is gone by then); a failure is logged, not raised.
+    Without a daily limit nothing was reserved, so the message is counted here."""
+    extra = max(usage.input_tokens + usage.output_tokens - reserved, 0)
+    messages = 1 if reserved == 0 else 0
+    if extra == 0 and messages == 0:
         return
-    stmt = insert(AgentUsage).values(user_id=user_id, day=TODAY, tokens=extra)
+    stmt = insert(AgentUsage).values(user_id=user_id, day=TODAY, tokens=extra, messages=messages)
     stmt = stmt.on_conflict_do_update(
         index_elements=[AgentUsage.user_id, AgentUsage.day],
-        set_={"tokens": AgentUsage.tokens + stmt.excluded.tokens},
+        set_={
+            "tokens": AgentUsage.tokens + stmt.excluded.tokens,
+            "messages": AgentUsage.messages + stmt.excluded.messages,
+        },
     )
     try:
         async with get_sessionmaker()() as db:

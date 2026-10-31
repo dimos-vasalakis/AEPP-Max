@@ -69,7 +69,13 @@ def test_contact_stores_the_message(client: TestClient, use_db) -> None:
 
 @pytest.mark.parametrize(
     "change",
-    [{"email": "maria"}, {"name": "   "}, {"message": ""}, {"message": "α" * 2001}],
+    [
+        {"email": "maria"},
+        {"name": "   "},
+        {"message": ""},
+        {"message": "α" * 2001},
+        {"message": "Γεια\x00"},  # Postgres text can't hold NUL
+    ],
 )
 def test_contact_rejects_invalid_fields(client: TestClient, use_db, change: dict) -> None:
     db = use_db(FakeDb())

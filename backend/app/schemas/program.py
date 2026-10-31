@@ -5,17 +5,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.glossa import Language
 from app.schemas.run import MAX_SOURCE_CHARS
+from app.schemas.text import StoredText
 
 
 class ProgramCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
-    code: str = Field(default="", max_length=MAX_SOURCE_CHARS)
+    title: StoredText = Field(min_length=1, max_length=120)
+    code: StoredText = Field(default="", max_length=MAX_SOURCE_CHARS)
     language: Language = "glossa"  # fixed once saved: the IDE opens it in that mode
 
 
 class ProgramUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=120)
-    code: str | None = Field(default=None, max_length=MAX_SOURCE_CHARS)
+    title: StoredText | None = Field(default=None, min_length=1, max_length=120)
+    code: StoredText | None = Field(default=None, max_length=MAX_SOURCE_CHARS)
 
 
 class ProgramSummary(BaseModel):

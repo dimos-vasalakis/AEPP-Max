@@ -27,7 +27,7 @@ import {
   RETURN_TYPES,
   spell,
 } from "./vocabulary";
-import { codeWords } from "./words";
+import { codeWords, lastWord } from "./words";
 
 // Keyword and name completion for ΓΛΩΣΣΑ and ψευδογλώσσα. Runs entirely in the
 // browser: no requests, no AI. Matching ignores case and accents, so «πρ» offers
@@ -166,7 +166,6 @@ const BEFORE_VALUE = new Set([
 const NAME_LISTS = new Set([
   "ΔΙΑΒΑΣΕ", "ΑΝΤΙΜΕΤΑΘΕΣΕ", "ΔΕΔΟΜΕΝΑ", "ΑΠΟΤΕΛΕΣΜΑΤΑ", ...DECLARATION_TYPES,
 ]);
-const LAST_WORD = /([\p{L}_][\p{L}\p{N}_]*)$/u;
 const FIRST_WORD = /^\s*([\p{L}_][\p{L}\p{N}_]*)/u;
 
 /** The place of a word that starts after `before` (the line up to it). */
@@ -174,8 +173,8 @@ export function placeOf(before: string, language: Language = "glossa"): Place {
   const text = before.trimEnd();
   if (text === "") return "line-start";
   const first = normalizeWord(FIRST_WORD.exec(text)?.[1] ?? "");
-  const lastWord = LAST_WORD.exec(text)?.[1];
-  const last = lastWord === undefined ? null : normalizeWord(lastWord);
+  const word = lastWord(text);
+  const last = word === undefined ? null : normalizeWord(word);
 
   let afterValue: boolean;
   if (last === null) {

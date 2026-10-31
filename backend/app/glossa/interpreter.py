@@ -275,13 +275,16 @@ class _Machine:
 
     # Bookkeeping
 
-    def tick(self, node: n.Node, frame: _Frame) -> None:
-        """Count a step; start its trace entry."""
+    def count_step(self) -> None:
         self.steps += 1
         if self.steps > self.limits.max_steps:
             raise _Limit
         if self.steps % CLOCK_EVERY == 0 and time.monotonic() > self.deadline:
             raise _Limit
+
+    def tick(self, node: n.Node, frame: _Frame) -> None:
+        """Count a step; start its trace entry."""
+        self.count_step()
         self.resume = None
         if self.trace is not None:
             self.step = self.record(
@@ -466,6 +469,9 @@ class _Machine:
 
     def run_body(self, sub: n.Unit, frame: _Frame) -> None:
         """A called subprogram's statements; the caller's trace step resumes after."""
+        # A call is a step too: in ψευδογλώσσα a body may be empty, and thousands of
+        # nested calls in one expression would otherwise never reach the clock check.
+        self.count_step()
         caller = self.resume or self.step
         self.resume = None
         self.calls += 1
@@ -709,16 +715,16 @@ class _Machine:
             frame.counters.pop()
 
     def loop_rounds(self, loop: n.For, end: Value, step: Value, frame: _Frame) -> None:
+        # In ψευδογλώσσα nothing is typed, so the body may make the counter a string.
+        who = f"Ο μετρητής {loop.counter.name}"
         first = True
         while True:
             if not first:
                 self.tick(loop, frame)
-                current = self.eval(loop.counter, frame)
-                assert _is_number(current)
+                current = self.number(loop.counter, frame, who)
                 self.store(loop.counter, self.arithmetic("+", current, step, loop), frame)  # type: ignore[arg-type]
             first = False
-            current = self.eval(loop.counter, frame)
-            assert _is_number(current)
+            current = self.number(loop.counter, frame, who)
             going = _compare("<=" if step > 0 else ">=", current, end)  # type: ignore[arg-type]
             if row := self.current():
                 row.condition = going
@@ -864,13 +870,17 @@ class _Machine:
                 if expr.key in BUILTINS:
                     argument = self.number(args[0], frame, f"Η συνάρτηση {expr.name}")
                     try:
-                        return BUILTINS[expr.key](argument)
+                        value = BUILTINS[expr.key](argument)
                     except GlossaError as exc:
                         raise _error(expr, exc.message) from None
                     except (OverflowError, ValueError):
                         raise _error(
                             expr, f"Η τιμή είναι εκτός ορίων για τη συνάρτηση {expr.name}."
                         ) from None
+                    # Α_Μ of a huge real: the same cap as arithmetic's.
+                    if isinstance(value, int) and abs(value) > MAX_INTEGER:
+                        raise _error(expr, "Το αποτέλεσμα είναι πολύ μεγάλο.")
+                    return value
                 result = self.call(self.subprograms[expr.key], args, expr, frame)
                 assert result is not None
                 return result

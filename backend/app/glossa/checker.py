@@ -48,6 +48,10 @@ class _Checker:
                 raise _error(sub, f"Το {sub.name} είναι όνομα ενσωματωμένης συνάρτησης.")
             if sub.key in self.subprograms:
                 raise _error(sub, f"Υπάρχει ήδη υποπρόγραμμα με το όνομα {sub.name}.")
+            if sub.key == self.program.key:
+                raise _error(
+                    sub, f"Το {sub.name} είναι το όνομα του προγράμματος: δώσε άλλο όνομα."
+                )
             self.subprograms[sub.key] = sub
         self.main_scope = _UnitChecker(self, self.program).run()
         for sub in self.program.subprograms:

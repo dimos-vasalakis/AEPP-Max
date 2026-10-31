@@ -64,7 +64,14 @@ export function SettingsDialog({ user, onClose }: { user: User; onClose: () => v
 
         <DeleteAccount deletion={deletion} setDeletion={setDeletion} />
 
-        <Link href="/privacy" className="mt-4 inline-block text-xs text-accent hover:underline">
+        <Link
+          href="/privacy"
+          // Left open, the dialog would stay modal on the hidden IDE (Next keeps it in
+          // <Activity>) and leave the privacy page inert. Not mid-deletion: the dialog
+          // stays to show how it ends.
+          onClick={(e) => (deleting ? e.preventDefault() : dialog.current?.close())}
+          aria-disabled={deleting}
+          className="mt-4 inline-block text-xs text-accent hover:underline aria-disabled:pointer-events-none aria-disabled:opacity-50">
           Πολιτική απορρήτου
         </Link>
       </div>

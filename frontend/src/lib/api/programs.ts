@@ -36,7 +36,8 @@ export function programError(err: unknown): string {
     case 409:
       return `Έφτασες το όριο των αποθηκευμένων προγραμμάτων (${FREE.max_programs} στο δωρεάν πλάνο, ${DIAMOND.max_programs} στο Diamond 💎). Σβήσε κάποιο στο «Τα προγράμματά μου» για να αποθηκεύσεις νέο.`;
     case 422:
-      return "Ο κώδικας είναι πολύ μεγάλος για να αποθηκευτεί.";
+      // schemas/program.py: too long, or a NUL character (pasted from somewhere).
+      return "Ο κώδικας δεν αποθηκεύεται: είναι πολύ μεγάλος ή έχει κάποιον άκυρο χαρακτήρα.";
     case 503:
       return "Η αποθήκευση δεν είναι διαθέσιμη αυτή τη στιγμή.";
     default:

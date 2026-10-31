@@ -179,6 +179,7 @@ The parser (`backend/app/glossa/parser.py`, `checker.py`) had to pick something 
 | `ΓΙΑ` counter | A simple variable only, not an array element. |
 | Main-program constants in subprograms | Visible; variables are not. |
 | Functions with no parameters | Allowed. |
+| A subprogram named like the program | An error. In ψευδογλώσσα, two algorithms can't share a name either. |
 | `0 < x < 10` | An error that suggests `0 < x ΚΑΙ x < 10`. |
 | Latin look-alikes (`APXH`, `TOTE`) | An error that suggests the Greek keyword. Not raised for `H`, which is a valid Latin variable name. |
 | Constant values | A literal, a signed number, or an earlier constant. No other expressions. |
