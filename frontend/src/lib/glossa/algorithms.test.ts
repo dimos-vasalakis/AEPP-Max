@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ALGORITHM_GROUPS, algorithmCode, algorithmProgram } from "./algorithms";
 import { formatCode } from "./format";
+import { PART_MARKER } from "./trace";
 
 const ALL = ALGORITHM_GROUPS.flatMap((group) => group.algorithms);
 
@@ -37,6 +38,14 @@ describe("the algorithm library", () => {
       expect(words.filter((word) => !["TOP", "FRONT", "REAR", "MOD", "DIV"].includes(word))).toEqual([]);
     },
   );
+
+  it("marks where a framed algorithm's own code starts, so a run can open there", () => {
+    for (const algorithm of ALL.filter((a) => a.frame)) {
+      const lines = algorithmProgram(algorithm).split("\n");
+      const marker = lines.findIndex((line) => line.trim() === PART_MARKER);
+      expect(lines[marker + 1]).toBe(`  ${algorithm.code[0]}`);
+    }
+  });
 
   it("wraps a part of a program, indented, in a whole one", () => {
     const part = ALL.find((algorithm) => algorithm.title.startsWith("Εξαγωγή ενός"));

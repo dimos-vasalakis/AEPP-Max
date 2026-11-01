@@ -36,13 +36,13 @@ def by_title(part: str) -> str:
     return program(matches[0])
 
 
-def run_answering(source: str):
+def run_answering(source: str, trace: bool = False):
     """Runs to the end as a student would: ΝΑΙ to questions, otherwise 1, 2, 3, …"""
     lines = source.splitlines()
     inputs: list[str] = []
     numbers = 0
     while True:
-        result = glossa.run(source, inputs)
+        result = glossa.run(source, inputs, trace=trace)
         if result.status != "needs_input":
             return result
         if "ΔΙΑΒΑΣΕ ΑΠ" in lines[result.input_line - 1]:
@@ -62,6 +62,14 @@ def test_compiles_and_runs_to_the_end(item):
     assert glossa.check(source, "glossa") is None
     result = run_answering(source)
     assert result.status == "ok", result.error
+
+
+@pytest.mark.parametrize("item", ALGORITHMS, ids=titles())
+def test_runs_traced_too(item):
+    # Slow and step runs and the πίνακας τιμών all run this way.
+    result = run_answering(program(item), trace=True)
+    assert result.status == "ok", result.error
+    assert result.trace
 
 
 @pytest.mark.parametrize("item", ALGORITHMS, ids=titles())
@@ -122,6 +130,54 @@ def test_every_sort_ends_descending(start):
 def test_stays_well_inside_the_time_limit(item):
     # /run allows 3 s, by the clock: a slow host must still finish the heaviest one.
     assert run_answering(program(item)).steps <= 50_000
+
+
+def sample(row: int, column: int) -> int:
+    """The 2D frames' sample value: Α[Κ, Λ] <- 100 - Κ + (Κ MOD 10) * 2 + Λ."""
+    return 100 - row + (row % 10) * 2 + column
+
+
+def whole_rows(item: dict) -> list[list[int]]:
+    """Runs a 2D sort printing all ten columns of each row, then ΟΝ if it has one."""
+    parts = LIBRARY["frames"][item["frame"]]
+    cells = ", ".join(f"Α[Κ, {column}]" for column in range(1, 11))
+    if any("ΟΝ[100]" in line for line in parts["before"]):
+        cells += ", ΟΝ[Κ]"
+    after = [
+        "  ΓΙΑ Κ ΑΠΟ 1 ΜΕΧΡΙ 100",
+        f"    ΓΡΑΨΕ {cells}",
+        "  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ",
+    ]
+    lines = [*parts["before"], *(f"  {line}" for line in item["code"]), *after]
+    result = glossa.run("\n".join(lines) + "\n", [])
+    assert result.status == "ok", result.error
+    return [[int(cell) for cell in line.split()] for line in result.output]
+
+
+SORTS_2D = [item for item in ALGORITHMS if item.get("frame", "").startswith("sort-2d")]
+
+
+@pytest.mark.parametrize("item", SORTS_2D, ids=[item["title"] for item in SORTS_2D])
+def test_a_2d_sort_moves_whole_rows(item):
+    rows = whole_rows(item)
+    assert len(rows) == 100
+    third = [row[2] for row in rows]
+    assert third == sorted(third, reverse=True)
+
+    def expected(number: int) -> list[int]:
+        row = [sample(number, column) for column in range(1, 11)]
+        if item["frame"] == "sort-2d-ties":
+            row[2] = (100 - number) // 20 + number % 2
+        return row
+
+    if item["frame"] == "sort-2d":
+        assert sorted(rows) == sorted(expected(number) for number in range(1, 101))
+    else:
+        # ΟΝ[Κ] started as Κ: it still names the row it belongs to.
+        assert sorted(row[10] for row in rows) == list(range(1, 101))
+        for row in rows:
+            assert row[:10] == expected(row[10])
 
 
 def test_sort_breaks_ties_by_the_first_column():

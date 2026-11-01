@@ -1,7 +1,7 @@
 "use client";
 
 import { highlightCode } from "@lezer/highlight";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { NavPopover } from "@/components/NavPopover";
 import {
   ALGORITHM_GROUPS,
@@ -11,21 +11,25 @@ import {
 } from "@/lib/glossa/algorithms";
 import { glossa } from "@/lib/glossa/language";
 import { glossaHighlight } from "@/lib/glossa/theme";
+import type { Language } from "@/lib/glossa/types";
 
 type Props = {
-  /** Puts the algorithm in the Πρόγραμμα editor, as a whole program. */
-  onOpen: (algorithm: Algorithm) => void;
+  /**
+   * Puts the algorithm in the Πρόγραμμα editor, as a whole program; resolves to why it
+   * couldn't, or null. `cancelled` says the panel closed while it waited for a save.
+   */
+  onOpen: (algorithm: Algorithm, cancelled: () => boolean) => Promise<string | null>;
   /** A run or the agent's edit is on its way: the code can't be replaced now. */
   openDisabled?: boolean;
+  /** The side of the switch the editor is on: the library itself is always ΓΛΩΣΣΑ. */
+  language: Language;
 };
 
 /**
  * The navbar's Αλγόριθμοι: topics → an algorithm's title → its code, to read, copy,
  * or open in the editor.
  */
-export function AlgorithmsMenu({ onOpen, openDisabled }: Props) {
-  const [group, setGroup] = useState<AlgorithmGroup | null>(null);
-  const [algorithm, setAlgorithm] = useState<Algorithm | null>(null);
+export function AlgorithmsMenu(props: Props) {
   return (
     <NavPopover
       label="Αλγόριθμοι"
@@ -34,52 +38,105 @@ export function AlgorithmsMenu({ onOpen, openDisabled }: Props) {
       pill
       align="right"
       wide
-      onClose={() => {
-        setGroup(null);
-        setAlgorithm(null);
-      }}
     >
-      {(close) =>
-        algorithm && group ? (
-          <AlgorithmView
-            group={group}
-            algorithm={algorithm}
-            onBack={() => setAlgorithm(null)}
-            openDisabled={openDisabled}
-            onOpen={() => {
-              onOpen(algorithm);
-              close();
-            }}
-          />
-        ) : group ? (
-          <>
-            <Back onClick={() => setGroup(null)}>Αλγόριθμοι</Back>
-            <h2 className="mb-2 font-semibold">{group.name}</h2>
-            <ul className="space-y-1">
-              {group.algorithms.map((item) => (
-                <li key={item.title}>
-                  <Row onClick={() => setAlgorithm(item)}>{item.title}</Row>
-                </li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <>
-            <h2 className="font-semibold">Αλγόριθμοι</h2>
-            <p className="mb-2 text-xs text-muted">Γνωστοί αλγόριθμοι των Πανελλαδικών</p>
-            <ul className="space-y-1">
-              {ALGORITHM_GROUPS.map((item) => (
-                <li key={item.name}>
-                  <Row onClick={() => setGroup(item)} count={item.algorithms.length}>
-                    {item.name}
-                  </Row>
-                </li>
-              ))}
-            </ul>
-          </>
-        )
-      }
+      {(close) => <Browser {...props} close={close} />}
     </NavPopover>
+  );
+}
+
+/** What the panel shows. Mounted only while it is open, so it always opens on the topics. */
+function Browser({
+  onOpen,
+  openDisabled,
+  language,
+  close,
+}: Props & { close: () => void }) {
+  const [group, setGroup] = useState<AlgorithmGroup | null>(null);
+  const [algorithm, setAlgorithm] = useState<Algorithm | null>(null);
+  const [problem, setProblem] = useState<string | null>(null);
+  // Waiting for a save before it opens. Closing the panel (Esc, a click outside) gives up
+  // on it: a save can hang as long as the connection does, and the page stays usable.
+  const [opening, setOpening] = useState(false);
+  const closed = useRef(false);
+  useEffect(() => {
+    closed.current = false;
+    return () => {
+      closed.current = true;
+    };
+  }, []);
+
+  // A new view starts at its top, also where a long list had scrolled the panel, and takes
+  // the focus from the button that just went.
+  const view = useRef<HTMLDivElement>(null);
+  const lastView = useRef({ group, algorithm });
+  useEffect(() => {
+    if (lastView.current.group === group && lastView.current.algorithm === algorithm) return;
+    lastView.current = { group, algorithm };
+    view.current?.parentElement?.scrollTo({ top: 0 });
+    view.current?.focus({ preventScroll: true });
+  }, [group, algorithm]);
+
+  async function open(item: Algorithm) {
+    // Its button disables itself next: some browsers would drop keys (Esc) with the focus on it.
+    view.current?.focus({ preventScroll: true });
+    setOpening(true);
+    setProblem(null);
+    let failed: string | null;
+    try {
+      failed = await onOpen(item, () => closed.current);
+    } catch {
+      failed = "Δεν ήταν δυνατό το άνοιγμα. Δοκίμασε ξανά.";
+    }
+    if (closed.current) return;
+    setOpening(false);
+    if (failed) setProblem(failed);
+    else close();
+  }
+
+  return (
+    <div ref={view} tabIndex={-1} className="outline-none">
+      {algorithm && group ? (
+        <AlgorithmView
+          group={group}
+          algorithm={algorithm}
+          language={language}
+          onBack={() => {
+            setProblem(null);
+            setAlgorithm(null);
+          }}
+          onOpen={() => void open(algorithm)}
+          opening={opening}
+          openDisabled={openDisabled}
+          problem={problem}
+        />
+      ) : group ? (
+        <>
+          <Back onClick={() => setGroup(null)}>Αλγόριθμοι</Back>
+          <h2 className="mb-2 font-semibold">{group.name}</h2>
+          <ul className="space-y-1">
+            {group.algorithms.map((item) => (
+              <li key={item.title}>
+                <Row onClick={() => setAlgorithm(item)}>{item.title}</Row>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <>
+          <h2 className="font-semibold">Αλγόριθμοι</h2>
+          <p className="mb-2 text-xs text-muted">Γνωστοί αλγόριθμοι των Πανελλαδικών, σε ΓΛΩΣΣΑ</p>
+          <ul className="space-y-1">
+            {ALGORITHM_GROUPS.map((item) => (
+              <li key={item.name}>
+                <Row onClick={() => setGroup(item)} count={item.algorithms.length}>
+                  {item.name}
+                </Row>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -87,15 +144,21 @@ export function AlgorithmsMenu({ onOpen, openDisabled }: Props) {
 function AlgorithmView({
   group,
   algorithm,
+  language,
   onBack,
   onOpen,
+  opening,
   openDisabled,
+  problem,
 }: {
   group: AlgorithmGroup;
   algorithm: Algorithm;
+  language: Language;
   onBack: () => void;
   onOpen: () => void;
+  opening: boolean;
   openDisabled?: boolean;
+  problem: string | null;
 }) {
   const code = algorithmCode(algorithm);
   const tokens = useMemo(() => highlighted(code), [code]);
@@ -116,9 +179,18 @@ function AlgorithmView({
     }
   }
 
+  const pseudocode = language === "pseudocode";
+  const hint = opening
+    ? "Ολοκληρώνεται η αποθήκευση… Με Esc ή κλικ έξω ακυρώνεις το άνοιγμα."
+    : openDisabled
+      ? "Περίμενε να τελειώσει η εκτέλεση ή ο Agent."
+      : problem;
+
   return (
     <>
-      <Back onClick={onBack}>{group.name}</Back>
+      <Back onClick={onBack} disabled={opening}>
+        {group.name}
+      </Back>
       <h2 className="font-semibold">{algorithm.title}</h2>
       {algorithm.frame && (
         <p className="mt-1 text-xs text-muted">
@@ -135,14 +207,20 @@ function AlgorithmView({
         {tokens}
       </pre>
       {algorithm.note && <p className="mt-2 text-xs text-muted">{algorithm.note}</p>}
-      <div className="mt-3 flex gap-2">
+      {pseudocode && (
+        <p className="mt-2 text-xs text-warn">
+          Είναι σε ΓΛΩΣΣΑ, όχι σε ψευδογλώσσα, οπότε στον Αλγόριθμο δεν τρέχει. Το Άνοιγμα σε
+          πηγαίνει στο Πρόγραμμα· ο κώδικας που έχεις εδώ μένει.
+        </p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
         <button
           type="button"
           onClick={onOpen}
-          disabled={openDisabled}
+          disabled={openDisabled || opening}
           className="btn-primary rounded-md bg-accent px-2.5 py-1 font-semibold text-on-accent hover:brightness-110 disabled:opacity-50"
         >
-          Άνοιγμα στον editor
+          {opening ? "Άνοιγμα…" : pseudocode ? "Άνοιγμα στο Πρόγραμμα" : "Άνοιγμα στον editor"}
         </button>
         <button
           type="button"
@@ -157,6 +235,11 @@ function AlgorithmView({
               : "Αντιγραφή"}
         </button>
       </div>
+      {hint && (
+        <p role="status" className="mt-2 text-xs text-warn">
+          {hint}
+        </p>
+      )}
     </>
   );
 }
@@ -184,12 +267,21 @@ function highlighted(code: string): ReactNode[] {
   return out;
 }
 
-function Back({ onClick, children }: { onClick: () => void; children: ReactNode }) {
+function Back({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="mb-2 flex items-center gap-1 text-xs text-muted hover:text-text"
+      disabled={disabled}
+      className="mb-2 flex items-center gap-1 text-xs text-muted hover:text-text disabled:opacity-50"
     >
       <span aria-hidden>‹</span>
       {children}

@@ -13,6 +13,7 @@ export function AboutMenu() {
   return (
     <>
       <NavPopover
+        tipRight
         label="Πνευματικά δικαιώματα"
         title="Σχετικά με το AEPP Max"
         icon={<Image src="/logo-cloud.png" alt="" width={26} height={26} priority />}

@@ -2,6 +2,26 @@
 
 import { type ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 
+/**
+ * Where a navbar panel goes. From lg, under its button. Below that, under the whole bar,
+ * however many rows it took (the header is `relative`, the button's wrapper isn't), and
+ * across it: a panel under a button in the middle would run off a tablet's screen.
+ */
+export const PANEL_PLACE =
+  "absolute inset-x-3 top-full z-50 mx-auto mt-1 max-h-[calc(100dvh-9rem)] max-w-xl overflow-auto lg:inset-x-auto lg:mx-0 lg:mt-2 lg:max-h-[calc(100dvh-4.5rem)] lg:max-w-none";
+
+/** A rounded navbar button with its label (AlgorithmsMenu, ExtensionsMenu). */
+export function pillClass(open: boolean): string {
+  return `flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-text transition-colors disabled:pointer-events-none disabled:opacity-40 ${
+    open
+      ? "border-accent bg-accent/10"
+      : "border-border bg-panel-2 hover:border-accent/60 hover:bg-accent/5"
+  }`;
+}
+
+/** The label of a rounded button: only an icon until the bar has room for words. */
+export const PILL_LABEL = "hidden min-[1060px]:inline";
+
 type Props = {
   /** Accessible name of the button and the panel. */
   label: string;
@@ -10,16 +30,14 @@ type Props = {
   icon: ReactNode;
   /** Which edge of the button the panel lines up with, on wider screens. */
   align?: "left" | "right";
+  /** Lines the hover description up with the button's right edge: a long one, late in a narrow bar. */
+  tipRight?: boolean;
   /** A wider panel on wider screens, for longer text. */
   wide?: boolean;
-  /** A rounded button like Επεκτάσεις, with the label beside the icon where the bar has room (lg). */
+  /** A rounded button like Επεκτάσεις, with the label beside the icon where the bar has room. */
   pill?: boolean;
   /** Also closes an open panel, so its buttons can't act while the trigger couldn't. */
   disabled?: boolean;
-  /** Keeps the panel open (no outside click, Escape or trigger click), e.g. while it waits for a request. */
-  locked?: boolean;
-  /** Called whenever the panel closes, e.g. to reset what it showed. */
-  onClose?: () => void;
   /** The panel; a function gets `close`, for panels whose buttons finish the job. */
   children: ReactNode | ((close: () => void) => ReactNode);
 };
@@ -30,21 +48,14 @@ export function NavPopover({
   title,
   icon,
   align = "left",
+  tipRight,
   wide,
   pill,
   disabled,
-  locked,
-  onClose,
   children,
 }: Props) {
   const [open, setOpen] = useState(false);
   const close = useCallback(() => setOpen(false), []);
-  // onClose on every way of closing, including `disabled` below.
-  const wasOpen = useRef(false);
-  useEffect(() => {
-    if (wasOpen.current && !open) onClose?.();
-    wasOpen.current = open;
-  }, [open, onClose]);
   // Close when it becomes disabled (state adjusted during render, not in an effect).
   const [wasDisabled, setWasDisabled] = useState(disabled);
   if (disabled !== wasDisabled) {
@@ -55,7 +66,7 @@ export function NavPopover({
   const panelId = useId();
 
   useEffect(() => {
-    if (!open || locked) return;
+    if (!open) return;
     const onPointer = (e: PointerEvent) => {
       if (!root.current?.contains(e.target as Node)) close();
     };
@@ -66,14 +77,13 @@ export function NavPopover({
       document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
     };
-  }, [open, locked, close]);
+  }, [open, close]);
 
   return (
-    <div ref={root} className="relative">
+    <div ref={root} className="lg:relative">
       <button
         type="button"
         onClick={() => {
-          if (locked) return;
           if (open) close();
           else setOpen(true);
         }}
@@ -82,26 +92,22 @@ export function NavPopover({
         aria-controls={panelId}
         aria-label={label}
         data-tip={title ?? label}
-        data-tip-align={align === "right" ? "right" : undefined}
+        data-tip-align={align === "right" || tipRight ? "right" : undefined}
         className={
           pill
-            ? `flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-text transition-colors ${
-                open
-                  ? "border-accent bg-accent/10"
-                  : "border-border bg-panel-2 hover:border-accent/60 hover:bg-accent/5"
-              }`
+            ? pillClass(open)
             : `flex h-8 w-8 items-center justify-center rounded-md hover:bg-panel-2 hover:text-text disabled:pointer-events-none disabled:opacity-40 ${open ? "bg-panel-2 text-text" : "text-muted"}`
         }
       >
         {icon}
-        {pill && <span className="hidden lg:inline">{label}</span>}
+        {pill && <span className={PILL_LABEL}>{label}</span>}
       </button>
       {open && (
         <div
           id={panelId}
           role="dialog"
           aria-label={label}
-          className={`fixed inset-x-3 top-14 z-50 max-h-[calc(100dvh-4.5rem)] overflow-auto rounded-lg border border-border bg-panel p-4 text-sm shadow-2xl sm:absolute sm:inset-x-auto ${align === "left" ? "sm:left-0" : "sm:right-0"} sm:top-full sm:mt-2 ${wide ? "sm:w-[26rem]" : "sm:w-80"}`}
+          className={`${PANEL_PLACE} rounded-lg border border-border bg-panel p-4 text-sm shadow-2xl ${align === "left" ? "lg:left-0" : "lg:right-0"} ${wide ? "lg:w-[26rem]" : "lg:w-80"}`}
         >
           {typeof children === "function" ? children(close) : children}
         </div>

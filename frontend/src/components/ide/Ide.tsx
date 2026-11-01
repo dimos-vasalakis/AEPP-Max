@@ -9,7 +9,7 @@ import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { getProgram, type Program, programError, updateProgram } from "@/lib/api/programs";
 import { type Algorithm, algorithmProgram } from "@/lib/glossa/algorithms";
-import { screenAt, stepSummary } from "@/lib/glossa/trace";
+import { partStart, screenAt, stepSummary } from "@/lib/glossa/trace";
 import type { TraceMark } from "@/lib/glossa/traceLine";
 import type { Language, RunResult } from "@/lib/glossa/types";
 import { stashForSignIn, takePendingSave } from "@/lib/pendingSave";
@@ -41,6 +41,8 @@ const SLOW_MS = 500;
 function stepAfter(at: number, result: RunResult): number | null {
   return at >= (result.trace?.length ?? 0) - 1 ? null : at + 1;
 }
+
+const CODE_BUSY = "Περίμενε να τελειώσει η εκτέλεση ή ο Agent και δοκίμασε ξανά.";
 
 const UNSAVED_HERE = "Ο κώδικας που γράφεις τώρα δεν έχει αποθηκευτεί και θα χαθεί.";
 
@@ -151,12 +153,12 @@ export function Ide() {
 
   /** Shows `next`'s editor, with `code` in it if given. */
   function showLanguage(next: Language, code = codes[next]) {
+    // By the ref: this can run from an older render, after waiting for a save.
+    const switching = next !== languageRef.current;
     languageRef.current = next;
     codeRef.current = code;
-    if (next !== language) {
-      setLanguage(next);
-      resetRun(); // the output was the other code's
-    }
+    setLanguage(next);
+    if (switching) resetRun(); // the output was the other code's
   }
 
   function switchLanguage() {
@@ -182,8 +184,8 @@ export function Ide() {
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
-    const from =
-      inputs.length > 0 && run.kind === "done" ? Math.max(0, (run.result.trace?.length ?? 0) - 1) : 0;
+    const resumed =
+      inputs.length > 0 && run.kind === "done" ? Math.max(0, (run.result.trace?.length ?? 0) - 1) : null;
     if (inputs.length === 0) {
       setPlay(null);
       setRun({ kind: "running", traced, pace });
@@ -201,8 +203,11 @@ export function Ide() {
       });
       if (seq !== runSeq.current) return;
       setRun({ kind: "done", inputs, marks, result, code, traced, pace });
-      const steps = result.trace?.length ?? 0;
-      setPlay(pace && steps > 0 ? Math.min(from, steps - 1) : null);
+      const trace = result.trace ?? [];
+      // Played or tabled from the algorithm's own code, past a frame's sample values.
+      const start = partStart(code, trace);
+      if (inputs.length === 0 && traced) setTraceStep(start);
+      setPlay(pace && trace.length > 0 ? Math.min(resumed ?? start, trace.length - 1) : null);
     } catch (err) {
       if (seq !== runSeq.current) return;
       setRun({
@@ -357,27 +362,36 @@ export function Ide() {
 
   /**
    * `lang`'s code is about to be replaced by `name`: `go` at once if nothing would be
-   * lost, otherwise `question` with what would be.
+   * lost, otherwise `question` with what would be. Resolves to why it can't happen now
+   * (a run or the agent's edit on its way), or null. The page stays usable while it waits
+   * for a save, so it looks again after that, at the latest state; `cancelled` says the
+   * student gave up waiting.
    */
   async function replaceCode(
     lang: Language,
     name: string,
     question: (message: string) => void,
     go: () => void,
-  ) {
+    cancelled: () => boolean = () => false,
+  ): Promise<string | null> {
+    if (latest.current.codeLocked) return CODE_BUSY;
     const target = files.fileOf(lang);
     if (target) {
       const before = latest.current.codes[lang];
       const unsaved = await files.unsaved(lang);
-      // Typed into (or another program opened in) that editor meanwhile, or a run or
-      // the agent's edit began: leave it be.
-      if (latest.current.codes[lang] !== before || latest.current.codeLocked) return;
-      if (unsaved) question(lostChanges(target.title));
+      if (cancelled()) return null;
+      if (latest.current.codeLocked) return CODE_BUSY;
+      // Typed into that editor meanwhile: that typing isn't saved either.
+      if (unsaved || latest.current.codes[lang] !== before) question(lostChanges(target.title));
       else go();
-    } else if (codes[lang].trim()) {
+    } else if (latest.current.codes[lang].trim()) {
       // The editor it opens in: this one, or the other side of the switch.
       const where =
-        lang === language ? "" : lang === "pseudocode" ? " στον Αλγόριθμο" : " στο Πρόγραμμα";
+        lang === languageRef.current
+          ? ""
+          : lang === "pseudocode"
+            ? " στον Αλγόριθμο"
+            : " στο Πρόγραμμα";
       question(
         where
           ? `Ο κώδικας${where} δεν έχει αποθηκευτεί και θα χαθεί αν ανοίξεις το «${name}».`
@@ -386,6 +400,7 @@ export function Ide() {
     } else {
       go();
     }
+    return null;
   }
 
   async function openProgram(id: string): Promise<string | null> {
@@ -399,23 +414,23 @@ export function Ide() {
     if (files.fileOf(lang)?.id === program.id) {
       // Already open: the editor may hold newer code than the server.
       showLanguage(lang);
-    } else {
-      await replaceCode(
-        lang,
-        program.title,
-        (message) => setAsk({ kind: "open", program, message }),
-        () => load(program),
-      );
+      return null;
     }
-    return null;
+    return replaceCode(
+      lang,
+      program.title,
+      (message) => setAsk({ kind: "open", program, message }),
+      () => load(program),
+    );
   }
 
-  function openAlgorithm(algorithm: Algorithm) {
-    void replaceCode(
+  function openAlgorithm(algorithm: Algorithm, cancelled: () => boolean): Promise<string | null> {
+    return replaceCode(
       "glossa",
       algorithm.title,
       (message) => setAsk({ kind: "algorithm", algorithm, message }),
       () => loadAlgorithm(algorithm),
+      cancelled,
     );
   }
 
@@ -492,7 +507,11 @@ export function Ide() {
 
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
-      <Navbar tools={<AlgorithmsMenu onOpen={openAlgorithm} openDisabled={codeLocked} />}>
+      <Navbar
+        tools={
+          <AlgorithmsMenu onOpen={openAlgorithm} openDisabled={codeLocked} language={language} />
+        }
+      >
         {/* Not while a run or the agent's edit is on its way: each belongs to the code it was sent. */}
         <LanguageSwitch
           language={language}

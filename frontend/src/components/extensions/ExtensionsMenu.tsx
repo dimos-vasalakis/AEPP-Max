@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/Confirm";
+import { PANEL_PLACE, PILL_LABEL, pillClass } from "@/components/NavPopover";
 import { type CustomTheme, newCustomId, parseThemeCode, themeCode } from "@/lib/customTheme";
 import { DIAMOND, usePlan } from "@/lib/plan";
 import { type ThemeId, THEMES } from "@/lib/theme";
@@ -43,7 +44,7 @@ export function ExtensionsMenu() {
   }, [open, deleting]);
 
   return (
-    <div ref={root} className="relative">
+    <div ref={root} className="lg:relative">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -52,14 +53,10 @@ export function ExtensionsMenu() {
         aria-label="Επεκτάσεις"
         data-tip="Θέματα εμφάνισης"
         data-tip-align="right"
-        className={`group flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium transition-colors ${
-          open
-            ? "border-accent bg-accent/10 text-text"
-            : "border-border bg-panel-2 text-text hover:border-accent/60 hover:bg-accent/5"
-        }`}
+        className={`group ${pillClass(open)}`}
       >
         <ExtensionsIcon />
-        <span className="hidden sm:inline">Επεκτάσεις</span>
+        <span className={PILL_LABEL}>Επεκτάσεις</span>
       </button>
 
       {open && (
@@ -67,7 +64,7 @@ export function ExtensionsMenu() {
           id={panelId}
           role="dialog"
           aria-label="Επεκτάσεις"
-          className="fixed inset-x-3 top-14 z-50 max-h-[calc(100dvh-4.5rem)] overflow-auto rounded-lg border border-border bg-panel p-3 shadow-2xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-[26rem]"
+          className={`${PANEL_PLACE} rounded-lg border border-border bg-panel p-3 shadow-2xl lg:right-0 lg:w-[26rem]`}
         >
           {editing ? (
             <ThemeEditor

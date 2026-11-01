@@ -6,6 +6,7 @@ import {
   conditionText,
   scopeGroups,
   sourceLine,
+  tableWindow,
   traceColumns,
   valuesAfter,
 } from "@/lib/glossa/trace";
@@ -28,7 +29,7 @@ const PLAY_MS = 700;
 /**
  * The πίνακας τιμών, step by step: one row per executed line, one column per
  * variable. Rows appear as the student steps, so they can predict each one
- * first; «Όλος ο πίνακας» shows the rest. By default a cell shows a value only
+ * first; «Τέλος» goes to the last one. By default a cell shows a value only
  * where it changed, as the table is written on paper; «Όλες οι τιμές» fills in
  * the value each variable holds at every step.
  */
@@ -36,9 +37,14 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
   const trace = useMemo(() => run.result.trace ?? [], [run.result.trace]);
   const columns = useMemo(() => traceColumns(trace), [trace]);
   const [allValues, setAllValues] = useState(false);
+  // What it draws: a big table only in part, or it would freeze the tab.
+  const { first, columns: shown, capped } = useMemo(
+    () => tableWindow(trace, columns, step),
+    [trace, columns, step],
+  );
   const values = useMemo(
-    () => (allValues ? valuesAfter(trace, columns) : null),
-    [allValues, trace, columns],
+    () => (allValues ? valuesAfter(trace, shown, first, step) : null),
+    [allValues, trace, shown, first, step],
   );
   const [play, setPlay] = useState(false);
   const last = trace.length - 1;
@@ -47,7 +53,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
   const current = useRef<HTMLTableRowElement>(null);
   const body = useRef<HTMLDivElement>(null);
 
-  const groups = scopeGroups(columns);
+  const groups = scopeGroups(shown);
   const scopes = new Set(trace.map((s) => s.scope));
   const showScopes = scopes.size > 1;
   const hasCondition = trace.some((s) => s.condition !== null);
@@ -120,7 +126,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
   }
 
   const row = trace[Math.min(step, last)];
-  const visible = trace.slice(0, step + 1);
+  const visible = trace.slice(first, step + 1);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" onKeyDown={onKey}>
@@ -152,7 +158,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
           <StepButton label="Επόμενο βήμα (→)" onClick={() => go(step + 1)} disabled={atEnd}>
             <path d="M9 5l7 7-7 7" />
           </StepButton>
-          <StepButton label="Όλος ο πίνακας (End)" onClick={() => go(last)} disabled={atEnd}>
+          <StepButton label="Τέλος (End)" onClick={() => go(last)} disabled={atEnd}>
             <path d="M18 5v14M6 5l9 7-9 7z" />
           </StepButton>
         </div>
@@ -174,6 +180,14 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
       {stale && (
         <p className="shrink-0 border-b border-border bg-warn/10 px-3 py-1 text-xs text-warn">
           Ο κώδικας άλλαξε από αυτή την εκτέλεση. Πάτα ξανά «Πίνακας τιμών» για να ενημερωθεί.
+        </p>
+      )}
+
+      {shown.length < columns.length && (
+        <p className="shrink-0 border-b border-border px-3 py-1 text-xs text-muted">
+          Ο πίνακας έχει {columns.length} στήλες, οπότε από τους πίνακες δείχνει μόνο τα κελιά που
+          άλλαξαν στα τελευταία βήματα. Τα υπόλοιπα είναι στις Μεταβλητές (έως 500 ανά πίνακα).
+          {capped && " Σε αυτό το βήμα άλλαξαν πάνω από 2.000 κελιά: φαίνονται τα πρώτα."}
         </p>
       )}
 
@@ -208,10 +222,10 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
                 Γρ.
               </th>
               <th className="trace-th">Εντολή</th>
-              {columns.map((c, i) => (
+              {shown.map((c, i) => (
                 <th
                   key={c.key}
-                  className={`trace-th text-center font-mono text-text ${i === 0 || columns[i - 1].scope !== c.scope ? "border-l" : ""}`}
+                  className={`trace-th text-center font-mono text-text ${i === 0 || shown[i - 1].scope !== c.scope ? "border-l" : ""}`}
                 >
                   {c.name}
                 </th>
@@ -221,7 +235,22 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
             </tr>
           </thead>
           <tbody className="font-[family-name:var(--editor-font)]">
-            {visible.map((s, i) => {
+            {first > 0 && (
+              <tr>
+                <td colSpan={3 + shown.length + extra} className="trace-td text-xs text-muted">
+                  {/* Stays in view and wraps, however wide the table is. */}
+                  <div className="sticky left-2 w-[min(80vw,32rem)] whitespace-normal">
+                    ⋯{" "}
+                    {first === 1
+                      ? "το 1 προηγούμενο βήμα δεν φαίνεται"
+                      : `τα ${first} προηγούμενα βήματα δεν φαίνονται`}
+                    , για να μένει γρήγορος ο πίνακας. Γυρίζεις πίσω με το ← ή την Αρχή.
+                  </div>
+                </td>
+              </tr>
+            )}
+            {visible.map((s, shownRow) => {
+              const i = first + shownRow;
               const isCurrent = i === step;
               const inCall = showScopes && s.scope !== trace[0].scope;
               return (
@@ -241,13 +270,13 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
                     {inCall && <span className="mr-1 text-xs text-purple">{s.scope} ›</span>}
                     {sourceLine(run.code, s.line)}
                   </td>
-                  {columns.map((c, j) => {
+                  {shown.map((c, j) => {
                     const changed = changeAt(s, c);
-                    const shown = changed ?? values?.[i][j];
+                    const value = changed ?? values?.[shownRow][j];
                     return (
                       <td
                         key={c.key}
-                        className={`trace-td text-center tabular-nums ${j === 0 || columns[j - 1].scope !== c.scope ? "border-l" : ""} ${
+                        className={`trace-td text-center tabular-nums ${j === 0 || shown[j - 1].scope !== c.scope ? "border-l" : ""} ${
                           changed === undefined
                             ? "text-muted/60"
                             : isCurrent
@@ -255,7 +284,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
                               : "font-semibold text-text"
                         }`}
                       >
-                        {shown}
+                        {value}
                       </td>
                     );
                   })}
@@ -283,7 +312,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
               ⋯ ακόμα {last - step} {last - step === 1 ? "βήμα" : "βήματα"}: πρόβλεψε το επόμενο και
               πάτα <span className="text-accent">→</span>, ή{" "}
               <button type="button" onClick={() => go(last)} className="underline hover:text-text">
-                δες όλο τον πίνακα
+                πήγαινε στο τέλος
               </button>
               .
             </p>

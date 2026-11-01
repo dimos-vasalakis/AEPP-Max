@@ -312,6 +312,12 @@ export function RunEnd({
           ατέρμονος βρόχος;
         </p>
       )}
+      {run.pace && result.trace_truncated && (
+        <p className="mt-2 text-xs text-warn">
+          Δείχτηκαν τα πρώτα {result.trace?.length} βήματα· το πρόγραμμα συνέχισε χωρίς να φαίνεται,
+          μέχρι το βήμα {result.steps}.
+        </p>
+      )}
       {result.status === "ok" && <p className="mt-2 text-xs text-muted">— Τέλος προγράμματος —</p>}
     </>
   );

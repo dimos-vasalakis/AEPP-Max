@@ -50,18 +50,97 @@ export function changeAt(step: TraceStep, column: TraceColumn): string | undefin
 }
 
 /**
- * Every column's value after each step, carried forward from the step that set
- * it (undefined until the first one), for «Όλες οι τιμές» and the current values.
+ * Every column's value after each step from `first` to `end`, carried forward from the
+ * step that set it (undefined until the first one), for «Όλες οι τιμές». It keeps only
+ * those rows: a whole table can be 5,000 steps of 1,000 columns.
  */
-export function valuesAfter(trace: TraceStep[], columns: TraceColumn[]): (string | undefined)[][] {
-  const current: (string | undefined)[] = columns.map(() => undefined);
-  return trace.map((step) => {
-    columns.forEach((column, i) => {
-      const value = changeAt(step, column);
-      if (value !== undefined) current[i] = value;
-    });
-    return [...current];
-  });
+export function valuesAfter(
+  trace: TraceStep[],
+  columns: TraceColumn[],
+  first = 0,
+  end = trace.length - 1,
+): (string | undefined)[][] {
+  const current = new Map<string, string>();
+  const rows: (string | undefined)[][] = [];
+  for (let i = 0; i <= end && i < trace.length; i++) {
+    const step = trace[i];
+    for (const [name, value] of Object.entries(step.changes)) {
+      current.set(columnKey(step.scope, name), value);
+    }
+    if (i >= first) rows.push(columns.map((column) => current.get(column.key)));
+  }
+  return rows;
+}
+
+// What the table draws at most: every cell is a DOM node, and each step redraws them.
+const MAX_CELLS = 20_000;
+const MAX_COLUMNS = 60;
+const WIDE_ROWS = 60;
+/** One step can change thousands of cells: a procedure writing back a whole array. */
+const MAX_CHANGED_CELLS = 2_000;
+/** A row's cells besides the variables: #, Γρ., Εντολή, Συνθήκη, Οθόνη. */
+const ROW_CELLS = 5;
+
+/** The part of the table to draw at `step`. */
+export type TableWindow = {
+  /** The first row drawn; the rows before it are left out. */
+  first: number;
+  columns: TraceColumn[];
+  /** The current step changed more array cells than the table draws: it shows the first ones. */
+  capped: boolean;
+};
+
+/**
+ * Which rows and columns the table draws at `step`, so a big one can't freeze the tab: the
+ * latest rows that fit in MAX_CELLS. Past MAX_COLUMNS (big arrays) at most WIDE_ROWS rows, and
+ * of the arrays only the elements that changed in them; the current row is always drawn.
+ */
+export function tableWindow(trace: TraceStep[], columns: TraceColumn[], step: number): TableWindow {
+  if (columns.length <= MAX_COLUMNS) {
+    const rows = Math.floor(MAX_CELLS / (columns.length + ROW_CELLS));
+    return { first: Math.max(0, step + 1 - rows), columns, capped: false };
+  }
+  const plain = columns.filter((c) => arrayOf(c.name) === null).length;
+  const changed = new Set<string>();
+  let first = step;
+  let capped = false;
+  for (let i = step; i >= 0 && step - i < WIDE_ROWS; i--) {
+    const s = trace[i];
+    if (!s) continue;
+    const fresh = Object.keys(s.changes)
+      .filter((name) => arrayOf(name) !== null)
+      .map((name) => columnKey(s.scope, name))
+      .filter((key) => !changed.has(key));
+    // An older row that doesn't fit whole stays out: drawn without its cells, it would seem to
+    // have changed nothing. Only the current row, which is always drawn, can be cut.
+    if (i < step && changed.size + fresh.length > MAX_CHANGED_CELLS) break;
+    const rows = step - i + 1;
+    const cells = rows * (plain + changed.size + fresh.length + ROW_CELLS);
+    if (i < step && cells > MAX_CELLS) break;
+    if (i === step) capped = fresh.length > MAX_CHANGED_CELLS;
+    for (const key of fresh.slice(0, MAX_CHANGED_CELLS)) changed.add(key);
+    first = i;
+  }
+  return {
+    first,
+    columns: columns.filter((c) => arrayOf(c.name) === null || changed.has(c.key)),
+    capped,
+  };
+}
+
+/** Marks where a framed algorithm's own code starts (algorithms.json): what comes before only prepares it. */
+export const PART_MARKER = "! Το τμήμα προγράμματος:";
+
+/**
+ * The step a run should open on: 0, or for a framed algorithm the first step of its own
+ * code, so a student doesn't sit through thousands of steps of sample values first. If the
+ * run stopped before it (a ΔΙΑΒΑΣΕ in the frame), the last step, where it waits.
+ */
+export function partStart(code: string, trace: TraceStep[]): number {
+  const marker = code.split("\n").findIndex((line) => line.trim() === PART_MARKER);
+  if (marker === -1) return 0;
+  const at = trace.findIndex((step) => step.line > marker + 1);
+  return at === -1 ? Math.max(0, trace.length - 1) : at;
 }
 
 /** The program units the columns belong to, in order, with how many columns each spans. */
