@@ -80,6 +80,15 @@ class Frame:
 
 
 @dataclass
+class AutoInput:
+    """A value Αυτόματες τιμές gave a ΔΙΑΒΑΣΕ."""
+
+    value: str
+    output: int  # how many output lines existed when it was read
+    step: int  # traced runs: the trace step of its ΔΙΑΒΑΣΕ (a played run shows it from there)
+
+
+@dataclass
 class RunResult:
     status: RunStatus
     output: list[str] = field(default_factory=list)
@@ -93,3 +102,5 @@ class RunResult:
     # Traced runs only: each unit that ran, with its declared variables (no values), so
     # Μεταβλητές can list them all at any step.
     units: list[Frame] = field(default_factory=list)
+    # autofill=True: the values it gave, in order, after the `inputs` it was given.
+    auto_inputs: list[AutoInput] = field(default_factory=list)

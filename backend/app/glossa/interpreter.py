@@ -15,10 +15,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 
 from app.glossa import nodes as n
+from app.glossa.autofill import MAX_AUTO_INPUTS, Autofill
 from app.glossa.builtins import BUILTINS
 from app.glossa.errors import GlossaError
 from app.glossa.lexer import normalize
-from app.glossa.result import Frame, RunLimits, RunResult, TraceStep, Variable
+from app.glossa.result import AutoInput, Frame, RunLimits, RunResult, TraceStep, Variable
 
 Value = int | float | str | bool
 
@@ -182,12 +183,14 @@ def unit_title(unit: n.Unit) -> str:
     return f"{word} {unit.name}"
 
 
-def execute(program: n.Program, inputs: list[str], *, limits: RunLimits, trace: bool) -> RunResult:
+def execute(
+    program: n.Program, inputs: list[str], *, limits: RunLimits, trace: bool, autofill: bool = False
+) -> RunResult:
     """Run a parsed program.
 
     - ΔΙΑΒΑΣΕ consumes `inputs` in order and converts each to the variable's
       type; once they run out, stop with status "needs_input" and the output
-      so far.
+      so far. With autofill=True, first make up to MAX_AUTO_INPUTS more values.
     - Count steps and check the clock every few hundred steps; past
       limits.max_steps or limits.timeout_seconds stop with status "limit" (this
       runs in a worker thread that can't be killed, so the loop must stop itself).
@@ -198,7 +201,9 @@ def execute(program: n.Program, inputs: list[str], *, limits: RunLimits, trace: 
     - Runtime errors (uninitialized variable, division by zero, index out of
       bounds, type mismatch, ...) end the run with status "error".
     """
-    return run_machine(_Machine(program, inputs, limits, trace))
+    return run_machine(
+        _Machine(program, inputs, limits, trace, Autofill(program) if autofill else None)
+    )
 
 
 # Each ΓΛΩΣΣΑ call is a dozen Python frames; the depth itself is capped by MAX_CALL_DEPTH.
@@ -236,15 +241,25 @@ def run_machine(machine: "_Machine") -> RunResult:
         input_line=input_line,
         frames=machine.snapshot(),
         units=list(machine.declared.values()),
+        auto_inputs=machine.auto_inputs,
     )
 
 
 class _Machine:
-    def __init__(self, program: n.Program, inputs: list[str], limits: RunLimits, trace: bool):
+    def __init__(
+        self,
+        program: n.Program,
+        inputs: list[str],
+        limits: RunLimits,
+        trace: bool,
+        autofill: Autofill | None = None,
+    ):
         self.program = program
         self.subprograms = {sub.key: sub for sub in program.subprograms}
         self.inputs = inputs
         self.next_input = 0
+        self.autofill = autofill
+        self.auto_inputs: list[AutoInput] = []
         self.limits = limits
         self.deadline = time.monotonic() + limits.timeout_seconds
         self.steps = 0
@@ -744,17 +759,23 @@ class _Machine:
                 return self.compare(op, value, self.eval(expr, frame), condition)
         raise AssertionError(condition)
 
-    def next_text(self, target: n.Target) -> str:
-        """The next input, as typed; out of inputs, the run stops to ask for one."""
-        if self.next_input >= len(self.inputs):
+    def next_text(self, target: n.Target, type_name: str | None = None) -> str:
+        """The next input, as typed; out of inputs, one made up with autofill on, else
+        the run stops to ask for one."""
+        if self.next_input < len(self.inputs):
+            text = self.inputs[self.next_input]
+            self.next_input += 1
+            return text
+        if self.autofill is None or len(self.auto_inputs) >= MAX_AUTO_INPUTS:
             raise _NeedsInput(target.line)
-        text = self.inputs[self.next_input]
-        self.next_input += 1
+        text = self.autofill.value(target.key, type_name)
+        step = max(0, len(self.trace) - 1) if self.trace else 0
+        self.auto_inputs.append(AutoInput(value=text, output=len(self.output), step=step))
         return text
 
     def read(self, target: n.Target, frame: _Frame) -> Value:
-        text = self.next_text(target)
         type_name = self.target_type(target, frame)
+        text = self.next_text(target, type_name)
         plain = text.strip()
         if type_name == "ΑΚΕΡΑΙΑ":
             if INTEGER_INPUT.fullmatch(plain):

@@ -70,6 +70,9 @@ export function Ide() {
   // screen, null once it's done (or for any other run). Stopped (■), it stays there.
   // Βηματική εκτέλεση plays the same way, one step per Επόμενο.
   const [slowMode, setSlowMode] = useState(false);
+  // Αυτόματες τιμές (the dice): a new run gets its ΔΙΑΒΑΣΕ values from the interpreter
+  // (backend's autofill.py), up to its cap; past that it asks, as it does with this off.
+  const [autoFill, setAutoFill] = useState(false);
   const [play, setPlay] = useState<number | null>(null);
   const playing = play !== null && run.kind === "done" && !run.stopped;
   // A ΔΙΑΒΑΣΕ re-run keeps the last result on screen (`pending`); either way it's busy,
@@ -198,11 +201,34 @@ export function Ide() {
     try {
       const result = await apiFetch<RunResult>("/run", {
         method: "POST",
-        body: JSON.stringify({ code, inputs, language: languageRef.current, trace: traced || pace !== undefined }),
+        body: JSON.stringify({
+          code,
+          inputs,
+          language: languageRef.current,
+          trace: traced || pace !== undefined,
+          autofill: autoFill && inputs.length === 0,
+        }),
         signal: controller.signal,
       });
       if (seq !== runSeq.current) return;
-      setRun({ kind: "done", inputs, marks, result, code, traced, pace });
+      // ?? []: a backend not yet redeployed doesn't send it.
+      const filled = result.auto_inputs ?? [];
+      setRun({
+        kind: "done",
+        inputs: [...inputs, ...filled.map((auto) => auto.value)],
+        marks: [...marks, ...filled.map((auto) => auto.output)],
+        // A re-run with a typed value resends the autofilled ones as inputs.
+        autoSteps:
+          inputs.length === 0
+            ? filled.map((auto) => auto.step)
+            : run.kind === "done"
+              ? run.autoSteps
+              : undefined,
+        result,
+        code,
+        traced,
+        pace,
+      });
       const trace = result.trace ?? [];
       // Played or tabled from the algorithm's own code, past a frame's sample values.
       const start = partStart(code, trace);
@@ -313,10 +339,17 @@ export function Ide() {
     const waiting = run.result.status === "needs_input" && !run.stopped;
     return waiting && run.result.input_line ? { line: run.result.input_line, note: "" } : null;
   }, [run, stale, outputTab, step, play]);
-  // A played run shows the screen as it was at its step.
+  // A played run shows the screen as it was at its step, without the autofilled values
+  // it hasn't read yet.
   const shownRun = useMemo((): RunState => {
     if (play === null || run.kind !== "done" || !run.result.trace) return run;
-    return { ...run, result: { ...run.result, output: screenAt(run.result.output, run.result.trace, play) } };
+    const read = run.inputs.length - (run.autoSteps ?? []).filter((at) => at > play).length;
+    return {
+      ...run,
+      inputs: run.inputs.slice(0, read),
+      marks: run.marks.slice(0, read),
+      result: { ...run.result, output: screenAt(run.result.output, run.result.trace, play) },
+    };
   }, [run, play]);
   // Μεταβλητές follows the table's step while the table shows.
   const tracing = run.kind === "done" && run.traced && outputTab === "trace";
@@ -660,6 +693,23 @@ export function Ide() {
             <StepIcon />
           </button>
         )}
+        {/* An on/off switch, not a run: with it on, new runs fill in their ΔΙΑΒΑΣΕ values. */}
+        <button
+          type="button"
+          onClick={() => setAutoFill((on) => !on)}
+          aria-pressed={autoFill}
+          aria-label="Αυτόματες τιμές"
+          data-tip={
+            autoFill
+              ? "Αυτόματες τιμές: ενεργές. Η εκτέλεση δίνει μόνη της τιμές στις ΔΙΑΒΑΣΕ"
+              : "Αυτόματες τιμές: ανενεργές"
+          }
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md hover:bg-panel-2 ${
+            autoFill ? "bg-panel-2 ring-1 ring-accent/70" : "opacity-55 hover:opacity-100"
+          }`}
+        >
+          <AutoFillIcon />
+        </button>
         {/* An on/off switch, not a run: with it on, ▶ runs slowly (SLOW_MS). */}
         <button
           type="button"
@@ -920,6 +970,22 @@ function StepIcon({ plain = false }: { plain?: boolean }) {
           strokeLinecap: "round",
         }}
       />
+    </svg>
+  );
+}
+
+/** A die: Αυτόματες τιμές. */
+function AutoFillIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3.5" />
+      <g stroke="none" style={{ fill: "var(--accent)" }}>
+        <circle cx="8.5" cy="8.5" r="1.6" />
+        <circle cx="15.5" cy="8.5" r="1.6" />
+        <circle cx="12" cy="12" r="1.6" />
+        <circle cx="8.5" cy="15.5" r="1.6" />
+        <circle cx="15.5" cy="15.5" r="1.6" />
+      </g>
     </svg>
   );
 }

@@ -16,6 +16,7 @@ class RunRequest(BaseModel):
     )
     trace: bool = False
     language: Language = "glossa"  # "pseudocode": the editor is on Αλγόριθμος
+    autofill: bool = False  # Αυτόματες τιμές: ΔΙΑΒΑΣΕ gets made-up values past `inputs`
 
 
 class CheckRequest(BaseModel):

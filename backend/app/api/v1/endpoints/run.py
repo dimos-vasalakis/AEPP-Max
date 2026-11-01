@@ -15,7 +15,12 @@ def timed_run(body: RunRequest, limits: glossa.RunLimits) -> tuple[glossa.RunRes
     """The run and its milliseconds, timed in the worker: not the wait for a thread."""
     started = time.monotonic()
     result = glossa.run(
-        body.code, body.inputs, language=body.language, limits=limits, trace=body.trace
+        body.code,
+        body.inputs,
+        language=body.language,
+        limits=limits,
+        trace=body.trace,
+        autofill=body.autofill,
     )
     return result, (time.monotonic() - started) * 1000
 

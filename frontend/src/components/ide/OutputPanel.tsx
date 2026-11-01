@@ -20,6 +20,8 @@ export type Pace = "slow" | "step";
  * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way. `stopped`: the
  * student stopped it (■) while it waited for a value or re-ran; `kind: "stopped"`
  * when it was stopped before anything came back.
+ * `autoSteps`: Αυτόματες τιμές gave the first of `inputs`, one per entry, each read at
+ * that trace step; values typed after them follow.
  */
 export type RunState =
   | { kind: "idle" }
@@ -28,6 +30,7 @@ export type RunState =
       kind: "done";
       inputs: string[];
       marks: number[];
+      autoSteps?: number[];
       result: RunResult;
       code: string;
       traced: boolean;
@@ -287,10 +290,23 @@ export function RunEnd({
   playing?: boolean;
 }) {
   const { inputs, result } = run;
+  const autoCount = run.autoSteps?.length ?? 0;
   if (run.stopped) return <p className="mt-2 text-xs text-warn">— Η εκτέλεση διακόπηκε —</p>;
   if (playing) return null;
   return (
     <>
+      {autoCount > 0 &&
+        (result.status === "needs_input" ? (
+          <p className="mt-2 text-xs text-warn">
+            Δόθηκαν αυτόματα {autoCount} τιμές και το πρόγραμμα ζητά κι άλλες. Μήπως περιμένει μια
+            συγκεκριμένη τιμή για να σταματήσει; Γράψε την εδώ:
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-muted">
+            {autoCount === 1 ? "Η τιμή δόθηκε αυτόματα" : `Οι ${autoCount} τιμές δόθηκαν αυτόματα`}.
+            Με νέα εκτέλεση δίνονται άλλες.
+          </p>
+        ))}
       {result.status === "needs_input" && (
         <InputLine
           key={inputs.length}

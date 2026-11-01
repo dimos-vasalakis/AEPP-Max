@@ -14,6 +14,7 @@ What differs from ΓΛΩΣΣΑ (docs/glossa.md, "Αλγόριθμος (ψευδ�
 from dataclasses import dataclass, field
 
 from app.glossa import nodes as n
+from app.glossa.autofill import Autofill
 from app.glossa.interpreter import (
     INTEGER_INPUT,
     MAX_ARRAY_CELLS,
@@ -61,15 +62,24 @@ class _Back:
 
 
 def execute_algorithms(
-    main: n.Algorithm, inputs: list[str], *, limits: RunLimits, trace: bool
+    main: n.Algorithm, inputs: list[str], *, limits: RunLimits, trace: bool, autofill: bool = False
 ) -> RunResult:
     """Run the first algorithm; the same contract as interpreter.execute."""
-    return run_machine(_AlgorithmMachine(main, inputs, limits, trace))
+    return run_machine(
+        _AlgorithmMachine(main, inputs, limits, trace, Autofill(main) if autofill else None)
+    )
 
 
 class _AlgorithmMachine(_Machine):
-    def __init__(self, main: n.Algorithm, inputs: list[str], limits: RunLimits, trace: bool):
-        super().__init__(main, inputs, limits, trace)  # type: ignore[arg-type]
+    def __init__(
+        self,
+        main: n.Algorithm,
+        inputs: list[str],
+        limits: RunLimits,
+        trace: bool,
+        autofill: Autofill | None = None,
+    ):
+        super().__init__(main, inputs, limits, trace, autofill)  # type: ignore[arg-type]
         self.main = main
         # Array cells copied into the calls still running: a deep recursion that passes a
         # big array along would otherwise hold a copy per level (memory, not steps).

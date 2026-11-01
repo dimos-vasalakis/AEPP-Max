@@ -53,6 +53,15 @@ export type Frame = {
   variables: Variable[];
 };
 
+/** A value Αυτόματες τιμές gave a ΔΙΑΒΑΣΕ. */
+export type AutoInput = {
+  value: string;
+  /** How many output lines existed when it was read. */
+  output: number;
+  /** Traced runs: the trace step of its ΔΙΑΒΑΣΕ. */
+  step: number;
+};
+
 export type RunResult = {
   status: RunStatus;
   output: string[];
@@ -66,4 +75,6 @@ export type RunResult = {
   frames: Frame[];
   /** Traced runs only: each unit that ran, with its declared variables (no values). */
   units: Frame[];
+  /** With autofill on: the values it gave, in order, after the inputs sent. */
+  auto_inputs: AutoInput[];
 };

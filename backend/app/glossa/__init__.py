@@ -56,9 +56,11 @@ def run(
     language: Language = "glossa",
     limits: RunLimits | None = None,
     trace: bool = False,
+    autofill: bool = False,
 ) -> RunResult:
     """Run a ΓΛΩΣΣΑ program, or a ψευδογλώσσα algorithm with language="pseudocode".
-    `inputs` feed ΔΙΑΒΑΣΕ (and an algorithm's Δεδομένα) in order.
+    `inputs` feed ΔΙΑΒΑΣΕ (and an algorithm's Δεδομένα) in order; once they run out,
+    `autofill` makes up the next values (autofill.py) instead of asking for them.
 
     Never raises for mistakes in the student's program: syntax and runtime
     errors come back as status "error" with a Greek message and line number.
@@ -68,4 +70,10 @@ def run(
     if isinstance(compiled, ErrorInfo):
         return RunResult(status="error", error=compiled)
     run_with = execute_algorithms if isinstance(compiled, Algorithm) else execute
-    return run_with(compiled, inputs or [], limits=limits or RunLimits(), trace=trace)  # type: ignore[arg-type]
+    return run_with(
+        compiled,  # type: ignore[arg-type]
+        inputs or [],
+        limits=limits or RunLimits(),
+        trace=trace,
+        autofill=autofill,
+    )
