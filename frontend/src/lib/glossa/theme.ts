@@ -10,7 +10,7 @@ import { tags as t } from "@lezer/highlight";
 // The --syn-* tokens a theme may leave out fall back to the ones beside them
 // (only the Κλασικό theme sets them all). One rule per tag: a later rule
 // for the same tag replaces an earlier one instead of adding to it.
-const highlight = HighlightStyle.define([
+export const glossaHighlight = HighlightStyle.define([
   {
     tag: t.keyword,
     color: "var(--syn-keyword)",
@@ -79,7 +79,7 @@ function editorTheme(dark: boolean) {
       },
       { dark },
     ),
-    syntaxHighlighting(highlight),
+    syntaxHighlighting(glossaHighlight),
   ];
 }
 

@@ -2,11 +2,13 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AgentPanel } from "@/components/agent/AgentPanel";
+import { AlgorithmsMenu } from "@/components/AlgorithmsMenu";
 import { ConfirmDialog } from "@/components/Confirm";
 import { NavPopover } from "@/components/NavPopover";
 import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { getProgram, type Program, programError, updateProgram } from "@/lib/api/programs";
+import { type Algorithm, algorithmProgram } from "@/lib/glossa/algorithms";
 import { screenAt, stepSummary } from "@/lib/glossa/trace";
 import type { TraceMark } from "@/lib/glossa/traceLine";
 import type { Language, RunResult } from "@/lib/glossa/types";
@@ -27,7 +29,10 @@ import { StatusBar } from "./StatusBar";
 import { VariablesPanel } from "./VariablesPanel";
 
 /** A question before an editor's unsaved code is replaced; `message` says what would be lost. */
-type Ask = { kind: "open"; program: Program; message: string } | { kind: "new"; message: string };
+type Ask =
+  | { kind: "open"; program: Program; message: string }
+  | { kind: "algorithm"; algorithm: Algorithm; message: string }
+  | { kind: "new"; message: string };
 
 /** How long the slow run (the 50 sign) stays on each step. */
 const SLOW_MS = 500;
@@ -76,7 +81,7 @@ export function Ide() {
   const nextButton = useRef<HTMLButtonElement>(null);
   // The request of the run on screen, aborted when it is stopped or replaced.
   const request = useRef<AbortController | null>(null);
-  // Bumped when a program is opened: a fresh editor, so Ctrl+Z can't bring back the last one's code.
+  // Bumped when a program or an algorithm is opened: a fresh editor, so Ctrl+Z can't bring back the last one's code.
   const [editorKey, setEditorKey] = useState(0);
   // Locked while an Agent-mode reply runs, so its write_code can't overwrite new typing.
   const [agentWriting, setAgentWriting] = useState(false);
@@ -312,6 +317,16 @@ export function Ide() {
   const tracing = run.kind === "done" && run.traced && outputTab === "trace";
   const sideTabs = run.kind === "idle" ? undefined : <SideTabs tab={sideTab} onTab={setSideTab} />;
 
+  // A run or the agent's edit on its way: the code it belongs to can't be replaced now.
+  // Not during a slow run's playback: the run is already back, and it can last minutes.
+  const codeLocked =
+    agentWriting || run.kind === "running" || (run.kind === "done" && run.pending === true);
+  // For replaceCode, which waits for a save while the page stays usable.
+  const latest = useRef({ codes, codeLocked });
+  useEffect(() => {
+    latest.current = { codes, codeLocked };
+  });
+
   // Saving
 
   function save() {
@@ -319,14 +334,58 @@ export function Ide() {
     else if (code.trim()) setDialog("save");
   }
 
-  /** Puts `program` in its editor, as the file Ctrl/Cmd+S saves to. */
-  function load(program: Program) {
-    codeRef.current = program.code;
-    setCodes((all) => ({ ...all, [program.language]: program.code }));
-    files.link(program);
-    showLanguage(program.language, program.code);
+  /** Puts `code` in `lang`'s editor: a fresh one, so Ctrl+Z can't bring back the last code. */
+  function fillEditor(lang: Language, code: string) {
+    codeRef.current = code;
+    setCodes((all) => ({ ...all, [lang]: code }));
+    showLanguage(lang, code);
     setEditorKey((k) => k + 1);
     resetRun();
+  }
+
+  /** Puts `program` in its editor, as the file Ctrl/Cmd+S saves to. */
+  function load(program: Program) {
+    files.link(program);
+    fillEditor(program.language, program.code);
+  }
+
+  /** Puts `algorithm` in the Πρόγραμμα editor, as new code: no saved program is overwritten by it. */
+  function loadAlgorithm(algorithm: Algorithm) {
+    files.unlink("glossa");
+    fillEditor("glossa", algorithmProgram(algorithm));
+  }
+
+  /**
+   * `lang`'s code is about to be replaced by `name`: `go` at once if nothing would be
+   * lost, otherwise `question` with what would be.
+   */
+  async function replaceCode(
+    lang: Language,
+    name: string,
+    question: (message: string) => void,
+    go: () => void,
+  ) {
+    const target = files.fileOf(lang);
+    if (target) {
+      const before = latest.current.codes[lang];
+      const unsaved = await files.unsaved(lang);
+      // Typed into (or another program opened in) that editor meanwhile, or a run or
+      // the agent's edit began: leave it be.
+      if (latest.current.codes[lang] !== before || latest.current.codeLocked) return;
+      if (unsaved) question(lostChanges(target.title));
+      else go();
+    } else if (codes[lang].trim()) {
+      // The editor it opens in: this one, or the other side of the switch.
+      const where =
+        lang === language ? "" : lang === "pseudocode" ? " στον Αλγόριθμο" : " στο Πρόγραμμα";
+      question(
+        where
+          ? `Ο κώδικας${where} δεν έχει αποθηκευτεί και θα χαθεί αν ανοίξεις το «${name}».`
+          : `${UNSAVED_HERE} Για να τον κρατήσεις, πάτα Άκυρο και Αποθήκευση πρώτα.`,
+      );
+    } else {
+      go();
+    }
   }
 
   async function openProgram(id: string): Promise<string | null> {
@@ -337,29 +396,27 @@ export function Ide() {
       return programError(err);
     }
     const lang = program.language;
-    const target = files.fileOf(lang);
-    // The editor it opens in: this one, or the other side of the switch.
-    const where =
-      lang === language ? "" : lang === "pseudocode" ? " στον Αλγόριθμο" : " στο Πρόγραμμα";
-    if (target?.id === program.id) {
+    if (files.fileOf(lang)?.id === program.id) {
       // Already open: the editor may hold newer code than the server.
       showLanguage(lang);
-    } else if (target) {
-      const before = lang === languageRef.current ? codeRef.current : null;
-      const unsaved = await files.unsaved(lang);
-      // Typed into (or another program opened in) that editor meanwhile: leave it be.
-      if (before !== null && codeRef.current !== before) return null;
-      if (unsaved) setAsk({ kind: "open", program, message: lostChanges(target.title) });
-      else load(program);
-    } else if (codes[lang].trim()) {
-      const message = where
-        ? `Ο κώδικας${where} δεν έχει αποθηκευτεί και θα χαθεί αν ανοίξεις το «${program.title}».`
-        : `${UNSAVED_HERE} Για να τον κρατήσεις, πάτα Άκυρο και Αποθήκευση πρώτα.`;
-      setAsk({ kind: "open", program, message });
     } else {
-      load(program);
+      await replaceCode(
+        lang,
+        program.title,
+        (message) => setAsk({ kind: "open", program, message }),
+        () => load(program),
+      );
     }
     return null;
+  }
+
+  function openAlgorithm(algorithm: Algorithm) {
+    void replaceCode(
+      "glossa",
+      algorithm.title,
+      (message) => setAsk({ kind: "algorithm", algorithm, message }),
+      () => loadAlgorithm(algorithm),
+    );
   }
 
   /** Empties the editor and unlinks it: its program, if any, stays as it was saved. */
@@ -435,7 +492,7 @@ export function Ide() {
 
   return (
     <div className="flex min-h-dvh flex-col lg:h-dvh">
-      <Navbar>
+      <Navbar tools={<AlgorithmsMenu onOpen={openAlgorithm} openDisabled={codeLocked} />}>
         {/* Not while a run or the agent's edit is on its way: each belongs to the code it was sent. */}
         <LanguageSwitch
           language={language}
@@ -627,11 +684,18 @@ export function Ide() {
       )}
       {ask && (
         <ConfirmDialog
-          title={ask.kind === "open" ? `Άνοιγμα του «${ask.program.title}»;` : "Νέο πρόγραμμα;"}
-          confirmLabel={ask.kind === "open" ? "Άνοιγμα" : "Νέο"}
+          title={
+            ask.kind === "open"
+              ? `Άνοιγμα του «${ask.program.title}»;`
+              : ask.kind === "algorithm"
+                ? "Άνοιγμα του αλγορίθμου;"
+                : "Νέο πρόγραμμα;"
+          }
+          confirmLabel={ask.kind === "new" ? "Νέο" : "Άνοιγμα"}
           onConfirm={() => {
             setAsk(null);
             if (ask.kind === "open") load(ask.program);
+            else if (ask.kind === "algorithm") loadAlgorithm(ask.algorithm);
             else clearPage();
           }}
           onCancel={() => setAsk(null)}
@@ -660,8 +724,7 @@ export function Ide() {
               onPrograms={() => setDialog("programs")}
               onSave={save}
               onRename={rename}
-              // Not during a slow run's playback: the run is already back, and it can last minutes.
-              disabled={agentWriting || run.kind === "running" || (run.kind === "done" && run.pending === true)}
+              disabled={codeLocked}
             />
             {agentWriting && (
               <div className="shrink-0 border-b border-border bg-panel-2 px-3 py-1.5 font-mono text-xs text-warn">

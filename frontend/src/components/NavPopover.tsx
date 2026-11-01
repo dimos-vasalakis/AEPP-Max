@@ -12,6 +12,8 @@ type Props = {
   align?: "left" | "right";
   /** A wider panel on wider screens, for longer text. */
   wide?: boolean;
+  /** A rounded button like Επεκτάσεις, with the label beside the icon where the bar has room (lg). */
+  pill?: boolean;
   /** Also closes an open panel, so its buttons can't act while the trigger couldn't. */
   disabled?: boolean;
   /** Keeps the panel open (no outside click, Escape or trigger click), e.g. while it waits for a request. */
@@ -29,6 +31,7 @@ export function NavPopover({
   icon,
   align = "left",
   wide,
+  pill,
   disabled,
   locked,
   onClose,
@@ -80,9 +83,18 @@ export function NavPopover({
         aria-label={label}
         data-tip={title ?? label}
         data-tip-align={align === "right" ? "right" : undefined}
-        className={`flex h-8 w-8 items-center justify-center rounded-md hover:bg-panel-2 hover:text-text disabled:pointer-events-none disabled:opacity-40 ${open ? "bg-panel-2 text-text" : "text-muted"}`}
+        className={
+          pill
+            ? `flex h-8 items-center gap-1.5 rounded-full border px-3 text-sm font-medium text-text transition-colors ${
+                open
+                  ? "border-accent bg-accent/10"
+                  : "border-border bg-panel-2 hover:border-accent/60 hover:bg-accent/5"
+              }`
+            : `flex h-8 w-8 items-center justify-center rounded-md hover:bg-panel-2 hover:text-text disabled:pointer-events-none disabled:opacity-40 ${open ? "bg-panel-2 text-text" : "text-muted"}`
+        }
       >
         {icon}
+        {pill && <span className="hidden lg:inline">{label}</span>}
       </button>
       {open && (
         <div

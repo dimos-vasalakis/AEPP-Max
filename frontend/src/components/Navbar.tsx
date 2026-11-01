@@ -7,17 +7,18 @@ import { ZoomMenu } from "@/components/ZoomMenu";
 
 /**
  * The top bar. Left: the page's own actions (`children`, e.g. run), the lens
- * (font size), the guide and the logo (copyright). Right: Επεκτάσεις and the
- * account (its menu holds Ρυθμίσεις).
+ * (font size), the guide and the logo (copyright). Right: the page's `tools`
+ * (Αλγόριθμοι), Επεκτάσεις and the account (its menu holds Ρυθμίσεις).
  */
-export function Navbar({ children }: { children?: ReactNode }) {
+export function Navbar({ children, tools }: { children?: ReactNode; tools?: ReactNode }) {
   return (
     <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border bg-panel px-1.5 sm:gap-3 sm:px-3">
       {children}
       <ZoomMenu />
       <HelpMenu />
       <AboutMenu />
-      <nav aria-label="Κύριο μενού" className="ml-auto flex items-center sm:gap-1">
+      <nav aria-label="Κύριο μενού" className="ml-auto flex items-center gap-1">
+        {tools}
         <ExtensionsMenu />
         <span className="mx-1 hidden h-5 w-px bg-border sm:block" aria-hidden />
         <UserMenu />
