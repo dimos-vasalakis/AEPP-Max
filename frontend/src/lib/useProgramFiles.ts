@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ApiError } from "@/lib/api/client";
 import { createProgram, type Program, programError, updateProgram } from "@/lib/api/programs";
 import type { Language } from "@/lib/glossa/types";
@@ -19,8 +19,27 @@ export type ProgramFile = {
 };
 
 type Files = Record<Language, ProgramFile | null>;
+type OwnedFiles = { owner: string | null | undefined; epoch: number; files: Files };
 
 const NONE: Files = { glossa: null, pseudocode: null };
+
+/** Only a response from the current account may link a newly created program. */
+export function linkCreated(
+  current: OwnedFiles,
+  epoch: number,
+  lang: Language,
+  program: Program,
+  saved: string,
+): OwnedFiles {
+  if (current.epoch !== epoch) return current;
+  return {
+    ...current,
+    files: {
+      ...current.files,
+      [lang]: { id: program.id, title: program.title, saved, status: "saved" },
+    },
+  };
+}
 
 /**
  * Which saved program each editor (Πρόγραμμα, Αλγόριθμος) holds, if any, and its
@@ -33,13 +52,21 @@ export function useProgramFiles(
   language: Language,
   userId: string | null | undefined,
 ) {
-  const [files, setFiles] = useState<Files>(NONE);
+  const [owned, setOwned] = useState<OwnedFiles>({ owner: userId, epoch: 0, files: NONE });
+  const ownerEpoch = useRef(owned.epoch);
+  useLayoutEffect(() => {
+    ownerEpoch.current = owned.epoch;
+  }, [owned.epoch]);
+  const files = owned.files;
+  const setFiles = useCallback(
+    (update: (files: Files) => Files) =>
+      setOwned((current) => ({ ...current, files: update(current.files) })),
+    [],
+  );
 
   // Adjusted during render, not in an effect: no frame shows another account's file.
-  const [owner, setOwner] = useState(userId);
-  if (userId !== undefined && userId !== owner) {
-    setOwner(userId);
-    if (owner !== undefined) setFiles(NONE);
+  if (userId !== undefined && userId !== owned.owner) {
+    setOwned({ owner: userId, epoch: owned.epoch + 1, files: NONE });
   }
 
   /** Changes `language`'s file, if it is still program `id`. */
@@ -50,7 +77,7 @@ export function useProgramFiles(
         if (file?.id !== id) return all;
         return { ...all, [lang]: change === null ? null : { ...file, ...change } };
       }),
-    [],
+    [setFiles],
   );
 
   // The save in flight per program and the code it sends, so unsaved() can wait for it,
@@ -142,12 +169,15 @@ export function useProgramFiles(
     async saveAs(title: string): Promise<string | null> {
       const lang = language;
       const sent = codes[lang];
+      const epoch = owned.epoch;
       try {
         const program = await createProgram({ title, code: sent, language: lang });
-        setFiles((all) => ({
-          ...all,
-          [lang]: { id: program.id, title: program.title, saved: sent, status: "saved" },
-        }));
+        // The account may have changed while the request was in flight. Keep the
+        // response from linking a file that belongs to the previous account.
+        if (ownerEpoch.current !== epoch) {
+          return "Ο λογαριασμός άλλαξε όσο αποθηκευόταν το πρόγραμμα. Δοκίμασε ξανά.";
+        }
+        setOwned((current) => linkCreated(current, epoch, lang, program, sent));
         return null;
       } catch (err) {
         return programError(err);

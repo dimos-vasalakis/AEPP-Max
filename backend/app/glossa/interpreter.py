@@ -768,7 +768,7 @@ class _Machine:
             return text
         if self.autofill is None or len(self.auto_inputs) >= MAX_AUTO_INPUTS:
             raise _NeedsInput(target.line)
-        text = self.autofill.value(target.key, type_name)
+        text = self.autofill.value(target.key, type_name, self.stack[-1].unit)
         step = max(0, len(self.trace) - 1) if self.trace else 0
         self.auto_inputs.append(AutoInput(value=text, output=len(self.output), step=step))
         return text

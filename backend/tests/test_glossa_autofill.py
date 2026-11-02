@@ -102,6 +102,51 @@ def test_a_sentinel_loop_ends_but_not_before_any_data(declarations, stop, consta
         assert len(result.auto_inputs) >= 2
 
 
+def test_unused_procedure_constant_cannot_change_main_sentinel():
+    source = (
+        "ΠΡΟΓΡΑΜΜΑ Τ\nΣΤΑΘΕΡΕΣ\nΟΡΙΟ = 100\nΜΕΤΑΒΛΗΤΕΣ\nΑΚΕΡΑΙΕΣ: x\nΑΡΧΗ\n"
+        "ΔΙΑΒΑΣΕ x\nΟΣΟ x <> ΟΡΙΟ ΕΠΑΝΑΛΑΒΕ\n  ΔΙΑΒΑΣΕ x\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n"
+        "ΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+        "ΔΙΑΔΙΚΑΣΙΑ Αχρηστη()\nΣΤΑΘΕΡΕΣ\nΟΡΙΟ = -1\nΑΡΧΗ\n"
+        "ΓΡΑΨΕ ΟΡΙΟ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ\n"
+    )
+    result = filled(source)
+    assert result.status == "ok", result.error
+    assert "100" in values(result)
+
+
+def test_called_procedure_uses_its_own_input_hints_and_constant():
+    source = (
+        "ΠΡΟΓΡΑΜΜΑ Τ\nΣΤΑΘΕΡΕΣ\nΟΡΙΟ = 100\nΜΕΤΑΒΛΗΤΕΣ\nΑΚΕΡΑΙΕΣ: x\nΑΡΧΗ\n"
+        "ΚΑΛΕΣΕ Τοπικη()\nΔΙΑΒΑΣΕ x\nΟΣΟ x <> ΟΡΙΟ ΕΠΑΝΑΛΑΒΕ\n"
+        "  ΔΙΑΒΑΣΕ x\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+        "ΔΙΑΔΙΚΑΣΙΑ Τοπικη()\nΣΤΑΘΕΡΕΣ\nΟΡΙΟ = -1\n"
+        "ΜΕΤΑΒΛΗΤΕΣ\nΑΚΕΡΑΙΕΣ: x\nΑΡΧΗ\n"
+        "ΔΙΑΒΑΣΕ x\nΟΣΟ x <> ΟΡΙΟ ΕΠΑΝΑΛΑΒΕ\n"
+        "  ΔΙΑΒΑΣΕ x\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ\n"
+    )
+    result = filled(source)
+    assert result.status == "ok", result.error
+    assert "-1" in values(result)
+    assert "100" in values(result)
+
+
+def test_procedure_variable_shadows_main_constant_in_comparisons():
+    source = (
+        "ΠΡΟΓΡΑΜΜΑ Τ\nΣΤΑΘΕΡΕΣ\nΟΡΙΟ = 100\nΑΡΧΗ\n"
+        "ΚΑΛΕΣΕ Τοπικη()\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+        "ΔΙΑΔΙΚΑΣΙΑ Τοπικη()\nΜΕΤΑΒΛΗΤΕΣ\nΑΚΕΡΑΙΕΣ: ΟΡΙΟ, x\nΑΡΧΗ\n"
+        "ΟΡΙΟ <- -1\nΔΙΑΒΑΣΕ x\nΟΣΟ x <> ΟΡΙΟ ΕΠΑΝΑΛΑΒΕ\n"
+        "  ΔΙΑΒΑΣΕ x\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\nΤΕΛΟΣ_ΔΙΑΔΙΚΑΣΙΑΣ\n"
+    )
+    result = filled(source)
+    # A mutable variable is not a literal hint; use the usual small-number range
+    # instead of incorrectly treating it as the main program's constant (100).
+    assert result.status == "needs_input"
+    assert len(values(result)) == MAX_AUTO_INPUTS
+    assert all(1 <= int(value) <= 20 for value in values(result))
+
+
 def test_a_case_value_can_come_up():
     source = program(
         "ΑΚΕΡΑΙΕΣ: κ",
