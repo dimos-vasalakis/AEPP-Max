@@ -378,6 +378,13 @@ class TestLimits:
         assert result.status == "limit"
         assert result.limit == "time"
 
+    def test_stops_once_nobody_waits_for_the_result(self) -> None:
+        body = "  ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        limits = RunLimits(max_steps=10**12, timeout_seconds=600, stop=lambda: True)
+        result = run(program(body), limits=limits)
+        assert result.status == "limit"
+        assert result.steps <= 256
+
     def test_says_which_limit_stopped_the_run(self) -> None:
         loop = "  ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
         assert run(program(loop), limits=RunLimits(max_steps=100)).limit == "steps"

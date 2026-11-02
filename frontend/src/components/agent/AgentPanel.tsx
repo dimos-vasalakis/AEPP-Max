@@ -315,7 +315,8 @@ export function AgentPanel({
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    const message = draft.trim();
+    // A NUL pasted from somewhere: the backend refuses it, and it means nothing here.
+    const message = draft.replaceAll("\0", "").trim();
     if (message.startsWith("/")) {
       setDraft("");
       runCommand(message);

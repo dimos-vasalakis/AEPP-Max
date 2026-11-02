@@ -1,6 +1,7 @@
 """What a run returns. These dataclasses are the API's response shape too
 (frontend/src/lib/glossa/types.ts mirrors them), so change both together."""
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Literal
 
@@ -29,6 +30,8 @@ class RunLimits:
     max_output_chars: int = 200_000
     max_trace_chars: int = 1_000_000  # the trace's values and output; then it stops, truncated
     timeout_seconds: float = 10.0  # as core/config.py's run_timeout_seconds
+    # Asked with the clock: true once nobody waits for the result (endpoints/run.py).
+    stop: Callable[[], bool] | None = None
 
 
 @dataclass

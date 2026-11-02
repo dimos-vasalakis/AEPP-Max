@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/Confirm";
 import type { LimitReason, RunResult } from "@/lib/glossa/types";
 import { TracePanel } from "./TracePanel";
@@ -18,8 +18,7 @@ export type Pace = "slow" | "step";
  * `traced` runs (the «Πίνακας τιμών» button) carry the trace; `code` is what ran.
  * `pace`: a run traced to be played back (it shows no table).
  * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way; `failure`: it didn't
- * get through, with the value for the box to send again (the box may have remounted,
- * on another tab or step). `stopped`: the
+ * get through (the box still holds the value: `RunEndProps`). `stopped`: the
  * student stopped it (■) while it waited for a value or re-ran; `kind: "stopped"`
  * when it was stopped before anything came back.
  * `autoSteps`: the trace step each value Αυτόματες τιμές gave was read at. They mix with
@@ -38,13 +37,27 @@ export type RunState =
       traced: boolean;
       pace?: Pace;
       pending?: boolean;
-      failure?: { message: string; value: string };
+      failure?: string;
       stopped?: boolean;
     }
   | { kind: "stopped" }
   | { kind: "failed"; message: string };
 
 export type OutputTab = "screen" | "trace";
+
+/**
+ * What is typed in the ΔΙΑΒΑΣΕ box, and for how many values read so far. The box remounts
+ * on another tab or table step, so it's kept above them; in a ref, so that a keystroke
+ * doesn't redraw a whole table.
+ */
+type Draft = { read: number; value: string };
+
+/** What RunEnd needs from above the tabs. */
+export type RunEndProps = {
+  /** The dice is on: a typed value goes on with more made-up ones. */
+  autoFill: boolean;
+  draftRef: RefObject<Draft>;
+};
 
 type Props = {
   run: RunState;
@@ -107,6 +120,12 @@ export function OutputPanel({
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const [askClear, setAskClear] = useState(false);
+  const draftRef = useRef<Draft>({ read: 0, value: "" });
+  const end: RunEndProps = { autoFill, draftRef };
+  // A new run or a cleared screen forgets it.
+  useEffect(() => {
+    if (run.kind !== "done") draftRef.current = { read: 0, value: "" };
+  }, [run.kind]);
   const badge = statusBadge(run, playing);
   const hasContent = run.kind === "done" || run.kind === "failed" || run.kind === "stopped";
   const traced = (run.kind === "running" || run.kind === "done") && run.traced;
@@ -194,7 +213,7 @@ export function OutputPanel({
           onStep={onStep}
           stale={stale}
           onInput={onInput}
-          autoFill={autoFill}
+          end={end}
         />
       ) : (
         <div
@@ -215,7 +234,7 @@ export function OutputPanel({
           {run.kind === "running" && <p className="text-muted">Εκτέλεση…</p>}
           {run.kind === "stopped" && <p className="text-warn">— Η εκτέλεση διακόπηκε —</p>}
           {run.kind === "failed" && <p className="text-danger">{run.message}</p>}
-          {run.kind === "done" && <RunOutput run={run} onInput={onInput} playing={playing} autoFill={autoFill} />}
+          {run.kind === "done" && <RunOutput run={run} onInput={onInput} playing={playing} end={end} />}
         </div>
       )}
     </section>
@@ -254,12 +273,12 @@ function RunOutput({
   run,
   onInput,
   playing,
-  autoFill,
+  end,
 }: {
   run: Done;
   onInput: (value: string) => void;
   playing: boolean;
-  autoFill: boolean;
+  end: RunEndProps;
 }) {
   const { inputs, marks, result } = run;
   const lines: { text: string; input: boolean }[] = [];
@@ -298,7 +317,7 @@ function RunOutput({
         onInput={onInput}
         number={lines.length + 1}
         playing={playing}
-        autoFill={autoFill}
+        end={end}
       />
     </>
   );
@@ -310,7 +329,7 @@ export function RunEnd({
   onInput,
   number,
   playing = false,
-  autoFill,
+  end,
 }: {
   run: Done;
   onInput: (value: string) => void;
@@ -318,7 +337,7 @@ export function RunEnd({
   number?: number;
   /** A played run (slow or step) hasn't reached its end. */
   playing?: boolean;
-  autoFill: boolean;
+  end: RunEndProps;
 }) {
   const { inputs, result } = run;
   const autoCount = run.autoSteps?.length ?? 0;
@@ -330,14 +349,14 @@ export function RunEnd({
         (result.status === "needs_input" ? (
           <p className="mt-2 text-xs text-warn">
             Δόθηκαν αυτόματα {autoCount} τιμές και το πρόγραμμα ζητά κι άλλες.{" "}
-            {autoFill &&
+            {end.autoFill &&
               "Μετά τη δική σου συνεχίζουν αυτόματα· για να γράψεις μόνο δικές σου, κλείσε πρώτα το ζάρι. "}
             Μήπως περιμένει μια συγκεκριμένη τιμή για να σταματήσει; Γράψε την εδώ:
           </p>
         ) : (
           <p className="mt-2 text-xs text-muted">
             {autoCount === 1 ? "Η τιμή δόθηκε αυτόματα" : `Οι ${autoCount} τιμές δόθηκαν αυτόματα`}.
-            Με νέα εκτέλεση δίνονται άλλες.
+            {end.autoFill && " Με νέα εκτέλεση δίνονται άλλες."}
           </p>
         ))}
       {result.status === "needs_input" && (
@@ -347,10 +366,11 @@ export function RunEnd({
           onSubmit={onInput}
           waiting={run.pending === true}
           stepped={run.pace === "step"}
-          initial={run.failure?.value}
+          read={inputs.length}
+          draftRef={end.draftRef}
         />
       )}
-      {run.failure && <p className="mt-2 text-danger">{run.failure.message}</p>}
+      {run.failure && <p className="mt-2 text-danger">{run.failure}</p>}
       {result.status === "error" && result.error && (
         <p className="mt-2 rounded-md border-l-2 border-danger bg-danger/10 px-3 py-2 text-danger">
           {result.error.line !== null && <strong>Γραμμή {result.error.line}: </strong>}
@@ -381,7 +401,8 @@ function InputLine({
   onSubmit,
   waiting,
   stepped,
-  initial = "",
+  read,
+  draftRef,
 }: {
   number?: number;
   onSubmit: (value: string) => void;
@@ -389,10 +410,15 @@ function InputLine({
   waiting: boolean;
   /** A step run, where the box appears from Enter on Επόμενο. */
   stepped: boolean;
-  /** A value that didn't get through, to send again. */
-  initial?: string;
+  /** How many values the run has read: once one more is, the box starts empty. */
+  read: number;
+  draftRef: RefObject<Draft>;
 }) {
-  const [value, setValue] = useState(initial);
+  // Uncontrolled, so typing renders nothing; a remounted box picks the value back up.
+  const input = useRef<HTMLInputElement>(null);
+  useLayoutEffect(() => {
+    if (input.current && draftRef.current.read === read) input.current.value = draftRef.current.value;
+  }, [draftRef, read]);
   // A held Enter never sends a value; in a step run, nor does a quick second Enter
   // meant for Επόμενο (it would send an empty one).
   const shownAt = useRef(0);
@@ -404,7 +430,7 @@ function InputLine({
       className="output-input mt-1 flex items-center gap-2 rounded-md border border-accent/50 bg-bg px-2 py-1 focus-within:border-accent"
       onSubmit={(e) => {
         e.preventDefault();
-        onSubmit(value);
+        onSubmit(input.current?.value ?? "");
       }}
     >
       <span className="output-num" aria-hidden>
@@ -418,13 +444,15 @@ function InputLine({
       </label>
       <input
         id="read-input"
+        ref={input}
         autoFocus
         autoComplete="off"
         readOnly={waiting}
         aria-busy={waiting}
-        value={value}
         maxLength={1000} // schemas/run.py MAX_INPUT_CHARS
-        onChange={(e) => setValue(e.target.value)}
+        onChange={(e) => {
+          draftRef.current = { read, value: e.target.value };
+        }}
         onKeyDown={(e) => {
           const early = stepped && performance.now() - shownAt.current < 400;
           if (e.key === "Enter" && (e.repeat || early)) {

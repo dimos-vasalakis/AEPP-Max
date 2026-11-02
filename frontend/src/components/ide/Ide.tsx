@@ -143,8 +143,8 @@ export function Ide() {
 
   /**
    * ■: the run stops where it is. The interpreter runs on the server, so this drops
-   * the reply (the server's own limits end a run nobody waits for); its output so
-   * far stays on screen.
+   * the reply, and the server stops once it sees the client gone (`stop_on_disconnect`;
+   * else its own limits end the run); its output so far stays on screen.
    */
   function stop() {
     runSeq.current++;
@@ -239,11 +239,7 @@ export function Ide() {
       const again = err instanceof ApiError && err.status !== 503 ? "" : " Πάτα ξανά Enter για να σταλεί η τιμή.";
       setRun((last) =>
         inputs.length > 0 && last.kind === "done"
-          ? {
-              ...last,
-              pending: false,
-              failure: { message: message + again, value: inputs[inputs.length - 1] },
-            }
+          ? { ...last, pending: false, failure: message + again }
           : { kind: "failed", message },
       );
     }

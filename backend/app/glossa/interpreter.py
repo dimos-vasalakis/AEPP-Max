@@ -204,8 +204,9 @@ def execute(
       so far. With autofill=True, first make up to MAX_AUTO_INPUTS more values.
       The read past MAX_INPUTS values in all stops with status "limit".
     - Count steps and check the clock every few hundred steps; past
-      limits.max_steps or limits.timeout_seconds stop with status "limit" (this
-      runs in a worker thread that can't be killed, so the loop must stop itself).
+      limits.max_steps or limits.timeout_seconds, or once limits.stop says so,
+      stop with status "limit" (this runs in a worker thread that can't be killed,
+      so the loop must stop itself).
     - With trace=True, record a TraceStep per executed statement, up to
       limits.max_trace_steps and limits.max_trace_chars (then set trace_truncated
       and keep running). Output past max_output_lines or max_output_chars stops
@@ -309,7 +310,13 @@ class _Machine:
         self.steps += 1
         if self.steps > self.limits.max_steps:
             raise _Limit("steps")
-        if self.steps % CLOCK_EVERY == 0 and time.monotonic() > self.deadline:
+        if self.steps % CLOCK_EVERY == 0:
+            self.check_clock()
+
+    def check_clock(self) -> None:
+        # A stopped run says "time" too: nobody reads its result.
+        stopped = self.limits.stop is not None and self.limits.stop()
+        if stopped or time.monotonic() > self.deadline:
             raise _Limit("time")
 
     def tick(self, node: n.Node, frame: _Frame) -> None:
@@ -327,8 +334,7 @@ class _Machine:
         self.steps += cells // CELLS_PER_STEP
         if self.steps > self.limits.max_steps:
             raise _Limit("steps")
-        if time.monotonic() > self.deadline:
-            raise _Limit("time")
+        self.check_clock()
 
     def allocate(self, cells: int, node: n.Node) -> None:
         if self.live_cells + cells > MAX_LIVE_CELLS:

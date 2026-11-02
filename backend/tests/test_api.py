@@ -1,6 +1,7 @@
 import asyncio
 import json
 import re
+import time
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
@@ -9,6 +10,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from app.main import app
 from app.models import Conversation
 from app.schemas.agent import ChatRequest
 from app.schemas.program import ProgramCreate, ProgramUpdate
@@ -372,6 +374,57 @@ def test_a_busy_interpreter_answers_503(
     assert client.post("/api/v1/check", json={"code": ""}).status_code == 200
     monkeypatch.setattr(interpreter_pool._checks, "admitted", full)
     assert client.post("/api/v1/check", json={"code": ""}).status_code == 503
+
+
+def test_a_run_stops_when_the_client_leaves(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Through the ASGI app, as the server calls it: ■ closes the connection mid-run.
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "run_max_steps", 10**12)
+    monkeypatch.setattr(get_settings(), "run_timeout_seconds", 60.0)
+    code = "ΠΡΟΓΡΑΜΜΑ Π\nΑΡΧΗ\nΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+    payload = json.dumps({"code": code}).encode()
+    sent: list[dict] = []
+    calls = 0
+
+    async def receive() -> dict:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return {"type": "http.request", "body": payload, "more_body": False}
+        return {"type": "http.disconnect"}
+
+    async def send(message: dict) -> None:
+        sent.append(message)
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "path": "/api/v1/run",
+        "raw_path": b"/api/v1/run",
+        "query_string": b"",
+        "root_path": "",
+        "scheme": "http",
+        "headers": [(b"content-type", b"application/json")],
+        "client": ("test", 1),
+        "server": ("test", 80),
+    }
+    started = time.monotonic()
+    asyncio.run(asyncio.wait_for(app(scope, receive, send), timeout=30))
+    assert time.monotonic() - started < 10  # the 60 s timeout never came into it
+    assert sent[0]["status"] == 200
+
+
+def test_a_long_run_goes_on_while_the_client_is_there(client: TestClient) -> None:
+    # Past the clock checks, so a wrong "disconnected" would end it.
+    code = (
+        "ΠΡΟΓΡΑΜΜΑ Π\nΜΕΤΑΒΛΗΤΕΣ\nΑΚΕΡΑΙΕΣ: i\nΑΡΧΗ\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 1000\n"
+        "ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\nΓΡΑΨΕ i\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+    )
+    body = client.post("/api/v1/run", json={"code": code}).json()
+    assert (body["status"], body["output"]) == ("ok", ["1001"])
 
 
 def test_agent_runs_one_reply_at_a_time(

@@ -10,7 +10,7 @@ import {
   traceColumns,
   valuesAfter,
 } from "@/lib/glossa/trace";
-import { RunEnd, type RunState } from "./OutputPanel";
+import { RunEnd, type RunEndProps, type RunState } from "./OutputPanel";
 
 type Done = Extract<RunState, { kind: "done" }>;
 
@@ -22,7 +22,7 @@ type Props = {
   /** The code changed since this run: the table no longer matches the editor. */
   stale: boolean;
   onInput: (value: string) => void;
-  autoFill: boolean;
+  end: RunEndProps;
 };
 
 const PLAY_MS = 700;
@@ -34,7 +34,7 @@ const PLAY_MS = 700;
  * where it changed, as the table is written on paper; «Όλες οι τιμές» fills in
  * the value each variable holds at every step.
  */
-export function TracePanel({ run, step, onStep, stale, onInput, autoFill }: Props) {
+export function TracePanel({ run, step, onStep, stale, onInput, end }: Props) {
   const trace = useMemo(() => run.result.trace ?? [], [run.result.trace]);
   const columns = useMemo(() => traceColumns(trace), [trace]);
   const [allValues, setAllValues] = useState(false);
@@ -121,7 +121,7 @@ export function TracePanel({ run, step, onStep, stale, onInput, autoFill }: Prop
             Ο πίνακας τιμών φτιάχνεται μόλις το πρόγραμμα τρέξει χωρίς λάθη σύνταξης.
           </p>
         ) : null}
-        <RunEnd run={run} onInput={onInput} autoFill={autoFill} />
+        <RunEnd run={run} onInput={onInput} end={end} />
       </div>
     );
   }
@@ -325,7 +325,7 @@ export function TracePanel({ run, step, onStep, stale, onInput, autoFill }: Prop
                   τέλος του ({run.result.steps} βήματα).
                 </p>
               )}
-              <RunEnd run={run} onInput={onInput} autoFill={autoFill} />
+              <RunEnd run={run} onInput={onInput} end={end} />
             </>
           )}
         </div>
