@@ -4,7 +4,7 @@ change away from what students are taught."""
 
 import pytest
 
-from app.glossa import RunLimits, RunResult, check, run
+from app.glossa import MAX_INPUTS, RunLimits, RunResult, check, run
 
 
 def go(source: str, inputs: list[str] | None = None, trace: bool = False) -> RunResult:
@@ -26,6 +26,13 @@ def error(source: str, inputs: list[str] | None = None) -> tuple[str, int | None
 
 def algorithm(body: str, header: str = "") -> str:
     return f"Αλγόριθμος Δοκιμή\n{header}{body}\nΤέλος Δοκιμή\n"
+
+
+def test_the_read_past_the_inputs_a_run_may_have_ends_it() -> None:
+    source = "Αλγόριθμος Δοκιμή\nΌσο 1 < 2 επανάλαβε\nΔιάβασε a\nΤέλος_επανάληψης\nΤέλος Δοκιμή\n"
+    assert go(source, ["1"] * (MAX_INPUTS - 1)).status == "needs_input"
+    result = go(source, ["1"] * MAX_INPUTS)
+    assert (result.status, result.limit) == ("limit", "inputs")
 
 
 class TestTextbookExamples:

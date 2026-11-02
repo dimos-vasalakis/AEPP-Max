@@ -22,6 +22,7 @@ type Props = {
   /** The code changed since this run: the table no longer matches the editor. */
   stale: boolean;
   onInput: (value: string) => void;
+  autoFill: boolean;
 };
 
 const PLAY_MS = 700;
@@ -33,7 +34,7 @@ const PLAY_MS = 700;
  * where it changed, as the table is written on paper; «Όλες οι τιμές» fills in
  * the value each variable holds at every step.
  */
-export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
+export function TracePanel({ run, step, onStep, stale, onInput, autoFill }: Props) {
   const trace = useMemo(() => run.result.trace ?? [], [run.result.trace]);
   const columns = useMemo(() => traceColumns(trace), [trace]);
   const [allValues, setAllValues] = useState(false);
@@ -120,7 +121,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
             Ο πίνακας τιμών φτιάχνεται μόλις το πρόγραμμα τρέξει χωρίς λάθη σύνταξης.
           </p>
         ) : null}
-        <RunEnd run={run} onInput={onInput} />
+        <RunEnd run={run} onInput={onInput} autoFill={autoFill} />
       </div>
     );
   }
@@ -324,7 +325,7 @@ export function TracePanel({ run, step, onStep, stale, onInput }: Props) {
                   τέλος του ({run.result.steps} βήματα).
                 </p>
               )}
-              <RunEnd run={run} onInput={onInput} />
+              <RunEnd run={run} onInput={onInput} autoFill={autoFill} />
             </>
           )}
         </div>

@@ -128,7 +128,7 @@ def test_every_sort_ends_descending(start):
 
 @pytest.mark.parametrize("item", ALGORITHMS, ids=titles())
 def test_stays_well_inside_the_time_limit(item):
-    # /run allows 3 s, by the clock: a slow host must still finish the heaviest one.
+    # /run allows 10 s, by the clock: a slow host must still finish the heaviest one.
     assert run_answering(program(item)).steps <= 50_000
 
 

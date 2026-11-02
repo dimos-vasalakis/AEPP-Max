@@ -364,10 +364,14 @@ def test_a_busy_interpreter_answers_503(
 
     settings = get_settings()
     full = settings.run_workers + settings.run_queue
-    monkeypatch.setattr(interpreter_pool, "_admitted", full)
-    res = client.post("/api/v1/check", json={"code": ""})
+    monkeypatch.setattr(interpreter_pool._runs, "admitted", full)
+    res = client.post("/api/v1/run", json={"code": ""})
     assert res.status_code == 503
     assert res.headers["retry-after"] == "2"
+    # Runs holding every thread leave the editor's error marks alone.
+    assert client.post("/api/v1/check", json={"code": ""}).status_code == 200
+    monkeypatch.setattr(interpreter_pool._checks, "admitted", full)
+    assert client.post("/api/v1/check", json={"code": ""}).status_code == 503
 
 
 def test_agent_runs_one_reply_at_a_time(

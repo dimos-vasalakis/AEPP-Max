@@ -1,6 +1,7 @@
 import pytest
 
-from app.glossa import RunLimits, RunResult, check, run
+from app.core.config import Settings
+from app.glossa import MAX_INPUTS, RunLimits, RunResult, check, run
 from app.glossa.interpreter import SNAPSHOT_ARRAY_CELLS, SNAPSHOT_CELLS
 from app.glossa.result import Frame
 
@@ -375,6 +376,29 @@ class TestLimits:
         body = "  ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
         result = run(program(body), limits=RunLimits(max_steps=10**9, timeout_seconds=0.05))
         assert result.status == "limit"
+        assert result.limit == "time"
+
+    def test_says_which_limit_stopped_the_run(self) -> None:
+        loop = "  ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        assert run(program(loop), limits=RunLimits(max_steps=100)).limit == "steps"
+        printing = "  ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n    ΓΡΑΨΕ 1\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ"
+        assert run(program(printing), limits=RunLimits(max_output_lines=10)).limit == "output"
+        assert run(program("  ΓΡΑΨΕ 1")).limit is None
+
+    def test_the_read_past_the_inputs_a_run_may_have_ends_it(self) -> None:
+        # /run refuses more (schemas/run.py), so the screen must not depend on sending them.
+        declarations = "ΜΕΤΑΒΛΗΤΕΣ\n  ΑΚΕΡΑΙΕΣ: x, i"
+        body = "  ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ {}\n    ΔΙΑΒΑΣΕ x\n  ΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\n  ΓΡΑΨΕ i"
+        inputs = ["1"] * MAX_INPUTS
+        fits = run(program(body.format(MAX_INPUTS), declarations), inputs)
+        assert (fits.status, fits.output) == ("ok", [str(MAX_INPUTS + 1)])
+        past = run(program(body.format(MAX_INPUTS + 1), declarations), inputs)
+        assert (past.status, past.limit) == ("limit", "inputs")
+        almost = run(program(body.format(MAX_INPUTS + 1), declarations), inputs[1:])
+        assert almost.status == "needs_input"
+
+    def test_the_settings_and_the_interpreter_default_to_the_same_time(self) -> None:
+        assert Settings.model_fields["run_timeout_seconds"].default == RunLimits().timeout_seconds
 
 
 class TestTrace:

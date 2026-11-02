@@ -2,7 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, Field
 
-from app.glossa import ErrorInfo, Language
+from app.glossa import MAX_INPUTS, ErrorInfo, Language
 
 MAX_SOURCE_CHARS = 50_000
 # One ΔΙΑΒΑΣΕ value; OutputPanel's input box has the same maxLength.
@@ -12,7 +12,7 @@ MAX_INPUT_CHARS = 1_000
 class RunRequest(BaseModel):
     code: str = Field(max_length=MAX_SOURCE_CHARS)
     inputs: list[Annotated[str, Field(max_length=MAX_INPUT_CHARS)]] = Field(
-        default_factory=list, max_length=1_000
+        default_factory=list, max_length=MAX_INPUTS
     )
     trace: bool = False
     language: Language = "glossa"  # "pseudocode": the editor is on Αλγόριθμος

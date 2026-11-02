@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { ConfirmDialog } from "@/components/Confirm";
-import type { RunResult } from "@/lib/glossa/types";
+import type { LimitReason, RunResult } from "@/lib/glossa/types";
 import { TracePanel } from "./TracePanel";
 
 /**
@@ -17,11 +17,13 @@ export type Pace = "slow" | "step";
  * program from the start with one more value; the output is the same up to there.)
  * `traced` runs (the «Πίνακας τιμών» button) carry the trace; `code` is what ran.
  * `pace`: a run traced to be played back (it shows no table).
- * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way. `stopped`: the
+ * `pending`: a re-run with one more ΔΙΑΒΑΣΕ value is on its way; `failure`: it didn't
+ * get through, with the value for the box to send again (the box may have remounted,
+ * on another tab or step). `stopped`: the
  * student stopped it (■) while it waited for a value or re-ran; `kind: "stopped"`
  * when it was stopped before anything came back.
- * `autoSteps`: Αυτόματες τιμές gave the first of `inputs`, one per entry, each read at
- * that trace step; values typed after them follow.
+ * `autoSteps`: the trace step each value Αυτόματες τιμές gave was read at. They mix with
+ * typed `inputs`, but those a played run hasn't reached yet are always made up.
  */
 export type RunState =
   | { kind: "idle" }
@@ -36,6 +38,7 @@ export type RunState =
       traced: boolean;
       pace?: Pace;
       pending?: boolean;
+      failure?: { message: string; value: string };
       stopped?: boolean;
     }
   | { kind: "stopped" }
@@ -57,6 +60,16 @@ type Props = {
   stale: boolean;
   /** A slow or step run is playing (or was stopped while it played): `run` holds the screen so far. */
   playing: boolean;
+  /** The dice is on: a typed value goes on with more made-up ones. */
+  autoFill: boolean;
+};
+
+/** Why the run stopped. Time is the server's, so a program with no bug may hit it. */
+const LIMIT_MESSAGES: Record<LimitReason, string> = {
+  steps: "Η εκτέλεση σταμάτησε γιατί ξεπέρασε το όριο βημάτων. Μήπως υπάρχει ατέρμονος βρόχος;",
+  time: "Η εκτέλεση σταμάτησε γιατί ξεπέρασε το όριο χρόνου. Μήπως υπάρχει ατέρμονος βρόχος; Αν όχι, δοκίμασε ξανά: ο διακομιστής μπορεί να ήταν απασχολημένος.",
+  output: "Η εκτέλεση σταμάτησε γιατί το πρόγραμμα έγραψε πάρα πολλά στην οθόνη. Μήπως υπάρχει ατέρμονος βρόχος;",
+  inputs: "Η εκτέλεση σταμάτησε γιατί το πρόγραμμα ζήτησε περισσότερες από 1.000 τιμές, το όριο μίας εκτέλεσης.",
 };
 
 /** The badge in the header: where the last run ended up. */
@@ -89,6 +102,7 @@ export function OutputPanel({
   onStep,
   stale,
   playing,
+  autoFill,
 }: Props) {
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
@@ -174,7 +188,14 @@ export function OutputPanel({
         </ConfirmDialog>
       )}
       {showTrace && run.kind === "done" ? (
-        <TracePanel run={run} step={step} onStep={onStep} stale={stale} onInput={onInput} />
+        <TracePanel
+          run={run}
+          step={step}
+          onStep={onStep}
+          stale={stale}
+          onInput={onInput}
+          autoFill={autoFill}
+        />
       ) : (
         <div
           ref={body}
@@ -194,7 +215,7 @@ export function OutputPanel({
           {run.kind === "running" && <p className="text-muted">Εκτέλεση…</p>}
           {run.kind === "stopped" && <p className="text-warn">— Η εκτέλεση διακόπηκε —</p>}
           {run.kind === "failed" && <p className="text-danger">{run.message}</p>}
-          {run.kind === "done" && <RunOutput run={run} onInput={onInput} playing={playing} />}
+          {run.kind === "done" && <RunOutput run={run} onInput={onInput} playing={playing} autoFill={autoFill} />}
         </div>
       )}
     </section>
@@ -233,10 +254,12 @@ function RunOutput({
   run,
   onInput,
   playing,
+  autoFill,
 }: {
   run: Done;
   onInput: (value: string) => void;
   playing: boolean;
+  autoFill: boolean;
 }) {
   const { inputs, marks, result } = run;
   const lines: { text: string; input: boolean }[] = [];
@@ -270,7 +293,13 @@ function RunOutput({
           {line.text}
         </div>
       ))}
-      <RunEnd run={run} onInput={onInput} number={lines.length + 1} playing={playing} />
+      <RunEnd
+        run={run}
+        onInput={onInput}
+        number={lines.length + 1}
+        playing={playing}
+        autoFill={autoFill}
+      />
     </>
   );
 }
@@ -281,6 +310,7 @@ export function RunEnd({
   onInput,
   number,
   playing = false,
+  autoFill,
 }: {
   run: Done;
   onInput: (value: string) => void;
@@ -288,6 +318,7 @@ export function RunEnd({
   number?: number;
   /** A played run (slow or step) hasn't reached its end. */
   playing?: boolean;
+  autoFill: boolean;
 }) {
   const { inputs, result } = run;
   const autoCount = run.autoSteps?.length ?? 0;
@@ -298,8 +329,10 @@ export function RunEnd({
       {autoCount > 0 &&
         (result.status === "needs_input" ? (
           <p className="mt-2 text-xs text-warn">
-            Δόθηκαν αυτόματα {autoCount} τιμές και το πρόγραμμα ζητά κι άλλες. Μήπως περιμένει μια
-            συγκεκριμένη τιμή για να σταματήσει; Γράψε την εδώ:
+            Δόθηκαν αυτόματα {autoCount} τιμές και το πρόγραμμα ζητά κι άλλες.{" "}
+            {autoFill &&
+              "Μετά τη δική σου συνεχίζουν αυτόματα· για να γράψεις μόνο δικές σου, κλείσε πρώτα το ζάρι. "}
+            Μήπως περιμένει μια συγκεκριμένη τιμή για να σταματήσει; Γράψε την εδώ:
           </p>
         ) : (
           <p className="mt-2 text-xs text-muted">
@@ -314,8 +347,10 @@ export function RunEnd({
           onSubmit={onInput}
           waiting={run.pending === true}
           stepped={run.pace === "step"}
+          initial={run.failure?.value}
         />
       )}
+      {run.failure && <p className="mt-2 text-danger">{run.failure.message}</p>}
       {result.status === "error" && result.error && (
         <p className="mt-2 rounded-md border-l-2 border-danger bg-danger/10 px-3 py-2 text-danger">
           {result.error.line !== null && <strong>Γραμμή {result.error.line}: </strong>}
@@ -324,8 +359,10 @@ export function RunEnd({
       )}
       {result.status === "limit" && (
         <p className="mt-2 rounded-md border-l-2 border-warn bg-warn/10 px-3 py-2 text-warn">
-          Η εκτέλεση σταμάτησε γιατί ξεπέρασε το όριο βημάτων, χρόνου ή εξόδου. Μήπως υπάρχει
-          ατέρμονος βρόχος;
+          {/* A backend not yet redeployed doesn't say which. */}
+          {result.limit
+            ? LIMIT_MESSAGES[result.limit]
+            : "Η εκτέλεση σταμάτησε γιατί ξεπέρασε το όριο βημάτων, χρόνου ή εξόδου. Μήπως υπάρχει ατέρμονος βρόχος;"}
         </p>
       )}
       {run.pace && result.trace_truncated && (
@@ -344,6 +381,7 @@ function InputLine({
   onSubmit,
   waiting,
   stepped,
+  initial = "",
 }: {
   number?: number;
   onSubmit: (value: string) => void;
@@ -351,8 +389,10 @@ function InputLine({
   waiting: boolean;
   /** A step run, where the box appears from Enter on Επόμενο. */
   stepped: boolean;
+  /** A value that didn't get through, to send again. */
+  initial?: string;
 }) {
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(initial);
   // A held Enter never sends a value; in a step run, nor does a quick second Enter
   // meant for Επόμενο (it would send an empty one).
   const shownAt = useRef(0);

@@ -12,8 +12,27 @@ import {
   tableWindow,
   traceColumns,
   valuesAfter,
+  valuesRead,
 } from "./trace";
 import type { TraceStep } from "./types";
+
+describe("valuesRead", () => {
+  it("counts everything but the made-up values past the step", () => {
+    // A typed value (no autoSteps entry) was read before the steps played from here.
+    expect(valuesRead(4, [2, 9, 12], 8)).toBe(2);
+    expect(valuesRead(4, [2, 9, 12], 9)).toBe(3);
+    expect(valuesRead(4, [2, 9, 12], 12)).toBe(4);
+  });
+
+  it("counts them all with no made-up values", () => {
+    expect(valuesRead(3, undefined, 0)).toBe(3);
+  });
+
+  it("holds values past a truncated trace, which share its last step, until that step", () => {
+    expect(valuesRead(3, [4999, 4999, 4999], 4998)).toBe(0);
+    expect(valuesRead(3, [4999, 4999, 4999], 4999)).toBe(3);
+  });
+});
 
 const step = (
   line: number,

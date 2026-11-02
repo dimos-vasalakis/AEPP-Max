@@ -14,8 +14,9 @@ from dataclasses import dataclass, field, fields
 
 from app.glossa import nodes as n
 
-# Then the run stops to ask, as without autofill: a program may read forever, and /run's
-# request limit (schemas/run.py) must leave room for the values re-sent with typed ones.
+# Per request. Then the run stops to ask, as without autofill: a program may read forever
+# until it gets a value only the student knows. A typed value goes on with more, up to
+# MAX_INPUTS in all.
 MAX_AUTO_INPUTS = 500
 
 COMPARISONS = {"=", "<>", "<", ">", "<=", ">="}

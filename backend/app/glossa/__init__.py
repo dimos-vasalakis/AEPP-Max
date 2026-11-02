@@ -12,9 +12,10 @@ from app.glossa.interpreter import execute
 from app.glossa.lexer import Language, tokenize
 from app.glossa.nodes import Algorithm, Program
 from app.glossa.parser import parse
-from app.glossa.result import ErrorInfo, RunLimits, RunResult, RunStatus, TraceStep
+from app.glossa.result import MAX_INPUTS, ErrorInfo, RunLimits, RunResult, RunStatus, TraceStep
 
 __all__ = [
+    "MAX_INPUTS",
     "ErrorInfo",
     "GlossaError",
     "Language",

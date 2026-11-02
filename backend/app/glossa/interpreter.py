@@ -19,7 +19,16 @@ from app.glossa.autofill import MAX_AUTO_INPUTS, Autofill
 from app.glossa.builtins import BUILTINS
 from app.glossa.errors import GlossaError
 from app.glossa.lexer import normalize
-from app.glossa.result import AutoInput, Frame, RunLimits, RunResult, TraceStep, Variable
+from app.glossa.result import (
+    MAX_INPUTS,
+    AutoInput,
+    Frame,
+    LimitReason,
+    RunLimits,
+    RunResult,
+    TraceStep,
+    Variable,
+)
 
 Value = int | float | str | bool
 
@@ -118,7 +127,9 @@ class _NeedsInput(Exception):
 
 
 class _Limit(Exception):
-    pass
+    def __init__(self, reason: LimitReason):
+        super().__init__(reason)
+        self.reason = reason
 
 
 def _error(node: n.Node, message: str) -> GlossaError:
@@ -191,6 +202,7 @@ def execute(
     - ΔΙΑΒΑΣΕ consumes `inputs` in order and converts each to the variable's
       type; once they run out, stop with status "needs_input" and the output
       so far. With autofill=True, first make up to MAX_AUTO_INPUTS more values.
+      The read past MAX_INPUTS values in all stops with status "limit".
     - Count steps and check the clock every few hundred steps; past
       limits.max_steps or limits.timeout_seconds stop with status "limit" (this
       runs in a worker thread that can't be killed, so the loop must stop itself).
@@ -214,6 +226,7 @@ sys.setrecursionlimit(max(sys.getrecursionlimit(), 20 * MAX_CALL_DEPTH + 1000))
 def run_machine(machine: "_Machine") -> RunResult:
     """Run `machine` (this module's, or algorithm_interpreter's) to a RunResult."""
     input_line = None
+    limit = None
     try:
         machine.run()
         status = "ok"
@@ -223,8 +236,9 @@ def run_machine(machine: "_Machine") -> RunResult:
     except _NeedsInput as exc:
         status, error = "needs_input", None
         input_line = exc.line
-    except _Limit:
+    except _Limit as exc:
         status, error = "limit", None
+        limit = exc.reason
     except RecursionError:
         status = "error"
         error = GlossaError(
@@ -239,6 +253,7 @@ def run_machine(machine: "_Machine") -> RunResult:
         trace_truncated=machine.trace_truncated,
         steps=machine.steps,
         input_line=input_line,
+        limit=limit,
         frames=machine.snapshot(),
         units=list(machine.declared.values()),
         auto_inputs=machine.auto_inputs,
@@ -293,9 +308,9 @@ class _Machine:
     def count_step(self) -> None:
         self.steps += 1
         if self.steps > self.limits.max_steps:
-            raise _Limit
+            raise _Limit("steps")
         if self.steps % CLOCK_EVERY == 0 and time.monotonic() > self.deadline:
-            raise _Limit
+            raise _Limit("time")
 
     def tick(self, node: n.Node, frame: _Frame) -> None:
         """Count a step; start its trace entry."""
@@ -310,8 +325,10 @@ class _Machine:
         """Count allocating or copying `cells` array cells as steps, and check the clock:
         one call can copy a million cells, far more than its steps say."""
         self.steps += cells // CELLS_PER_STEP
-        if self.steps > self.limits.max_steps or time.monotonic() > self.deadline:
-            raise _Limit
+        if self.steps > self.limits.max_steps:
+            raise _Limit("steps")
+        if time.monotonic() > self.deadline:
+            raise _Limit("time")
 
     def allocate(self, cells: int, node: n.Node) -> None:
         if self.live_cells + cells > MAX_LIVE_CELLS:
@@ -761,11 +778,13 @@ class _Machine:
 
     def next_text(self, target: n.Target, type_name: str | None = None) -> str:
         """The next input, as typed; out of inputs, one made up with autofill on, else
-        the run stops to ask for one."""
+        the run stops to ask for one, unless it has read all a run may."""
         if self.next_input < len(self.inputs):
             text = self.inputs[self.next_input]
             self.next_input += 1
             return text
+        if self.next_input + len(self.auto_inputs) >= MAX_INPUTS:
+            raise _Limit("inputs")
         if self.autofill is None or len(self.auto_inputs) >= MAX_AUTO_INPUTS:
             raise _NeedsInput(target.line)
         text = self.autofill.value(target.key, type_name, self.stack[-1].unit)
@@ -806,7 +825,7 @@ class _Machine:
             # Checked as it grows: one ΓΡΑΨΕ of many long strings could build a huge line.
             length += len(parts[-1])
             if length > self.limits.max_output_chars + 1:  # + the space that may go below
-                raise _Limit
+                raise _Limit("output")
         text = "".join(parts)
         # A ΓΡΑΨΕ ending with a space leaves the cursor on its line (the space itself goes).
         stays = text.endswith(" ")
@@ -814,12 +833,12 @@ class _Machine:
             text = text[:-1]
         self.output_chars += len(text)
         if self.output_chars > self.limits.max_output_chars:
-            raise _Limit
+            raise _Limit("output")
         if self.line_open and self.output:
             self.output[-1] += text
         else:
             if len(self.output) >= self.limits.max_output_lines:
-                raise _Limit
+                raise _Limit("output")
             self.output.append(text)
         self.line_open = stays
         if row := self.current():

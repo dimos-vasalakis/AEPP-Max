@@ -48,9 +48,11 @@ class Settings(BaseSettings):
     run_max_steps: int = 200_000
     run_max_output_lines: int = 2_000
     run_max_trace_steps: int = 5_000
-    run_timeout_seconds: float = 3.0
-    # Programs running at once, and requests waiting for one of them, before /run and
-    # /check answer 503 (core/interpreter_pool.py).
+    # Wall clock, so it depends on the server: Render ran about 9 steps/ms, and at 3 s a valid
+    # sort of 100 rows stopped at 27k steps. 10 s allows about 90k there.
+    run_timeout_seconds: float = 10.0
+    # Programs running at once, and requests waiting for one of them, before /run answers
+    # 503; /check has the same again, of its own (core/interpreter_pool.py).
     run_workers: int = 2
     run_queue: int = 16
 

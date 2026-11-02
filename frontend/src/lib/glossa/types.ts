@@ -5,6 +5,8 @@ export type Language = "glossa" | "pseudocode";
 
 export type RunStatus = "ok" | "error" | "needs_input" | "limit";
 
+export type LimitReason = "steps" | "time" | "output" | "inputs";
+
 export type ErrorInfo = {
   kind: "syntax" | "runtime";
   message: string;
@@ -71,6 +73,8 @@ export type RunResult = {
   steps: number;
   /** needs_input: the line of the ΔΙΑΒΑΣΕ waiting for a value. */
   input_line: number | null;
+  /** Status "limit": which bound. Missing from a backend not yet redeployed. */
+  limit?: LimitReason | null;
   /** The calls running when it stopped, the program first, with their variables' values. */
   frames: Frame[];
   /** Traced runs only: each unit that ran, with its declared variables (no values). */

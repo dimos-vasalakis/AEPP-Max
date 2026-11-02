@@ -289,7 +289,7 @@ function where(run: Done, step: number | null): ReactNode {
         </>
       );
     case "limit":
-      return "Οι τιμές όταν σταμάτησε (όριο βημάτων, χρόνου ή εξόδου).";
+      return "Οι τιμές όταν σταμάτησε στο όριο.";
     case "error":
       return result.error?.line ? (
         <>

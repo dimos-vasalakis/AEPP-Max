@@ -184,6 +184,15 @@ export function screenAt(output: string[], trace: TraceStep[], step: number): st
   return screen;
 }
 
+/**
+ * How many of a played run's `total` values it has read by `step`: all but the made-up ones
+ * past it (`autoSteps`). Typed values are never past it: a box only shows at the run's end,
+ * and the re-run goes on from there.
+ */
+export function valuesRead(total: number, autoSteps: number[] | undefined, step: number): number {
+  return total - (autoSteps ?? []).filter((at) => at > step).length;
+}
+
 /** What a step did, in short, for the editor's inline note: «x = 5, y = 2 · ΑΛΗΘΗΣ». */
 export function stepSummary(step: TraceStep): string {
   const changes = Object.entries(step.changes).map(([name, value]) => `${name} = ${value}`);

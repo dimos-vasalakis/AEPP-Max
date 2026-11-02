@@ -10,8 +10,14 @@ ErrorKind = Literal["syntax", "runtime"]
 # error: syntax or runtime error (see `error`).
 # needs_input: ΔΙΑΒΑΣΕ ran out of inputs. The client asks the student for a
 #   value and runs again with it appended (programs are deterministic).
-# limit: a RunLimits bound was hit, usually an infinite loop.
+# limit: a bound was hit, usually an infinite loop (see `limit`).
 RunStatus = Literal["ok", "error", "needs_input", "limit"]
+# Which bound: the RunLimits' steps, time or output, or MAX_INPUTS.
+LimitReason = Literal["steps", "time", "output", "inputs"]
+
+# ΔΙΑΒΑΣΕ values in one run, typed or made up: each is re-sent with the next, and /run takes
+# no more (schemas/run.py). The read past them ends the run, so the client never sends a 1001st.
+MAX_INPUTS = 1_000
 
 
 @dataclass(frozen=True)
@@ -22,7 +28,7 @@ class RunLimits:
     # Characters, so a long string printed in a loop can't fill the server's memory.
     max_output_chars: int = 200_000
     max_trace_chars: int = 1_000_000  # the trace's values and output; then it stops, truncated
-    timeout_seconds: float = 3.0
+    timeout_seconds: float = 10.0  # as core/config.py's run_timeout_seconds
 
 
 @dataclass
@@ -97,6 +103,7 @@ class RunResult:
     trace_truncated: bool = False
     steps: int = 0
     input_line: int | None = None  # needs_input: the line of the ΔΙΑΒΑΣΕ waiting for a value
+    limit: LimitReason | None = None  # status "limit": which bound
     # The calls running when it stopped, the program first, with their variables' values.
     frames: list[Frame] = field(default_factory=list)
     # Traced runs only: each unit that ran, with its declared variables (no values), so

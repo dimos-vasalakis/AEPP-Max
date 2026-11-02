@@ -5,7 +5,7 @@ from sentry_sdk import metrics
 
 from app import glossa
 from app.core.config import get_settings
-from app.core.interpreter_pool import in_interpreter
+from app.core.interpreter_pool import in_checker, in_interpreter
 from app.schemas.run import CheckRequest, CheckResult, RunRequest
 
 router = APIRouter(tags=["run"])
@@ -47,6 +47,8 @@ async def run_program(body: RunRequest) -> glossa.RunResult:
     # to tune RunLimits and see whether students hit them. Per request: each value a
     # ΔΙΑΒΑΣΕ asks for re-runs the program, so needs_input counts those re-runs.
     tags = {"status": result.status, "language": body.language, "trace": body.trace}
+    if result.limit:
+        tags["limit"] = result.limit
     metrics.count("glossa.run", 1, attributes=tags)
     metrics.distribution("glossa.run.duration", elapsed, "millisecond", tags)
     return result
@@ -55,4 +57,4 @@ async def run_program(body: RunRequest) -> glossa.RunResult:
 @router.post("/check", response_model=CheckResult)
 async def check_program(body: CheckRequest) -> CheckResult:
     """The first syntax/static error, for the editor's live error marking (no AI)."""
-    return CheckResult(error=await in_interpreter(glossa.check, body.code, body.language))
+    return CheckResult(error=await in_checker(glossa.check, body.code, body.language))

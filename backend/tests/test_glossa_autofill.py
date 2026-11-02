@@ -4,7 +4,7 @@ end. The values are random, so each property is checked over many runs."""
 import pytest
 from fastapi.testclient import TestClient
 
-from app.glossa import RunResult, run
+from app.glossa import MAX_INPUTS, RunResult, run
 from app.glossa.autofill import MAX_AUTO_INPUTS
 from app.main import app
 
@@ -246,6 +246,36 @@ def test_a_program_that_never_stops_reading_asks_after_the_cap():
     assert result.status == "needs_input"
     assert result.input_line == 6
     assert len(result.auto_inputs) == MAX_AUTO_INPUTS
+
+
+def test_a_typed_value_goes_on_with_more_up_to_the_limit_of_a_run():
+    source = program("ΑΚΕΡΑΙΕΣ: x", "ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n  ΔΙΑΒΑΣΕ x\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ")
+    first = filled(source)
+    second = run(source, [*values(first), "7"], autofill=True)
+    assert second.status == "limit"
+    assert second.limit == "inputs"
+    assert len(second.auto_inputs) == MAX_INPUTS - MAX_AUTO_INPUTS - 1
+
+
+def test_an_array_of_a_thousand_can_be_filled():
+    source = program(
+        "ΑΚΕΡΑΙΕΣ: Α[1000], i",
+        "ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 1000\n  ΔΙΑΒΑΣΕ Α[i]\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\nΓΡΑΨΕ i",
+    )
+    first = filled(source)
+    assert first.status == "needs_input"
+    done = run(source, [*values(first), "7"], autofill=True)
+    assert (done.status, done.output) == ("ok", ["1001"])
+
+
+def test_the_api_takes_every_value_a_run_may_read():
+    client = TestClient(app)
+    source = program("ΑΚΕΡΑΙΕΣ: x", "ΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\n  ΔΙΑΒΑΣΕ x\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ")
+    sent = {"code": source, "inputs": ["1"] * MAX_INPUTS}
+    body = client.post("/api/v1/run", json=sent).json()
+    assert (body["status"], body["limit"]) == ("limit", "inputs")
+    sent["inputs"] = ["1"] * (MAX_INPUTS + 1)
+    assert client.post("/api/v1/run", json=sent).status_code == 422
 
 
 def test_values_given_first_are_used_first():

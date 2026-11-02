@@ -7,6 +7,10 @@ allowed RunLimits' timeout, took every thread and nearly all the CPU: token chec
 webhook stalled with it. Here at most `run_workers` programs run at once, in anyio's
 worker threads (not that pool), at most `run_queue` more requests wait, and the rest
 get 503 straight away. One process holds it all, as on Render.
+
+/check only parses, in milliseconds, but runs can hold their threads for the whole
+timeout. So it has threads and a queue of its own: an infinite loop elsewhere doesn't
+delay or refuse the editor's error marks.
 """
 
 from collections.abc import Callable
@@ -18,29 +22,39 @@ from fastapi import HTTPException, status
 
 from app.core.config import get_settings
 
-_limiter: anyio.CapacityLimiter | None = None
-_admitted = 0  # running or waiting for a thread
+
+class _Pool:
+    def __init__(self) -> None:
+        self.limiter: anyio.CapacityLimiter | None = None  # made on first use, in the event loop
+        self.admitted = 0  # running or waiting for a thread
+
+    async def call[T](self, func: Callable[..., T], args: tuple[object, ...], queue: bool) -> T:
+        settings = get_settings()
+        if queue and self.admitted >= settings.run_workers + settings.run_queue:
+            raise HTTPException(
+                status.HTTP_503_SERVICE_UNAVAILABLE,
+                "Interpreter busy",
+                headers={"Retry-After": "2"},
+            )
+        if self.limiter is None:
+            self.limiter = anyio.CapacityLimiter(settings.run_workers)
+        self.admitted += 1
+        try:
+            return await anyio.to_thread.run_sync(partial(func, *args), limiter=self.limiter)
+        finally:
+            self.admitted -= 1
 
 
-def _threads() -> anyio.CapacityLimiter:
-    # Made on first use, inside the event loop.
-    global _limiter
-    if _limiter is None:
-        _limiter = anyio.CapacityLimiter(get_settings().run_workers)
-    return _limiter
+_runs = _Pool()
+_checks = _Pool()
 
 
 async def in_interpreter[T](func: Callable[..., T], *args: object, queue: bool = True) -> T:
     """`func(*args)` on one of the interpreter's threads. With `queue` (the public
     endpoints), 503 at once when the queue is full; the agent's tools wait instead."""
-    global _admitted
-    settings = get_settings()
-    if queue and _admitted >= settings.run_workers + settings.run_queue:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE, "Interpreter busy", headers={"Retry-After": "2"}
-        )
-    _admitted += 1
-    try:
-        return await anyio.to_thread.run_sync(partial(func, *args), limiter=_threads())
-    finally:
-        _admitted -= 1
+    return await _runs.call(func, args, queue)
+
+
+async def in_checker[T](func: Callable[..., T], *args: object) -> T:
+    """`func(*args)` for /check, apart from the runs."""
+    return await _checks.call(func, args, True)

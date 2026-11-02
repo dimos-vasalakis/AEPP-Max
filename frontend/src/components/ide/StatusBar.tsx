@@ -53,7 +53,7 @@ function runText(run: RunState, playing: boolean): string {
         ? `Διάβασμα τιμής στη γραμμή ${result.input_line}`
         : "Διάβασμα τιμής";
     case "limit":
-      return "Η εκτέλεση σταμάτησε (όριο βημάτων, χρόνου ή εξόδου).";
+      return "Η εκτέλεση σταμάτησε (όριο).";
     case "error":
       return result.error
         ? `${result.error.line ? `Γραμμή ${result.error.line}: ` : ""}${result.error.message}`

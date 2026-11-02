@@ -9,7 +9,7 @@ import { Navbar } from "@/components/Navbar";
 import { ApiError, apiFetch } from "@/lib/api/client";
 import { getProgram, type Program, programError, updateProgram } from "@/lib/api/programs";
 import { type Algorithm, algorithmProgram } from "@/lib/glossa/algorithms";
-import { partStart, screenAt, stepSummary } from "@/lib/glossa/trace";
+import { partStart, screenAt, stepSummary, valuesRead } from "@/lib/glossa/trace";
 import type { TraceMark } from "@/lib/glossa/traceLine";
 import type { Language, RunResult } from "@/lib/glossa/types";
 import { stashForSignIn, takePendingSave } from "@/lib/pendingSave";
@@ -70,8 +70,8 @@ export function Ide() {
   // screen, null once it's done (or for any other run). Stopped (■), it stays there.
   // Βηματική εκτέλεση plays the same way, one step per Επόμενο.
   const [slowMode, setSlowMode] = useState(false);
-  // Αυτόματες τιμές (the dice): a new run gets its ΔΙΑΒΑΣΕ values from the interpreter
-  // (backend's autofill.py), up to its cap; past that it asks, as it does with this off.
+  // Αυτόματες τιμές (the dice): a run gets its ΔΙΑΒΑΣΕ values from the interpreter (backend's
+  // autofill.py), up to its cap per request; past that it asks, as it does with this off.
   const [autoFill, setAutoFill] = useState(false);
   const [play, setPlay] = useState<number | null>(null);
   const playing = play !== null && run.kind === "done" && !run.stopped;
@@ -196,7 +196,7 @@ export function Ide() {
       setTraceStep(0);
       setSideTab("variables");
     } else {
-      setRun((last) => (last.kind === "done" ? { ...last, pending: true } : last));
+      setRun((last) => (last.kind === "done" ? { ...last, pending: true, failure: undefined } : last));
     }
     try {
       const result = await apiFetch<RunResult>("/run", {
@@ -206,7 +206,7 @@ export function Ide() {
           inputs,
           language: languageRef.current,
           trace: traced || pace !== undefined,
-          autofill: autoFill && inputs.length === 0,
+          autofill: autoFill,
         }),
         signal: controller.signal,
       });
@@ -217,13 +217,11 @@ export function Ide() {
         kind: "done",
         inputs: [...inputs, ...filled.map((auto) => auto.value)],
         marks: [...marks, ...filled.map((auto) => auto.output)],
-        // A re-run with a typed value resends the autofilled ones as inputs.
-        autoSteps:
-          inputs.length === 0
-            ? filled.map((auto) => auto.step)
-            : run.kind === "done"
-              ? run.autoSteps
-              : undefined,
+        // A re-run with a typed value resends the autofilled ones as inputs, and may add more.
+        autoSteps: [
+          ...(inputs.length > 0 && run.kind === "done" ? (run.autoSteps ?? []) : []),
+          ...filled.map((auto) => auto.step),
+        ],
         result,
         code,
         traced,
@@ -236,10 +234,18 @@ export function Ide() {
       setPlay(pace && trace.length > 0 ? Math.min(resumed ?? start, trace.length - 1) : null);
     } catch (err) {
       if (seq !== runSeq.current) return;
-      setRun({
-        kind: "failed",
-        message: runFailure(err),
-      });
+      const message = runFailure(err);
+      // A failed ΔΙΑΒΑΣΕ re-run keeps the screen and the values, to send that one again.
+      const again = err instanceof ApiError && err.status !== 503 ? "" : " Πάτα ξανά Enter για να σταλεί η τιμή.";
+      setRun((last) =>
+        inputs.length > 0 && last.kind === "done"
+          ? {
+              ...last,
+              pending: false,
+              failure: { message: message + again, value: inputs[inputs.length - 1] },
+            }
+          : { kind: "failed", message },
+      );
     }
   }
 
@@ -343,7 +349,7 @@ export function Ide() {
   // it hasn't read yet.
   const shownRun = useMemo((): RunState => {
     if (play === null || run.kind !== "done" || !run.result.trace) return run;
-    const read = run.inputs.length - (run.autoSteps ?? []).filter((at) => at > play).length;
+    const read = valuesRead(run.inputs.length, run.autoSteps, play);
     return {
       ...run,
       inputs: run.inputs.slice(0, read),
@@ -693,7 +699,7 @@ export function Ide() {
             <StepIcon />
           </button>
         )}
-        {/* An on/off switch, not a run: with it on, new runs fill in their ΔΙΑΒΑΣΕ values. */}
+        {/* An on/off switch, not a run: with it on, runs fill in their ΔΙΑΒΑΣΕ values. */}
         <button
           type="button"
           onClick={() => setAutoFill((on) => !on)}
@@ -827,6 +833,7 @@ export function Ide() {
               step={step}
               onStep={setTraceStep}
               stale={stale}
+              autoFill={autoFill}
             />
           </div>
         </div>
@@ -1077,8 +1084,8 @@ function runFailure(err: unknown): string {
   if (!(err instanceof ApiError)) return "Δεν ήταν δυνατή η σύνδεση με τον διερμηνευτή.";
   if (err.status === 503) return "Ο διερμηνευτής είναι πολύ απασχολημένος αυτή τη στιγμή. Δοκίμασε ξανά σε λίγα δευτερόλεπτα.";
   if (err.status === 413) return "Το πρόγραμμα ή οι τιμές εισόδου είναι πολύ μεγάλα για εκτέλεση.";
-  // schemas/run.py's limits (code length, number of inputs): FastAPI's detail is JSON
-  // that quotes the whole program.
+  // schemas/run.py's limits (the code's length): FastAPI's detail is JSON that quotes the
+  // whole program. The number of inputs never gets here: a run stops at them (RunResult.limit).
   if (err.status === 422) return "Το πρόγραμμα ή οι τιμές εισόδου είναι πολύ μεγάλα για εκτέλεση.";
-  return err.message;
+  return "Ο διερμηνευτής απάντησε με σφάλμα. Δοκίμασε ξανά σε λίγο.";
 }
