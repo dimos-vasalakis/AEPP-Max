@@ -782,7 +782,7 @@ class _Machine:
                 return self.compare(op, value, self.eval(expr, frame), condition)
         raise AssertionError(condition)
 
-    def next_text(self, target: n.Target, type_name: str | None = None) -> str:
+    def next_text(self, target: n.Target, frame: _Frame, type_name: str | None = None) -> str:
         """The next input, as typed; out of inputs, one made up with autofill on, else
         the run stops to ask for one, unless it has read all a run may."""
         if self.next_input < len(self.inputs):
@@ -793,14 +793,14 @@ class _Machine:
             raise _Limit("inputs")
         if self.autofill is None or len(self.auto_inputs) >= MAX_AUTO_INPUTS:
             raise _NeedsInput(target.line)
-        text = self.autofill.value(target.key, type_name, self.stack[-1].unit)
+        text = self.autofill.value(target.key, type_name, frame.unit)
         step = max(0, len(self.trace) - 1) if self.trace else 0
         self.auto_inputs.append(AutoInput(value=text, output=len(self.output), step=step))
         return text
 
     def read(self, target: n.Target, frame: _Frame) -> Value:
         type_name = self.target_type(target, frame)
-        text = self.next_text(target, type_name)
+        text = self.next_text(target, frame, type_name)
         plain = text.strip()
         if type_name == "ΑΚΕΡΑΙΑ":
             if INTEGER_INPUT.fullmatch(plain):

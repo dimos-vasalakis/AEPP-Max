@@ -66,7 +66,19 @@ def execute_algorithms(
 ) -> RunResult:
     """Run the first algorithm; the same contract as interpreter.execute."""
     return run_machine(
-        _AlgorithmMachine(main, inputs, limits, trace, Autofill(main) if autofill else None)
+        _AlgorithmMachine(
+            main, inputs, limits, trace, Autofill(main, keeps_text) if autofill else None
+        )
+    )
+
+
+def keeps_text(text: str) -> bool:
+    """Whether Διάβασε keeps `text` as text: not a number or ΑΛΗΘΗΣ/ΨΕΥΔΗΣ (`read`)."""
+    plain = text.strip()
+    return not (
+        INTEGER_INPUT.fullmatch(plain)
+        or REAL_INPUT.fullmatch(plain.replace(",", "."))
+        or normalize(plain) in ("ΑΛΗΘΗΣ", "ΨΕΥΔΗΣ")
     )
 
 
@@ -137,17 +149,17 @@ class _AlgorithmMachine(_Machine):
 
     def read(self, target: n.Target, frame: _Frame) -> Value:
         """No declared type: the value is what the typed text looks like."""
-        text = self.next_text(target)
+        text = self.next_text(target, frame)
+        # The same test autofill uses, so it never offers a text this reads as something else.
+        if keeps_text(text):
+            return text
         plain = text.strip()
         if INTEGER_INPUT.fullmatch(plain):
             return integer_input(plain, target)
         decimal = plain.replace(",", ".")  # 2,5 as Greeks write it
         if REAL_INPUT.fullmatch(decimal):
             return real_input(decimal, target)
-        word = normalize(plain)
-        if word in ("ΑΛΗΘΗΣ", "ΨΕΥΔΗΣ"):
-            return word == "ΑΛΗΘΗΣ"
-        return text
+        return normalize(plain) == "ΑΛΗΘΗΣ"  # keeps_text: ΑΛΗΘΗΣ or ΨΕΥΔΗΣ
 
     # Calls
 

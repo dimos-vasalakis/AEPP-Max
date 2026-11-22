@@ -234,6 +234,73 @@ def test_a_count_stays_inside_the_arrays(constants, size):
         assert result.status == "ok", result.error
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        # a copy, and a chain of copies
+        "ΔΙΑΒΑΣΕ πλήθος\nν <- πλήθος\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ ν\n  Π[i] <- i\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        "ΔΙΑΒΑΣΕ πλήθος\nμ <- πλήθος\nν <- μ\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ ν\n  Π[i] <- i\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        # a sum or a multiple in the bound, the index or the copy
+        "ΔΙΑΒΑΣΕ ν\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ ν + 1\n  Π[i] <- i\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        "ΔΙΑΒΑΣΕ ν\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 2 * ν\n  Π[i] <- i\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        "ΔΙΑΒΑΣΕ ν\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ ν\n  Π[i + 1] <- i\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        "ΔΙΑΒΑΣΕ πλήθος\nν <- πλήθος + 2\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ ν\n  Π[i] <- i\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+    ],
+)
+def test_a_count_copied_or_in_a_sum_stays_inside_the_arrays(body):
+    source = program("ΑΚΕΡΑΙΕΣ: πλήθος, μ, ν, i, Π[10]", body)
+    for _ in range(RUNS * 3):
+        result = filled(source)
+        assert result.status == "ok", result.error
+
+
+def test_a_number_from_the_code_is_held_to_the_arrays_too():
+    source = program(
+        "ΑΚΕΡΑΙΕΣ: ν, Π[10]",
+        "ΑΡΧΗ_ΕΠΑΝΑΛΗΨΗΣ\n  ΔΙΑΒΑΣΕ ν\nΜΕΧΡΙΣ_ΟΤΟΥ ν >= 1 ΚΑΙ ν <= 50\nΠ[ν] <- 1",
+    )
+    for _ in range(RUNS * 3):
+        result = filled(source)
+        assert result.status == "ok", result.error
+
+
+@pytest.mark.parametrize(
+    ("declarations", "body"),
+    [
+        # a real whose cap is its only value (an empty span)
+        ("ΠΡΑΓΜΑΤΙΚΕΣ: x\nΑΚΕΡΑΙΕΣ: Π[10]", "ΔΙΑΒΑΣΕ x\nΠ[x + 9] <- 1"),
+        (
+            "ΠΡΑΓΜΑΤΙΚΕΣ: x\nΑΚΕΡΑΙΕΣ: i, Π[1]",
+            "ΔΙΑΒΑΣΕ x\nΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ x\n  Π[i] <- 1\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ",
+        ),
+        # numbers too big or too small for a cap
+        ("ΑΚΕΡΑΙΕΣ: ν, Π[10]", f"ΔΙΑΒΑΣΕ ν\nΠ[ν - {'1' + '0' * 100} * {'1' + '0' * 100}] <- 1"),
+        ("ΑΚΕΡΑΙΕΣ: ν, Π[10]", f"ΔΙΑΒΑΣΕ ν\nΠ[ν * 0.{'0' * 318}1] <- 1"),
+    ],
+)
+def test_odd_bounds_end_as_the_program_would_never_crash(declarations, body):
+    for _ in range(RUNS):
+        result = filled(program(declarations, body))
+        assert result.status in ("ok", "error")
+        assert result.status == "ok" or result.error.kind == "runtime"
+
+
+def test_a_very_long_sum_runs_as_without_autofill():
+    long = " + ".join(["ν"] + ["1"] * 2500)
+    source = program("ΑΚΕΡΑΙΕΣ: ν, s, Π[10]", f"ΔΙΑΒΑΣΕ ν\ns <- {long}\nΠ[1] <- s")
+    assert filled(source).status == "ok"
+
+
+def test_a_counter_that_grows_keeps_no_cap():
+    # κ <- κ + 1 is not a copy: κ (read) is still drawn from the usual span.
+    source = program(
+        "ΑΚΕΡΑΙΕΣ: κ, Π[3]",
+        "ΔΙΑΒΑΣΕ κ\nΠ[1] <- κ\nκ <- κ + 1\nΑΝ κ > 0 ΤΟΤΕ\n  ΓΡΑΨΕ κ\nΤΕΛΟΣ_ΑΝ",
+    )
+    for _ in range(RUNS):
+        assert filled(source).status == "ok"
+
+
 def test_array_elements_are_not_held_to_its_size():
     source = program("ΑΚΕΡΑΙΕΣ: i, Π[2]", "ΓΙΑ i ΑΠΟ 1 ΜΕΧΡΙ 2\n  ΔΙΑΒΑΣΕ Π[i]\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ")
     seen = {int(value) for _ in range(RUNS) for value in values(filled(source))}
@@ -323,6 +390,23 @@ def test_algorithm_values_follow_the_comparisons():
         assert not first.lstrip("-").isdigit()  # compared with text
         assert second.isdigit()  # compared with nothing: a number
         assert result.auto_inputs[0].step == 0  # the Δεδομένα's row
+
+
+def test_algorithm_values_are_never_texts_read_as_numbers():
+    # Διάβασε reads "1" as the number 1 and "ΑΛΗΘΗΣ" as true: offered for `α = "1"`, the
+    # comparison would fail with a type error the student didn't make.
+    for literal in ("1", "2,5", "ΑΛΗΘΗΣ"):
+        source = (
+            f'Αλγόριθμος Τ\nΔιάβασε α\nΑν α = "{literal}" ή α = "ΝΑΙ" τότε\n'
+            "  Εκτύπωσε α\nΤέλος_αν\nΤέλος Τ\n"
+        )
+        seen = set()
+        for _ in range(RUNS):
+            result = filled(source, "pseudocode")
+            assert result.status == "ok", result.error
+            seen.add(values(result)[0])
+        assert literal not in seen
+        assert "ΝΑΙ" in seen  # the other text still is
 
 
 def test_the_api_takes_autofill():
