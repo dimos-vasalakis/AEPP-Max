@@ -10,7 +10,7 @@ import { createClient } from "@/lib/supabase/client";
 
 /**
  * Ρυθμίσεις, from the account menu: a centered dialog with today's limits first,
- * then the account's details, the font size and account deletion. Rendered only
+ * then the account's details and account deletion (font size is only in the lens). Rendered only
  * while open; Esc, the × or a click outside closes it (except mid-deletion).
  */
 export function SettingsDialog({ user, onClose }: { user: User; onClose: () => void }) {

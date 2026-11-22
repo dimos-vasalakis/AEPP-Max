@@ -204,9 +204,17 @@ js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `Δ�
 | `ΓΙΑ` | Bounds and step evaluated once; the counter is updated as `counter + step` each round, so after the loop it holds the first value past the bound. `ΜΕ_ΒΗΜΑ 0` is an error. Real counters and steps work. A ΓΙΑ inside another ΓΙΑ cannot use the same counter (a runtime error at the inner one, when it starts). |
 | Input | An integer variable takes only an integer; a real one also accepts a decimal comma (`2,5`); a ΛΟΓΙΚΗ one accepts ΑΛΗΘΗΣ/ΨΕΥΔΗΣ in any case or accents; ΧΑΡΑΚΤΗΡΕΣ take the text as typed. A wrong value ends the run with an error. |
 | Strings with `+` | An error (no concatenation), as the textbook says. |
-| Limits | Call depth 200, arrays up to 1,000,000 cells, integers up to 10^100: past them, a runtime error instead of a hung worker. |
+| Limits | Call depth 200, arrays up to 1,000,000 cells (2,000,000 live across all running calls), integers up to 10^100 (literals and inputs too): past them, a runtime error instead of a hung worker. A run reads at most 1,000 inputs (typed or made up) and stops at the next ΔΙΑΒΑΣΕ; steps, output and wall-clock time (10 s) are capped too, each with its own message. |
 | Πίνακας τιμών (trace) | Our choice; the textbook writes the table by hand. One row per executed statement, with the values it set and a condition's value. A call adds a row on the subprogram's first line with its scalar parameters; after the subprogram's rows, a row back on the calling line holds what the call changed there: a function's value assigned, a condition, and only those arguments whose values the procedure actually changed. Tests: `TestTrace`. |
 
+
+## Αυτόματες τιμές
+
+Not a language rule: an IDE option (the navbar's dice) for testing a program with many inputs. With it on, `/run` gets `autofill: true` and `backend/app/glossa/autofill.py` makes up a value at each `ΔΙΑΒΑΣΕ` that has no typed one, returned as `auto_inputs`. Tests: `backend/tests/test_glossa_autofill.py`.
+
+- A value has the variable's type and is read like a typed one, so the run behaves exactly as if the student had typed it.
+- Values come from what the code compares the variable with (ΑΝ, loop conditions, ΠΕΡΙΠΤΩΣΗ): those values, their neighbors and the range between them, otherwise small numbers (1–20). So validation loops accept a value and sentinel loops end; a sentinel is never the first value, and a count read from the student stays inside the declared arrays.
+- After 500 made-up values in one request the run asks the student, as without the option; a typed value goes on with more, up to the 1,000 inputs a run may read.
 
 ## Αλγόριθμος (ψευδογλώσσα)
 

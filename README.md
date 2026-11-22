@@ -25,28 +25,37 @@ AEPP Max runs the same programs as the Διερμηνευτής της ΓΛΩΣ�
 
 **Faithful to the exam.** Students are graded on textbook ΓΛΩΣΣΑ, so the interpreter accepts what the textbook and the Διερμηνευτής accept and rejects the rest. A program that runs here but would lose marks in the exam is treated as a bug. The rules it follows are written down in [docs/glossa.md](docs/glossa.md), and every rule has a test.
 
+**ΓΛΩΣΣΑ and ψευδογλώσσα.** A switch in the toolbar turns the editor from a **Πρόγραμμα** in ΓΛΩΣΣΑ to an **Αλγόριθμος** in the textbook's pseudocode (chapter 2): no declarations, `Δεδομένα // … //` read from the keyboard, `Αποτελέσματα // … //` shown at the end, and `Κάλεσε` between algorithms. Words and symbols are written as the book prints them (`Τέλος_αν`, `←`, `≤`).
+
 **Errors a student can act on.** Messages are in Greek, with the line number, and say how to fix the common mistakes: `=` instead of `<-`, `ΤΕΛΟΣ ΑΝ` without the underscore, `0 < x < 10`, Latin look-alike letters in keywords, a forgotten `ΑΡΧΗ`, a procedure called without `ΚΑΛΕΣΕ`. Errors are underlined in red while typing, and the line number turns red. Code that never runs is checked too.
 
 **An editor that knows the language.**
 - Context-aware autocomplete that ignores case and accents, and offers whole blocks (`ΑΝ … ΤΕΛΟΣ_ΑΝ`, `ΓΙΑ`, subprograms) with blanks to fill in using Tab.
-- Reserved words are capitalized automatically, blocks indent themselves, and a Greek loop counter typed on the Greek keyboard becomes the Latin letter.
+- Reserved words are capitalized automatically (even typed with the keyboard left on English: `grapse` → `ΓΡΑΨΕ`), blocks indent themselves, and a Greek loop counter typed on the Greek keyboard becomes the Latin letter.
+- **Τακτοποίηση** re-indents and spaces the whole program before every run, or from its button (Shift+Alt+F), as one undo step.
 - No AI and no tokens involved, so all of it works signed out.
 
-**A tutor that doesn't guess.** The agent runs your code on the real interpreter before it says anything about its output, replies in Greek, and uses only constructs from the textbook. **Tutor** mode gives hints before solutions and never touches your code. **Agent** mode writes changes into the editor: either at once (**αυτόματα**, Ctrl+Z undoes them) or as a diff you approve with Ctrl/Cmd+Enter first (**με έγκριση**). Shift+Tab switches between the two inside Agent mode. Slash commands work in the chat: `/switch` (Tutor ↔ Agent), `/new` and `/help`.
+**A tutor that doesn't guess.** The agent runs your code on the real interpreter before it says anything about its output, replies in Greek, and uses only constructs from the textbook. **Tutor** mode gives hints before solutions and never touches your code. **Agent** mode writes changes into the editor: either at once (**αυτόματα**, Ctrl+Z undoes them) or as a diff you approve with Ctrl/Cmd+Enter first (**με έγκριση**). Shift+Tab switches between the two inside Agent mode. Slash commands work in the chat: `/switch` (Tutor ↔ Agent), `/new`, `/effort` (how much it thinks before replying) and `/help`.
 
-**Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent needs an account (email link or Google), since it is the part that costs money.
+**Free to try, no account needed to run code.** Running programs, autocomplete and error checking are public. Only the agent and saving need an account (email link or Google), since the agent is the part that costs money.
 
-**The πίνακας τιμών, step by step.** The exam asks students to trace a program by hand. One button builds the trace table: a row per executed line, a column per variable, each condition's value and what ΓΡΑΨΕ printed. Rows appear one at a time, so students predict each before they see it, while the editor highlights the line. Students can then check their paper table against it.
+**Watch it run.** **Αργή εκτέλεση** plays a run back line by line, with the variables at each step; **Βηματική εκτέλεση** runs one statement per Επόμενο. **Αυτόματες τιμές** fill in the ΔΙΑΒΑΣΕ values, of the right type and drawn from what the code compares them with, so validation and sentinel loops end, to test a program with many inputs quickly.
+
+**The πίνακας τιμών, step by step.** The exam asks students to trace a program by hand. One button builds the trace table: a row per executed line, a column per variable, each condition's value and what ΓΡΑΨΕ printed. Rows appear one at a time, so students predict each before they see it, while the editor highlights the line. Students can then check their paper table against it. The **Μεταβλητές** tab shows every variable and array where the run stopped, or at the table's step, call by call.
+
+**The exam's algorithms.** The **Αλγόριθμοι** menu holds the classic Panhellenic algorithms (loops, arrays, sorting, searching, stacks and queues), to copy or open as a runnable program.
 
 **Your programs, everywhere.** With an account, Ctrl/Cmd+S or Αποθήκευση saves the code; it never saves on its own, as students asked. «Τα προγράμματά μου» opens, renames, copies and deletes them from any device.
 
-**Made for the screen you have.** Three built-in themes, including **Κλασικό**, with the colors students know from the school lab. Make your own theme from 12 colors in the Επεκτάσεις panel.
+**Made for the screen you have.** Three built-in themes, including **Κλασικό**, with the colors students know from the school lab. Make your own theme from 12 colors in the Επεκτάσεις panel, and share it as a code. It installs as an app (PWA) on a computer or a phone, with no app store.
+
+**Diamond.** A $5/month plan (Stripe) with the better agent model, a larger daily agent limit, `/effort high`, and room for more programs and themes. Everything else is the same for everyone.
 
 **One interpreter everywhere.** It lives on the backend, so the editor, the agent's tools and, later, exercise checking all give the same answer and can't be tampered with from the client.
 
 ## Status
 
-Working: the full interpreter, the editor, running programs with input, the step-by-step πίνακας τιμών, saving and opening programs, the agent (Tutor and Agent modes, approval, slash commands, a daily limit per student), themes, an in-app guide (ⓘ) and sign-in.
+Working: the full interpreter for ΓΛΩΣΣΑ and ψευδογλώσσα, the editor, running programs with input (typed or automatic), slow and step-by-step runs, the πίνακας τιμών and the Μεταβλητές tab, saving and opening programs, the library of exam algorithms, the agent (Tutor and Agent modes, approval, slash commands, a daily limit per student), the Diamond plan, themes, an in-app guide (ⓘ), the installable app, an English landing page (`/en`) and sign-in.
 
 Not built yet: a list of past agent conversations, and markdown in agent replies.
 
@@ -58,6 +67,8 @@ Not built yet: a list of past agent conversations, and markdown in agent replies
 | Backend | FastAPI, ΓΛΩΣΣΑ interpreter (pure Python) | Render |
 | Agent | OpenAI Agents SDK | (backend) |
 | DB & Auth | Supabase (Postgres + Auth), Alembic migrations | Supabase |
+| Payments | Stripe (Checkout, Customer Portal, webhooks) | (backend) |
+| Errors | Sentry (no student code, chats or IPs) | Sentry, EU |
 
 ## How the interpreter works
 
@@ -89,11 +100,11 @@ cd frontend && npm install && cp .env.example .env.local
 npm run dev                    # http://localhost:3000
 ```
 
-Everything defaults to empty, so the app boots without secrets: running programs works, and the agent and sign-in switch on once you add `OPENAI_API_KEY` and the Supabase keys.
+Everything defaults to empty, so the app boots without secrets: running programs works, and the agent and sign-in switch on once you add `OPENAI_API_KEY` and the Supabase keys (Diamond needs the Stripe keys too; without them everyone is on the free plan).
 
 ```bash
-cd backend && pytest && ruff check .          # backend tests and lint
-cd frontend && npm test && npm run lint       # frontend tests and lint
+cd backend && pytest && ruff check .                              # backend tests and lint
+cd frontend && npm test && npm run lint && npm run typecheck      # frontend tests, lint, types
 ```
 
 Code reviews in Claude Code go to the `code-reviewer` subagent in [`.claude/agents/`](.claude/agents/code-reviewer.md). It checks a change against the rules in CLAUDE.md, runs the tests and lint, and reports verified findings without editing anything.
