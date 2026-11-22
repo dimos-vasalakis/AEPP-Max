@@ -1,7 +1,16 @@
 "use client";
 
 import { useCursor } from "@/lib/cursor";
+import type { LimitReason } from "@/lib/glossa/types";
 import type { RunState } from "./OutputPanel";
+
+/** Which limit stopped the run, short enough for the bar (OutputPanel says it in full). */
+const LIMITS: Record<LimitReason, string> = {
+  steps: "Η εκτέλεση σταμάτησε: όριο βημάτων.",
+  time: "Η εκτέλεση σταμάτησε: όριο χρόνου.",
+  output: "Η εκτέλεση σταμάτησε: πάρα πολλή έξοδος.",
+  inputs: "Η εκτέλεση σταμάτησε: πάνω από 1.000 τιμές.",
+};
 
 /**
  * The Κλασικό theme's status bar along the bottom, as in the Διερμηνευτής: the
@@ -53,7 +62,7 @@ function runText(run: RunState, playing: boolean): string {
         ? `Διάβασμα τιμής στη γραμμή ${result.input_line}`
         : "Διάβασμα τιμής";
     case "limit":
-      return "Η εκτέλεση σταμάτησε (όριο).";
+      return result.limit ? LIMITS[result.limit] : "Η εκτέλεση σταμάτησε (όριο).";
     case "error":
       return result.error
         ? `${result.error.line ? `Γραμμή ${result.error.line}: ` : ""}${result.error.message}`

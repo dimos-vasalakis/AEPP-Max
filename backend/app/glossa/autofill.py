@@ -37,6 +37,9 @@ REDRAWS = 20
 # Numbers this close, in a loop's condition, may be a sentinel and another test (`x <> -1`
 # and `x > 0`), which leaves too few values between them to be data.
 NARROW = 10
+# How deep a sum is followed for caps (`ν + 1 + 1 …`): far past any index or bound a
+# student writes, and well inside Python's recursion limit.
+MAX_LINEAR_DEPTH = 50
 
 NAMES = ("ΜΑΡΙΑ", "ΝΙΚΟΣ", "ΕΛΕΝΗ", "ΓΙΩΡΓΟΣ", "ΑΝΝΑ", "ΚΩΣΤΑΣ", "ΣΟΦΙΑ", "ΔΗΜΗΤΡΗΣ")
 
@@ -51,9 +54,11 @@ class _Hints:
     # In a loop's condition: on its first read, not a value that would end the loop (a
     # sentinel) before the program has seen any data.
     looping: bool = False
-    # An array's index, or a ΓΙΑ's bound (which usually becomes one): stays inside the
-    # arrays, so a made-up value doesn't fail a program that is fine with sensible input.
-    bound: bool = False
+    # In an array's index, or a ΓΙΑ's bound (which usually becomes one), directly, in a sum
+    # (`ΜΕΧΡΙ ν - 1`) or through a copy (`ν <- πλήθος`): the largest value that keeps the
+    # index inside the arrays, so a made-up value doesn't fail a program that is fine with
+    # sensible input.
+    cap: int | None = None
 
 
 @dataclass
@@ -72,12 +77,16 @@ class Autofill:
         self.rng = random.Random()
         self.keeps_text = keeps_text or (lambda _: True)
         self.scopes: dict[int, _Scope] = {}
-        self.collect(program)
+        try:
+            self.collect(program)
+        except (ArithmeticError, ValueError, RecursionError):
+            # Hints only make the values better: never fail a run over them.
+            self.scopes = {}
 
     def value(self, key: str, type_name: str | None, unit: n.Unit) -> str:
         """The next value for the variable `key`, as typed. `type_name` is None in
         ψευδογλώσσα, where nothing is declared: the comparisons tell what it holds."""
-        scope = self.scopes[id(unit)]
+        scope = self.scopes.setdefault(id(unit), _Scope())
         hints = scope.hints.get(key, _Hints())
         first_of_loop = hints.looping and key not in scope.read_before
         scope.read_before.add(key)
@@ -119,14 +128,20 @@ class Autofill:
         picked = self.from_literals(hints, first_of_loop)
         if picked is None:
             low, high = self.span(hints, scope)
+            if high <= low:
+                return self.real_text(low)
             # Enough decimals to land between numbers close together (`x > 0 ΚΑΙ x < 0.04`).
             digits = 1 if high - low >= 1 else min(8, 1 + math.ceil(-math.log10(high - low)))
             picked = self.drawn(
                 lambda: round(self.rng.uniform(low, high), digits), hints, first_of_loop
             )
+        return self.real_text(picked)
+
+    @staticmethod
+    def real_text(value: int | float) -> str:
         # 8 decimals: as far as comparisons look. Never an exponent: ΔΙΑΒΑΣΕ doesn't read
         # those. + 0.0: no «-0».
-        return f"{round(picked, 8) + 0.0:.8f}".rstrip("0").rstrip(".")
+        return f"{round(value, 8) + 0.0:.8f}".rstrip("0").rstrip(".")
 
     def drawn(
         self, draw: Callable[[], int | float], hints: _Hints, first_of_loop: bool
@@ -149,8 +164,8 @@ class Autofill:
                 low, high = (low + 1, low + 20) if low <= 0 else (max(1, low - 10), low + 10)
             elif hints.looping and 1 <= high - low < NARROW:
                 high = low + DEFAULT_SPAN[1]
-        if hints.bound and scope.smallest_array is not None and low < scope.smallest_array:
-            high = min(high, scope.smallest_array)
+        if hints.cap is not None and low <= hints.cap:
+            high = min(high, hints.cap)
         return low, high
 
     def from_literals(self, hints: _Hints, first_of_loop: bool) -> int | float | None:
@@ -158,11 +173,16 @@ class Autofill:
         if not hints.numbers or first_of_loop:
             return None
         chance = self.rng.random()
+        picked: int | float | None = None
         if chance < NUMBER_EXACT:
-            return self.rng.choice(hints.numbers)
-        if chance < NUMBER_EXACT + NUMBER_NEAR:
-            return self.rng.choice(hints.numbers) + self.rng.choice((-1, 1))
-        return None
+            picked = self.rng.choice(hints.numbers)
+        elif chance < NUMBER_EXACT + NUMBER_NEAR:
+            picked = self.rng.choice(hints.numbers) + self.rng.choice((-1, 1))
+        if picked is not None and hints.cap is not None and min(hints.numbers) <= hints.cap:
+            # Held to the arrays like a drawn value (span), unless the code wants it bigger.
+            if picked > hints.cap:
+                return None
+        return picked
 
     # What the code compares each variable with
 
@@ -191,6 +211,7 @@ class Autofill:
             # Walk one unit at a time, without descending into its subprograms.
             # A stack avoids Python recursion limits on deeply nested student code.
             stack: list[tuple[n.Node, bool]] = [(unit, False)]
+            copies: list[tuple[str, n.Expr]] = []
             while stack:
                 node, in_loop = stack.pop()
                 match node:
@@ -202,10 +223,14 @@ class Autofill:
                             for condition in case.conditions:
                                 for expr in _case_values(condition):
                                     self.compare(subject, expr, False, scope)
-                    case n.For(start=start, end=end):
+                    case n.For(counter=counter, start=start, end=end):
                         self.mark_bound([start, end], scope)
+                        # The counter runs from one to the other: `Π[i + 1]` caps the bound.
+                        copies += [(counter.key, start), (counter.key, end)]
                     case n.Index(indices=indices):
                         self.mark_bound(indices, scope)
+                    case n.Assign(target=n.Name(key=key), value=value):
+                        copies.append((key, value))
                 for item in fields(node):
                     if item.name == "subprograms":
                         continue
@@ -216,6 +241,7 @@ class Autofill:
                     for child in value if isinstance(value, list) else [value]:
                         if isinstance(child, n.Node):
                             stack.append((child, in_loop or is_condition))
+            self.follow_copies(copies, scope)
 
     def compare(self, side: n.Expr, other: n.Expr, in_loop: bool, scope: _Scope) -> None:
         if not isinstance(side, n.Name | n.Index):
@@ -235,9 +261,100 @@ class Autofill:
                 hints.numbers.append(literal)
 
     def mark_bound(self, exprs: list[n.Expr], scope: _Scope) -> None:
+        if scope.smallest_array is None:
+            return
         for expr in exprs:
-            if isinstance(expr, n.Name):
-                scope.hints.setdefault(expr.key, _Hints()).bound = True
+            self.limit(expr, scope.smallest_array, scope)
+
+    def limit(self, expr: n.Expr, most: int | float, scope: _Scope) -> bool:
+        """Caps each variable that adds to `expr`, so that `expr` stays at most `most` while
+        the others are 0 or more. Only sums and multiples of variables are followed (`ν`,
+        `ν - 1`, `2 * ν + κ`); whether it capped anything."""
+        form = self.linear(expr, scope)
+        if form is None:
+            return False
+        coefficients, constant = form
+        capped = False
+        for key, coefficient in coefficients.items():
+            if coefficient <= 0:
+                continue
+            cap = math.floor((most - constant) / coefficient)
+            if cap < 1:
+                continue  # no count fits: the program expects something else
+            hints = scope.hints.setdefault(key, _Hints())
+            if hints.cap is None or cap < hints.cap:
+                hints.cap = cap
+                capped = True
+        return capped
+
+    def follow_copies(self, copies: list[tuple[str, n.Expr]], scope: _Scope) -> None:
+        """`ν <- πλήθος` with ν capped caps πλήθος too, through any chain of copies (a ΓΙΑ
+        counter counts as a copy of its bounds). Not a
+        variable's copy of itself (`κ <- κ + 1`), which would lower its cap each round."""
+        copies = [
+            (key, value)
+            for key, value in copies
+            if key not in ((self.linear(value, scope) or ({}, 0))[0])
+        ]
+        for _ in range(len(copies)):
+            changed = False
+            for key, value in copies:
+                cap = scope.hints[key].cap if key in scope.hints else None
+                if cap is not None and self.limit(value, cap, scope):
+                    changed = True
+            if not changed:
+                break
+
+    def linear(
+        self, expr: n.Expr, scope: _Scope, depth: int = 0
+    ) -> tuple[dict[str, float], float] | None:
+        """`expr` as Σ coefficient · variable + constant, or None if it isn't one, or if
+        a number in it is past MAX_HINT (or a coefficient that close to 0), where a cap
+        means nothing and the arithmetic could overflow."""
+        if depth > MAX_LINEAR_DEPTH:
+            return None
+        form = self.linear_form(expr, scope, depth)
+        if form is None:
+            return None
+        coefficients, constant = form
+        if not _sensible(constant) or not all(
+            _sensible(k) and (k == 0 or abs(k) >= 1 / MAX_HINT) for k in coefficients.values()
+        ):
+            return None
+        return form
+
+    def linear_form(
+        self, expr: n.Expr, scope: _Scope, depth: int
+    ) -> tuple[dict[str, float], float] | None:
+        literal = self.literal(expr, scope)
+        if literal is not None:
+            if isinstance(literal, bool) or not isinstance(literal, int | float):
+                return None
+            return {}, literal
+        match expr:
+            case n.Name(key=key):
+                return {key: 1}, 0
+            case n.Unary(op="+" | "-" as op, operand=operand):
+                form = self.linear(operand, scope, depth + 1)
+                if form is None or op == "+":
+                    return form
+                return {key: -k for key, k in form[0].items()}, -form[1]
+            case n.Binary(op="+" | "-" as op, left=left, right=right):
+                a, b = self.linear(left, scope, depth + 1), self.linear(right, scope, depth + 1)
+                if a is None or b is None:
+                    return None
+                sign = 1 if op == "+" else -1
+                coefficients = dict(a[0])
+                for key, k in b[0].items():
+                    coefficients[key] = coefficients.get(key, 0) + sign * k
+                return coefficients, a[1] + sign * b[1]
+            case n.Binary(op="*", left=left, right=right):
+                a, b = self.linear(left, scope, depth + 1), self.linear(right, scope, depth + 1)
+                if a is None or b is None or (a[0] and b[0]):
+                    return None
+                factor, form = (a[1], b) if not a[0] else (b[1], a)
+                return {key: factor * k for key, k in form[0].items()}, factor * form[1]
+        return None
 
     @staticmethod
     def literal(expr: n.Expr, scope: _Scope) -> int | float | str | bool | None:
@@ -251,6 +368,13 @@ class Autofill:
             case n.Name(key=key):
                 return scope.constants.get(key)
         return None
+
+
+def _sensible(number: int | float) -> bool:
+    """A finite number within MAX_HINT (an int is compared exactly, never as a float)."""
+    if isinstance(number, float) and not math.isfinite(number):
+        return False
+    return abs(number) <= MAX_HINT
 
 
 def _case_values(condition: n.CaseCondition) -> list[n.Expr]:

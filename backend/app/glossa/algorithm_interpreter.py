@@ -149,7 +149,7 @@ class _AlgorithmMachine(_Machine):
 
     def read(self, target: n.Target, frame: _Frame) -> Value:
         """No declared type: the value is what the typed text looks like."""
-        text = self.next_text(target)
+        text = self.next_text(target, frame)
         # The same test autofill uses, so it never offers a text this reads as something else.
         if keeps_text(text):
             return text
