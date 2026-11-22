@@ -65,8 +65,12 @@ class _Scope:
 
 
 class Autofill:
-    def __init__(self, program: n.Unit):
+    def __init__(self, program: n.Unit, keeps_text: Callable[[str], bool] | None = None):
+        """`keeps_text` says whether a value is read as text. In ψευδογλώσσα the value is
+        what it looks like, so a text such as "1" or "ΑΛΗΘΗΣ" in the code can't be offered:
+        it would be read as a number or a logical value, and the comparison fail."""
         self.rng = random.Random()
+        self.keeps_text = keeps_text or (lambda _: True)
         self.scopes: dict[int, _Scope] = {}
         self.collect(program)
 
@@ -98,8 +102,9 @@ class Autofill:
         return "ΑΚΕΡΑΙΑ"
 
     def text(self, hints: _Hints, first_of_loop: bool) -> str:
-        if hints.texts and not first_of_loop and self.rng.random() < TEXT_LITERAL:
-            return self.rng.choice(hints.texts)
+        texts = [text for text in hints.texts if self.keeps_text(text)]
+        if texts and not first_of_loop and self.rng.random() < TEXT_LITERAL:
+            return self.rng.choice(texts)
         return self.rng.choice([name for name in NAMES if name not in hints.texts] or NAMES)
 
     def integer(self, hints: _Hints, first_of_loop: bool, scope: _Scope) -> str:

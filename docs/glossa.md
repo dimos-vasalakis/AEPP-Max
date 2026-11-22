@@ -212,7 +212,7 @@ js-glossa reads a top comment `! KEYBOARD_INPUT: 5, 3` as preset inputs for `Δ�
 
 Not a language rule: an IDE option (the navbar's dice) for testing a program with many inputs. With it on, `/run` gets `autofill: true` and `backend/app/glossa/autofill.py` makes up a value at each `ΔΙΑΒΑΣΕ` that has no typed one, returned as `auto_inputs`. Tests: `backend/tests/test_glossa_autofill.py`.
 
-- A value has the variable's type and is read like a typed one, so the run behaves exactly as if the student had typed it.
+- A value has the variable's type and is read like a typed one, so the run behaves exactly as if the student had typed it. In ψευδογλώσσα, where a value is what it looks like, a text the code compares with is never offered if Διάβασε would read it as a number or ΑΛΗΘΗΣ/ΨΕΥΔΗΣ (`"1"`).
 - Values come from what the code compares the variable with (ΑΝ, loop conditions, ΠΕΡΙΠΤΩΣΗ): those values, their neighbors and the range between them, otherwise small numbers (1–20). So validation loops accept a value and sentinel loops end; a sentinel is never the first value, and a count read from the student stays inside the declared arrays.
 - After 500 made-up values in one request the run asks the student, as without the option; a typed value goes on with more, up to the 1,000 inputs a run may read.
 

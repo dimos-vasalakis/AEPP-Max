@@ -325,6 +325,23 @@ def test_algorithm_values_follow_the_comparisons():
         assert result.auto_inputs[0].step == 0  # the Δεδομένα's row
 
 
+def test_algorithm_values_are_never_texts_read_as_numbers():
+    # Διάβασε reads "1" as the number 1 and "ΑΛΗΘΗΣ" as true: offered for `α = "1"`, the
+    # comparison would fail with a type error the student didn't make.
+    for literal in ("1", "2,5", "ΑΛΗΘΗΣ"):
+        source = (
+            f'Αλγόριθμος Τ\nΔιάβασε α\nΑν α = "{literal}" ή α = "ΝΑΙ" τότε\n'
+            "  Εκτύπωσε α\nΤέλος_αν\nΤέλος Τ\n"
+        )
+        seen = set()
+        for _ in range(RUNS):
+            result = filled(source, "pseudocode")
+            assert result.status == "ok", result.error
+            seen.add(values(result)[0])
+        assert literal not in seen
+        assert "ΝΑΙ" in seen  # the other text still is
+
+
 def test_the_api_takes_autofill():
     client = TestClient(app)
     code = program("ΑΚΕΡΑΙΕΣ: x", "ΔΙΑΒΑΣΕ x\nΓΡΑΨΕ x")

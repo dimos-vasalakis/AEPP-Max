@@ -1,3 +1,9 @@
+import asyncio
+import json
+import threading
+import time
+
+import pytest
 from agents import RunConfig, Usage
 
 from app.agent.context import AgentContext, splits_declarations
@@ -89,3 +95,74 @@ def test_write_code_caps_the_edits_in_one_reply() -> None:
 def test_the_reply_log_reads_fields_that_exist() -> None:
     # stream_reply logs every reply before charging it; an SDK upgrade must not break this.
     report_reply("done", AgentContext(code="", mode="ask"), Usage(), RunConfig(model="m"), 0.0)
+
+
+def test_a_stopped_reply_stops_its_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Esc cancels the tool; the thread can't be killed, so the program must stop itself
+    # instead of holding one of /run's workers for the whole timeout.
+    from app.agent import tools
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "run_max_steps", 10**12)
+    monkeypatch.setattr(get_settings(), "run_timeout_seconds", 60.0)
+    finished = threading.Event()
+    original = tools._run
+
+    def run(*args: object) -> str:
+        try:
+            return original(*args)  # type: ignore[arg-type]
+        finally:
+            finished.set()
+
+    monkeypatch.setattr(tools, "_run", run)
+    loop = "ΠΡΟΓΡΑΜΜΑ Π\nΑΡΧΗ\nΟΣΟ ΑΛΗΘΗΣ ΕΠΑΝΑΛΑΒΕ\nΤΕΛΟΣ_ΕΠΑΝΑΛΗΨΗΣ\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+
+    async def cancel_mid_run() -> None:
+        task = asyncio.create_task(tools._run_stoppable(loop, [], False, "glossa"))
+        await asyncio.sleep(0.3)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    started = time.monotonic()
+    asyncio.run(cancel_mid_run())
+    assert time.monotonic() - started < 5  # the cancel isn't held up by the thread
+    assert finished.wait(5)  # and the program stopped long before its 60 s timeout
+
+
+def test_an_agent_run_still_finishes() -> None:
+    from app.agent import tools
+
+    code = "ΠΡΟΓΡΑΜΜΑ Π\nΑΡΧΗ\nΓΡΑΨΕ 7\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+    reply = json.loads(asyncio.run(tools._run_stoppable(code, [], False, "glossa")))
+    assert (reply["status"], reply["output"]) == ("ok", ["7"])
+
+
+def test_a_stopped_reply_leaves_the_queue_at_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every worker busy: a cancelled agent run waiting for one stops counting towards
+    # /run's 503 now, not when a worker frees up.
+    from app.agent import tools
+    from app.core import interpreter_pool
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "run_workers", 1)
+    pool = interpreter_pool._Pool()
+    monkeypatch.setattr(interpreter_pool, "_runs", pool)
+    release = threading.Event()
+    code = "ΠΡΟΓΡΑΜΜΑ Π\nΑΡΧΗ\nΓΡΑΨΕ 7\nΤΕΛΟΣ_ΠΡΟΓΡΑΜΜΑΤΟΣ\n"
+
+    async def cancel_while_queued() -> None:
+        busy = asyncio.create_task(interpreter_pool.in_interpreter(release.wait, 30))
+        await asyncio.sleep(0.05)
+        queued = asyncio.create_task(tools._run_stoppable(code, [], False, "glossa"))
+        await asyncio.sleep(0.05)
+        assert pool.admitted == 2
+        queued.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await queued
+        await asyncio.sleep(0)
+        assert pool.admitted == 1  # only the busy one
+        release.set()
+        await busy
+
+    asyncio.run(cancel_while_queued())

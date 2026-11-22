@@ -1,4 +1,7 @@
+import asyncio
 import json
+import threading
+from collections.abc import Callable
 from dataclasses import asdict
 
 from agents import Agent, RunContextWrapper, function_tool
@@ -22,7 +25,13 @@ MAX_EDITS_PER_REPLY = 3
 MAX_SUMMARY_CHARS = 300
 
 
-def _run(code: str, inputs: list[str], trace: bool, language: glossa.Language) -> str:
+def _run(
+    code: str,
+    inputs: list[str],
+    trace: bool,
+    language: glossa.Language,
+    stop: Callable[[], bool] | None = None,
+) -> str:
     settings = get_settings()
     limits = glossa.RunLimits(
         max_steps=settings.run_max_steps,
@@ -31,6 +40,7 @@ def _run(code: str, inputs: list[str], trace: bool, language: glossa.Language) -
         max_output_chars=AGENT_OUTPUT_CHARS,
         max_trace_chars=AGENT_OUTPUT_CHARS,
         timeout_seconds=settings.run_timeout_seconds,
+        stop=stop,
     )
     result = glossa.run(code, inputs, language=language, limits=limits, trace=trace)
     data = asdict(result)
@@ -40,6 +50,30 @@ def _run(code: str, inputs: list[str], trace: bool, language: glossa.Language) -
     for step in data["trace"] or []:
         del step["depth"], step["call"], step["copied"], step["lines"]
     return json.dumps(data, ensure_ascii=False)
+
+
+async def _run_stoppable(
+    code: str, inputs: list[str], trace: bool, language: glossa.Language
+) -> str:
+    """`_run` on an interpreter thread, stopped when the reply is (Esc, a closed tab).
+
+    A thread waits out its run even when cancelled (anyio), so without this an agent's
+    infinite loop held one of /run's workers for the whole timeout. The shield lets the
+    cancellation reach us at once, to tell the program to stop itself."""
+    stop = threading.Event()
+    run = asyncio.ensure_future(
+        in_interpreter(_run, code, inputs, trace, language, stop.is_set, queue=False)
+    )
+    try:
+        return await asyncio.shield(run)
+    except asyncio.CancelledError:
+        stop.set()
+        # Still waiting for a thread: leave the queue now, not when one frees up (it counts
+        # towards /run's 503). Running: anyio waits out the thread, short now it's stopped.
+        run.cancel()
+        # Nobody awaits it now: retrieve its result so an error isn't logged as unhandled.
+        run.add_done_callback(lambda task: task.cancelled() or task.exception())
+        raise
 
 
 @function_tool
@@ -54,7 +88,7 @@ async def run_program(
         code: The complete program or algorithm to run. Omit it to run the student's editor.
     """
     source = ctx.context.code if code is None else code
-    return await in_interpreter(_run, source, inputs, False, ctx.context.language, queue=False)
+    return await _run_stoppable(source, inputs, False, ctx.context.language)
 
 
 @function_tool
@@ -72,7 +106,7 @@ async def trace_program(
         code: The complete program or algorithm to run. Omit it to trace the student's editor.
     """
     source = ctx.context.code if code is None else code
-    return await in_interpreter(_run, source, inputs, True, ctx.context.language, queue=False)
+    return await _run_stoppable(source, inputs, True, ctx.context.language)
 
 
 def _agent_mode(ctx: RunContextWrapper[AgentContext], _: Agent[AgentContext]) -> bool:
