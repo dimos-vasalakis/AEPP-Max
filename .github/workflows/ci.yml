@@ -43,9 +43,9 @@ jobs:
       - run: pip install -r requirements-dev.txt
 
       - name: Lint
-        run: ruff check .
+        run: ruff check . ../scripts
       - name: Format
-        run: ruff format --check .
+        run: ruff format --check . ../scripts
 
       - name: Add Supabase stand-ins (auth schema, API roles, default grants)
         run: psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -f tests/supabase_stub.sql
@@ -67,9 +67,10 @@ jobs:
       - run: docker build -t aepp-max-api backend
       - name: Smoke-test the API image as Render runs it
         run: |
-          docker run -d --name api -e PORT=10000 -e ENVIRONMENT=production -p 10000:10000 aepp-max-api
-          for i in $(seq 1 30); do curl -sf localhost:10000/api/v1/health && exit 0; sleep 1; done
-          docker logs api; exit 1
+          docker run -d --name api -e PORT=10000 -e ENVIRONMENT=production \
+            -e 'CORS_ORIGINS=["https://smoke.example"]' -p 10000:10000 aepp-max-api
+          python3 scripts/smoke.py --api http://localhost:10000 --origin https://smoke.example --wait 30 \
+            || { docker logs api; exit 1; }
 
   frontend:
     name: Frontend (lint, types, tests, build)

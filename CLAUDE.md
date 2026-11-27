@@ -50,7 +50,7 @@ Env: copy `frontend/.env.example` → `.env.local` and `backend/.env.example` �
 
 `.github/workflows/ci.yml` runs three jobs:
 - **backend:** ruff; `tests/supabase_stub.sql` on a Postgres service; `alembic upgrade`, then `alembic check`, then a down/up round-trip; pytest.
-- **docker:** builds the API image and smoke-tests `/health` the way Render runs it.
+- **docker:** builds the API image and runs `scripts/smoke.py` on it the way Render runs it. The script (stdlib only, read-only: tiny programs on `/run` and `/check`, protected endpoints must 401, CORS, the site's pages) also checks a deploy: `python3 scripts/smoke.py --api <Render URL> --web <site>`.
 - **frontend:** lint, typecheck, vitest, build.
 
 The stub mirrors Supabase's default grants to `anon`/`authenticated`, so grants that only look restrictive fail in CI. Backend tests never hit the DB or OpenAI: `conftest.py` blanks `DATABASE_URL`/`OPENAI_API_KEY` and signs HS256 test tokens (`auth_header()`). Each ΓΛΩΣΣΑ language rule needs a pytest case (program in, expected output or error out).

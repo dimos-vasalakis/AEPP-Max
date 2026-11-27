@@ -10,6 +10,10 @@
 </p>
 
 <p align="center">
+  <a href="https://aeppmax.gr"><strong>🌐 aeppmax.gr</strong></a>
+</p>
+
+<p align="center">
   <a href="docs/user-guide.md">User guide (Greek)</a> ·
   <a href="docs/glossa.md">Language reference</a> ·
   <a href="CLAUDE.md">Developer guide</a>
